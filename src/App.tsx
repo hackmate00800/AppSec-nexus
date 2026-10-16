@@ -10,7 +10,8 @@ import {
   Sparkles,
   Target as TargetIcon,
   Lock,
-  Unlock
+  Unlock,
+  Download
 } from "lucide-react";
 import "./App.css";
 import { Target, ToolInfo, Finding, ScanResult } from "./types";
@@ -41,6 +42,23 @@ export default function App() {
   const [aiMode, setAiMode] = useState<"beginner" | "advanced">("beginner");
   const [aiExplanation, setAiExplanation] = useState<string>("");
   const [aiLoading, setAiLoading] = useState(false);
+  const [reportStatus, setReportStatus] = useState<string>("");
+
+  async function handleExportReport() {
+    if (!selectedTarget) {
+      alert("Please select a target first.");
+      return;
+    }
+    try {
+      const filename = await invoke<string>("export_report", {
+        targetId: selectedTarget.id,
+      });
+      setReportStatus(`Report successfully exported: ${filename}`);
+      setTimeout(() => setReportStatus(""), 8000);
+    } catch (err: any) {
+      alert("Failed to export report: " + err.toString());
+    }
+  }
 
   useEffect(() => {
     loadInitialData();
@@ -421,6 +439,13 @@ export default function App() {
                     >
                       Nuclei Audit
                     </button>
+                    <button
+                      className="btn btn-secondary"
+                      disabled={isScanning}
+                      onClick={() => handleRunScan("nmap")}
+                    >
+                      Nmap Scan
+                    </button>
                   </div>
                 </div>
 
@@ -447,13 +472,29 @@ export default function App() {
             <div>
               <div className="card">
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                  <h2 className="card-title" style={{ margin: 0 }}>
-                    <AlertTriangle size={20} color="var(--accent-amber)" />
-                    Unified Findings & Evidence ({findings.length})
-                  </h2>
-                  <button className="btn btn-secondary" onClick={loadInitialData}>
-                    <RotateCcw size={14} /> Refresh
-                  </button>
+                  <div>
+                    <h2 className="card-title" style={{ margin: 0 }}>
+                      <AlertTriangle size={20} color="var(--accent-amber)" />
+                      Unified Findings & Evidence ({findings.length})
+                    </h2>
+                    {reportStatus && (
+                      <div style={{ color: "var(--accent-emerald)", fontSize: "0.8rem", marginTop: "4px" }}>
+                        ✓ {reportStatus}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", gap: "10px" }}>
+                    <button
+                      className="btn btn-primary"
+                      onClick={handleExportReport}
+                      disabled={findings.length === 0}
+                    >
+                      <Download size={14} /> Export HTML Report
+                    </button>
+                    <button className="btn btn-secondary" onClick={loadInitialData}>
+                      <RotateCcw size={14} /> Refresh
+                    </button>
+                  </div>
                 </div>
 
                 {findings.length === 0 ? (

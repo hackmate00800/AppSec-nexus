@@ -1,0 +1,16 @@
+{
+  "id": "httpx",
+  "name": "ProjectDiscovery httpx",
+  "version": "1.12.0",
+  "publisher": "ProjectDiscovery",
+  "category": "Service & Tech Prober",
+  "executable": "httpx.exe",
+  "runtime": "native-binary",
+  "supported_os": ["windows", "linux", "darwin"],
+  "capabilities": ["http-probe", "tech-detect", "tls-grab"],
+  "permissions": ["network-http", "network-dns"],
+  "timeout_seconds": 120,
+  "arguments": ["-u", "{target}", "-status-code", "-title", "-tech-detect", "-no-color"],
+  "output_format": "text",
+  "documentation": "https://docs.projectdiscovery.io/tools/httpx/overview"
+}

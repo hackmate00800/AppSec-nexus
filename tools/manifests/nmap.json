@@ -1,0 +1,16 @@
+{
+  "id": "nmap",
+  "name": "Nmap Network Scanner",
+  "version": "7.92",
+  "publisher": "Gordon Lyon (Fyodor)",
+  "category": "Port & Service Discovery",
+  "executable": "nmap.exe",
+  "runtime": "native-binary",
+  "supported_os": ["windows", "linux", "darwin"],
+  "capabilities": ["port-scan", "service-fingerprint", "os-detect"],
+  "permissions": ["network-raw-sockets"],
+  "timeout_seconds": 300,
+  "arguments": ["-sV", "-T4", "-F", "-Pn", "{target}"],
+  "output_format": "stdout-text",
+  "documentation": "https://nmap.org/book/man.html"
+}

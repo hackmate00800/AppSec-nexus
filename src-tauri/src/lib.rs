@@ -1,6 +1,7 @@
 mod ai;
 mod db;
 mod models;
+mod reports;
 mod scanners;
 mod scope;
 mod tools;
@@ -114,8 +115,47 @@ async fn run_scan(
 
             Ok(scan_res)
         }
+        "nmap" => {
+            let (scan_res, findings) = state
+                .tool_mgr
+                .run_nmap(&target.id, &target.primary_url)
+                .await?;
+
+            for finding in &findings {
+                let _ = state.db.insert_finding(finding);
+            }
+
+            Ok(scan_res)
+        }
         _ => Err(format!("Unsupported tool '{}'", tool)),
     }
+}
+
+#[tauri::command]
+fn export_report(state: State<'_, AppState>, target_id: String) -> Result<String, String> {
+    let targets = state.db.get_targets().map_err(|e| e.to_string())?;
+    let target = targets
+        .into_iter()
+        .find(|t| t.id == target_id)
+        .ok_or_else(|| "Target not found".to_string())?;
+
+    let findings = state.db.get_findings().map_err(|e| e.to_string())?;
+    let target_findings: Vec<_> = findings
+        .into_iter()
+        .filter(|f| f.target_id == target_id)
+        .collect();
+
+    let html = reports::ReportGenerator::generate_html(&target, &target_findings);
+    let sanitized_name = target.name.replace(|c: char| !c.is_alphanumeric(), "_");
+    let filename = format!(
+        "AppSec_Report_{}_{}.html",
+        sanitized_name,
+        chrono::Utc::now().format("%Y%m%d_%H%M%S")
+    );
+
+    std::fs::write(&filename, html)
+        .map_err(|e| format!("Failed to write HTML report: {}", e))?;
+    Ok(filename)
 }
 
 #[tauri::command]
@@ -186,7 +226,8 @@ pub fn run() {
             run_scan,
             get_findings,
             get_ai_status,
-            explain_finding
+            explain_finding,
+            export_report
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

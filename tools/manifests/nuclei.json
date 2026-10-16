@@ -1,0 +1,16 @@
+{
+  "id": "nuclei",
+  "name": "ProjectDiscovery Nuclei",
+  "version": "3.11.1",
+  "publisher": "ProjectDiscovery",
+  "category": "Vulnerability Scanner",
+  "executable": "nuclei.exe",
+  "runtime": "native-binary",
+  "supported_os": ["windows", "linux", "darwin"],
+  "capabilities": ["cve-detection", "misconfiguration", "exposure"],
+  "permissions": ["network-http", "network-dns"],
+  "timeout_seconds": 600,
+  "arguments": ["-u", "{target}", "-tags", "misconfig,exposure,ssl,tech", "-jsonl", "-no-color", "-rate-limit", "50"],
+  "output_format": "jsonl",
+  "documentation": "https://docs.projectdiscovery.io/tools/nuclei/overview"
+}

@@ -1,0 +1,16 @@
+{
+  "id": "baseline",
+  "name": "Native Baseline Security Checks",
+  "version": "1.0.0",
+  "publisher": "AppSec Nexus Core",
+  "category": "Passive / Headers / Cookies",
+  "executable": "internal://rust",
+  "runtime": "internal-rust",
+  "supported_os": ["windows", "linux", "darwin"],
+  "capabilities": ["csp-audit", "cors-audit", "hsts-audit", "cookie-flags", "robots-txt"],
+  "permissions": ["network-http"],
+  "timeout_seconds": 30,
+  "arguments": [],
+  "output_format": "internal-findings",
+  "documentation": "https://owasp.org/www-project-top-ten/"
+}

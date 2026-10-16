@@ -226,4 +226,81 @@ impl ToolManager {
             findings,
         ))
     }
+
+    pub async fn run_nmap(
+        &self,
+        target_id: &str,
+        target_host: &str,
+    ) -> Result<(ScanResult, Vec<Finding>), String> {
+        let start = Instant::now();
+        let nmap_path = self
+            .find_nmap_path()
+            .ok_or_else(|| "Nmap binary not found in tools/bin".to_string())?;
+
+        // Extract host if full URL passed
+        let host = if let Ok(parsed) = url::Url::parse(target_host) {
+            parsed.host_str().unwrap_or(target_host).to_string()
+        } else {
+            target_host.to_string()
+        };
+
+        let output = Command::new(&nmap_path)
+            .args(&["-sV", "-T4", "-F", "-Pn", &host])
+            .output()
+            .await
+            .map_err(|e| format!("Failed to execute nmap: {}", e))?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let mut logs = Vec::new();
+        let mut findings = Vec::new();
+        let now = chrono::Utc::now().to_rfc3339();
+
+        let port_line_regex = Regex::new(r"^(\d+)/(tcp|udp)\s+(\w+)\s+(.*)$").unwrap();
+
+        for line in stdout.lines() {
+            let sanitized = Self::sanitize_log(line);
+            if let Some(caps) = port_line_regex.captures(line.trim()) {
+                let port = caps.get(1).map(|m| m.as_str()).unwrap_or("");
+                let proto = caps.get(2).map(|m| m.as_str()).unwrap_or("");
+                let state = caps.get(3).map(|m| m.as_str()).unwrap_or("");
+                let service = caps.get(4).map(|m| m.as_str()).unwrap_or("");
+
+                if state == "open" {
+                    findings.push(Finding {
+                        id: Uuid::new_v4().to_string(),
+                        target_id: target_id.to_string(),
+                        title: format!("Open Network Port: {}/{} ({})", port, proto, service),
+                        severity: if port == "21" || port == "23" || port == "445" || port == "3389" {
+                            FindingSeverity::Medium
+                        } else {
+                            FindingSeverity::Info
+                        },
+                        confidence: 100,
+                        affected_asset: format!("{}:{}", host, port),
+                        evidence: format!("Nmap detected open service: {}/{} is {} running {}", port, proto, state, service),
+                        source_tool: "Nmap".to_string(),
+                        tool_version: "7.92".to_string(),
+                        cwe: Some("CWE-200".to_string()),
+                        remediation: "Close unneeded network ports or restrict access with firewall rules.".to_string(),
+                        status: FindingStatus::New,
+                        created_at: now.clone(),
+                    });
+                }
+            }
+            logs.push(sanitized);
+        }
+
+        Ok((
+            ScanResult {
+                scan_id: Uuid::new_v4().to_string(),
+                target_url: target_host.to_string(),
+                tool: "Nmap".to_string(),
+                status: "Completed".to_string(),
+                logs,
+                findings_count: findings.len(),
+                duration_ms: start.elapsed().as_millis() as u64,
+            },
+            findings,
+        ))
+    }
 }
