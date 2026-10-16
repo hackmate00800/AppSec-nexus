@@ -383,8 +383,50 @@ pub fn run() {
         ai_mentor,
     };
 
+    let setup_log = log_file.clone();
+    let event_log = log_file.clone();
+
     let run_res = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .on_window_event(move |window, event| {
+            let msg = format!("WINDOW EVENT on {:?}: {:?}\n", window.label(), event);
+            let _ = std::fs::OpenOptions::new().append(true).create(true).open(&event_log).and_then(|mut f| {
+                use std::io::Write;
+                f.write_all(msg.as_bytes())
+            });
+        })
+        .setup(move |app| {
+            use tauri::Manager;
+            let win = app.get_webview_window("main");
+            let msg = format!("SETUP: window 'main' exists = {}\n", win.is_some());
+            let _ = std::fs::OpenOptions::new().append(true).create(true).open(&setup_log).and_then(|mut f| {
+                use std::io::Write;
+                f.write_all(msg.as_bytes())
+            });
+
+            if let Some(w) = win {
+                let _ = w.show();
+                let _ = w.set_focus();
+            } else {
+                let _ = std::fs::OpenOptions::new().append(true).create(true).open(&setup_log).and_then(|mut f| {
+                    use std::io::Write;
+                    f.write_all(b"SETUP: creating window 'main' via WebviewWindowBuilder\n")
+                });
+                let win_res = tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::default())
+                    .title("AppSec Nexus - Cybersecurity & Web Pentesting")
+                    .inner_size(1280.0, 820.0)
+                    .min_inner_size(1024.0, 700.0)
+                    .build();
+                if let Err(e) = win_res {
+                    let msg = format!("SETUP ERROR creating window 'main': {:?}\n", e);
+                    let _ = std::fs::OpenOptions::new().append(true).create(true).open(&setup_log).and_then(|mut f| {
+                        use std::io::Write;
+                        f.write_all(msg.as_bytes())
+                    });
+                }
+            }
+            Ok(())
+        })
         .manage(state)
         .invoke_handler(tauri::generate_handler![
             get_tools,
