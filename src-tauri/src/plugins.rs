@@ -40,6 +40,42 @@ struct PluginOutput {
     logs: Option<Vec<String>>,
 }
 
+fn find_executable(plugin_dir: &Path, exe: &str) -> Option<PathBuf> {
+    // 1. Path inside plugin dir
+    let in_plugin = plugin_dir.join(exe);
+    if in_plugin.exists() {
+        return Some(in_plugin);
+    }
+    // 2. Absolute path
+    let abs_path = PathBuf::from(exe);
+    if abs_path.is_absolute() && abs_path.exists() {
+        return Some(abs_path);
+    }
+    // 3. Search system PATH
+    if let Ok(path_var) = std::env::var("PATH") {
+        for dir in std::env::split_paths(&path_var) {
+            let direct = dir.join(exe);
+            if direct.exists() {
+                return Some(direct);
+            }
+            #[cfg(target_os = "windows")]
+            {
+                if !exe.ends_with(".exe") && !exe.ends_with(".cmd") && !exe.ends_with(".bat") {
+                    let with_exe = dir.join(format!("{}.exe", exe));
+                    if with_exe.exists() {
+                        return Some(with_exe);
+                    }
+                    let with_cmd = dir.join(format!("{}.cmd", exe));
+                    if with_cmd.exists() {
+                        return Some(with_cmd);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 impl PluginManager {
     pub fn new(plugins_dir: PathBuf) -> Self {
         Self { plugins_dir }
@@ -60,8 +96,7 @@ impl PluginManager {
                     if manifest_file.exists() {
                         if let Ok(content) = std::fs::read_to_string(&manifest_file) {
                             if let Ok(raw) = serde_json::from_str::<RawManifest>(&content) {
-                                let exe_path = path.join(&raw.executable);
-                                let is_available = exe_path.exists();
+                                let is_available = find_executable(&path, &raw.executable).is_some();
                                 list.push(PluginInfo {
                                     id: raw.id,
                                     name: raw.name,
@@ -99,8 +134,7 @@ impl PluginManager {
         std::fs::write(&manifest_path, manifest_json)
             .map_err(|e| format!("Failed to save manifest: {}", e))?;
 
-        let exe_path = plugin_dir.join(&raw.executable);
-        let is_available = exe_path.exists();
+        let is_available = find_executable(&plugin_dir, &raw.executable).is_some();
 
         Ok(PluginInfo {
             id: raw.id,
@@ -131,13 +165,12 @@ impl PluginManager {
             .ok_or_else(|| format!("Plugin '{}' not found in registry", plugin_id))?;
 
         let plugin_dir = Path::new(&plugin.path);
-        let exe_path = plugin_dir.join(&plugin.executable);
-        if !exe_path.exists() {
-            return Err(format!(
-                "Plugin executable '{}' missing at {:?}",
-                plugin.executable, exe_path
-            ));
-        }
+        let resolved_exe = find_executable(plugin_dir, &plugin.executable).ok_or_else(|| {
+            format!(
+                "Plugin executable '{}' could not be found in plugin folder, absolute path, or system PATH",
+                plugin.executable
+            )
+        })?;
 
         let start = Instant::now();
         let timeout_duration = Duration::from_secs(plugin.timeout_seconds.max(5));
@@ -150,16 +183,16 @@ impl PluginManager {
                     "python"
                 };
                 let mut c = Command::new(python_bin);
-                c.arg(&exe_path).arg(target_url);
+                c.arg(&resolved_exe).arg(target_url);
                 c
             }
             "node" => {
                 let mut c = Command::new("node");
-                c.arg(&exe_path).arg(target_url);
+                c.arg(&resolved_exe).arg(target_url);
                 c
             }
             _ => {
-                let mut c = Command::new(&exe_path);
+                let mut c = Command::new(&resolved_exe);
                 c.arg(target_url);
                 c
             }
@@ -180,41 +213,78 @@ impl PluginManager {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
 
-        let parsed: PluginOutput = serde_json::from_str(&stdout).map_err(|e| {
-            format!(
-                "Plugin output was not valid JSON: {}\nSTDOUT: {}\nSTDERR: {}",
-                e, stdout, stderr
-            )
-        })?;
+        // Try standard AppSec Nexus JSON output first, fallback to intelligent raw text parsing
+        let (findings, mut logs) = if let Ok(parsed) = serde_json::from_str::<PluginOutput>(&stdout) {
+            let mut f_list = Vec::new();
+            if let Some(raw_findings) = parsed.findings {
+                for rf in raw_findings {
+                    let sev = match rf.severity.to_lowercase().as_str() {
+                        "critical" => FindingSeverity::Critical,
+                        "high" => FindingSeverity::High,
+                        "medium" => FindingSeverity::Medium,
+                        "low" => FindingSeverity::Low,
+                        _ => FindingSeverity::Info,
+                    };
 
-        let mut findings = Vec::new();
-        if let Some(raw_findings) = parsed.findings {
-            for rf in raw_findings {
-                let sev = match rf.severity.to_lowercase().as_str() {
-                    "critical" => FindingSeverity::Critical,
-                    "high" => FindingSeverity::High,
-                    "medium" => FindingSeverity::Medium,
-                    "low" => FindingSeverity::Low,
-                    _ => FindingSeverity::Info,
-                };
-
-                let finding = Finding::new(
-                    target_id.to_string(),
-                    rf.title,
-                    sev,
-                    rf.confidence.unwrap_or(80),
-                    target_url.to_string(),
-                    format!("{}\nSummary: {}", rf.evidence, rf.summary),
-                    format!("Plugin: {}", plugin.name),
-                    plugin.version.clone(),
-                    rf.cwe,
-                    rf.remediation,
-                );
-                findings.push(finding);
+                    let finding = Finding::new(
+                        target_id.to_string(),
+                        rf.title,
+                        sev,
+                        rf.confidence.unwrap_or(80),
+                        target_url.to_string(),
+                        format!("{}\nSummary: {}", rf.evidence, rf.summary),
+                        format!("Plugin: {}", plugin.name),
+                        plugin.version.clone(),
+                        rf.cwe,
+                        rf.remediation,
+                    );
+                    f_list.push(finding);
+                }
             }
-        }
+            (f_list, parsed.logs.unwrap_or_default())
+        } else {
+            // Intelligent CLI text fallback
+            let mut f_list = Vec::new();
+            let mut l_list = Vec::new();
 
-        let mut logs = parsed.logs.unwrap_or_default();
+            for line in stdout.lines() {
+                let trimmed = line.trim();
+                if !trimmed.is_empty() {
+                    l_list.push(trimmed.to_string());
+
+                    let lower = trimmed.to_lowercase();
+                    if lower.contains("cve-") || lower.contains("[critical]") || lower.contains("[high]") || lower.contains("[vulnerable]") {
+                        let sev = if lower.contains("critical") {
+                            FindingSeverity::Critical
+                        } else if lower.contains("high") {
+                            FindingSeverity::High
+                        } else {
+                            FindingSeverity::Medium
+                        };
+
+                        f_list.push(Finding::new(
+                            target_id.to_string(),
+                            format!("{}: Security Alert Detected", plugin.name),
+                            sev,
+                            85,
+                            target_url.to_string(),
+                            trimmed.to_string(),
+                            format!("Plugin: {}", plugin.name),
+                            plugin.version.clone(),
+                            None,
+                            "Review tool finding and apply necessary configuration or code patches.".to_string(),
+                        ));
+                    }
+                }
+            }
+
+            if l_list.is_empty() && !stderr.trim().is_empty() {
+                l_list.push(format!("Process executed with stderr output: {}", stderr.trim()));
+            }
+
+            (f_list, l_list)
+        };
+
         if !stderr.trim().is_empty() {
             logs.push(format!("[Plugin stderr]: {}", stderr.trim()));
         }

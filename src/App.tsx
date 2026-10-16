@@ -25,7 +25,8 @@ import {
   PlusCircle,
   CheckCircle2,
   RefreshCw,
-  Radio
+  Radio,
+  BookOpen
 } from "lucide-react";
 import "./App.css";
 import { Target, ToolInfo, PluginInfo, FeedUpdateResult, Finding, ScanResult, FindingStatus, DiscoveredEndpoint, ModelPullProgress } from "./types";
@@ -42,8 +43,16 @@ export default function App() {
   const [plugins, setPlugins] = useState<PluginInfo[]>([]);
   const [toolHubTab, setToolHubTab] = useState<"tools" | "plugins">("tools");
   const [showPluginModal, setShowPluginModal] = useState<boolean>(false);
+  const [pluginModalMode, setPluginModalMode] = useState<"form" | "json">("form");
+  const [customToolName, setCustomToolName] = useState<string>("");
+  const [customToolExe, setCustomToolExe] = useState<string>("");
+  const [customToolRuntime, setCustomToolRuntime] = useState<string>("standalone");
+  const [customToolDesc, setCustomToolDesc] = useState<string>("");
+  const [customToolTimeout, setCustomToolTimeout] = useState<number>(30);
   const [newPluginJson, setNewPluginJson] = useState<string>("");
   const [pluginRegisterStatus, setPluginRegisterStatus] = useState<string>("");
+  const [showIntegrationGuide, setShowIntegrationGuide] = useState<boolean>(false);
+  const [guideTab, setGuideTab] = useState<"cli" | "python" | "burp_zap" | "wireshark" | "mobile">("cli");
   const [selectedPluginToRun, setSelectedPluginToRun] = useState<string>("");
   const [isUpdatingFeeds, setIsUpdatingFeeds] = useState<boolean>(false);
   const [feedStatus, setFeedStatus] = useState<string>("");
@@ -266,6 +275,50 @@ export default function App() {
         timeout_seconds: 45,
         description: "Standalone compiled binary scanner adapter."
       }, null, 2));
+    }
+  }
+
+  async function handleRegisterQuickTool() {
+    if (!customToolName.trim() || !customToolExe.trim()) {
+      setPluginRegisterStatus("Please enter both Tool Name and Executable/Command.");
+      return;
+    }
+    const cleanId = customToolName.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-");
+    const manifest = {
+      id: cleanId || `tool-${Date.now()}`,
+      name: customToolName.trim(),
+      version: "1.0.0",
+      publisher: "Local Administrator",
+      runtime: customToolRuntime,
+      executable: customToolExe.trim(),
+      capabilities: ["custom_security_scan", "cli_adapter"],
+      permissions: {
+        network: ["in_scope_target_only"],
+        filesystem: ["none"],
+        environment: ["none"]
+      },
+      timeout_seconds: customToolTimeout || 30,
+      description: customToolDesc.trim() || "Custom security tool integrated via AppSec Nexus Universal CLI Adapter."
+    };
+    setNewPluginJson(JSON.stringify(manifest, null, 2));
+    if (!isTauriApp) {
+      setPluginRegisterStatus("Desktop environment required to register tools.");
+      return;
+    }
+    setPluginRegisterStatus("Registering custom tool adapter...");
+    try {
+      const registered = await invoke<PluginInfo>("register_plugin", { manifestJson: JSON.stringify(manifest) });
+      setPlugins((prev) => [...prev.filter((p) => p.id !== registered.id), registered]);
+      setPluginRegisterStatus(`✓ Tool '${registered.name}' registered successfully!`);
+      setTimeout(() => {
+        setShowPluginModal(false);
+        setPluginRegisterStatus("");
+        setCustomToolName("");
+        setCustomToolExe("");
+        setCustomToolDesc("");
+      }, 1200);
+    } catch (err: any) {
+      setPluginRegisterStatus(`Error: ${err.toString()}`);
     }
   }
 
@@ -874,6 +927,14 @@ export default function App() {
                   >
                     <PlusCircle size={15} color="var(--accent-cyan)" /> Register Plugin
                   </button>
+
+                  <button
+                    className="btn btn-secondary"
+                    style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.82rem" }}
+                    onClick={() => setShowIntegrationGuide(true)}
+                  >
+                    <BookOpen size={15} color="var(--accent-cyan)" /> Integration Guide & Help
+                  </button>
                 </div>
               </div>
 
@@ -1097,7 +1158,7 @@ export default function App() {
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
                       <h3 style={{ fontSize: "1.1rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "8px" }}>
-                        <Puzzle size={18} color="var(--accent-cyan)" /> Register Custom Tool Plugin
+                        <Puzzle size={18} color="var(--accent-cyan)" /> Integrate Local Tool / Plugin
                       </h3>
                       <button
                         className="btn btn-secondary"
@@ -1112,40 +1173,134 @@ export default function App() {
                     </div>
 
                     <p style={{ color: "var(--text-muted)", fontSize: "0.82rem", marginBottom: "12px" }}>
-                      Define your tool manifest JSON below. The manifest declares execution parameters, process timeout, and network permissions.
+                      Easily hook any tool or script installed on your PC (e.g. <code>trivy</code>, <code>semgrep</code>, <code>gitleaks</code>, <code>tshark</code>, or custom scripts). AppSec Nexus automatically checks system PATH and runs them natively.
                     </p>
 
-                    <div style={{ display: "flex", gap: "8px", marginBottom: "10px" }}>
-                      <span style={{ fontSize: "0.78rem", color: "var(--text-dim)", alignSelf: "center" }}>Preset Templates:</span>
-                      <button className="btn btn-secondary" style={{ padding: "3px 8px", fontSize: "0.75rem" }} onClick={() => loadPluginTemplate("python")}>
-                        Python 3
+                    {/* MODE SWITCHER */}
+                    <div style={{ display: "flex", gap: "8px", marginBottom: "14px", borderBottom: "1px solid var(--border-color)", paddingBottom: "10px" }}>
+                      <button
+                        className={`btn ${pluginModalMode === "form" ? "btn-primary" : "btn-secondary"}`}
+                        style={{ padding: "5px 12px", fontSize: "0.8rem" }}
+                        onClick={() => setPluginModalMode("form")}
+                      >
+                        Quick Tool Form (Recommended)
                       </button>
-                      <button className="btn btn-secondary" style={{ padding: "3px 8px", fontSize: "0.75rem" }} onClick={() => loadPluginTemplate("node")}>
-                        Node.js
-                      </button>
-                      <button className="btn btn-secondary" style={{ padding: "3px 8px", fontSize: "0.75rem" }} onClick={() => loadPluginTemplate("binary")}>
-                        Compiled Binary (.exe)
+                      <button
+                        className={`btn ${pluginModalMode === "json" ? "btn-primary" : "btn-secondary"}`}
+                        style={{ padding: "5px 12px", fontSize: "0.8rem" }}
+                        onClick={() => setPluginModalMode("json")}
+                      >
+                        Advanced JSON Editor
                       </button>
                     </div>
 
-                    <textarea
-                      rows={14}
-                      value={newPluginJson}
-                      onChange={(e) => setNewPluginJson(e.target.value)}
-                      placeholder="Paste manifest.json content here..."
-                      style={{
-                        width: "100%",
-                        fontFamily: "monospace",
-                        fontSize: "0.8rem",
-                        backgroundColor: "#080c14",
-                        color: "#a5f3fc",
-                        border: "1px solid var(--border-color)",
-                        borderRadius: "6px",
-                        padding: "10px",
-                        marginBottom: "12px",
-                        resize: "vertical",
-                      }}
-                    />
+                    {pluginModalMode === "form" ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "12px" }}>
+                        <div>
+                          <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "4px" }}>
+                            Tool Name
+                          </label>
+                          <input
+                            className="input-field"
+                            placeholder="e.g. Trivy Container & SBOM Scanner"
+                            value={customToolName}
+                            onChange={(e) => setCustomToolName(e.target.value)}
+                          />
+                        </div>
+
+                        <div style={{ display: "grid", gridTemplateColumns: "2fr 1.2fr 0.8fr", gap: "10px" }}>
+                          <div>
+                            <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "4px" }}>
+                              Command Name or File Path
+                            </label>
+                            <input
+                              className="input-field"
+                              placeholder="e.g. trivy or C:\tools\scanner.exe or audit.py"
+                              value={customToolExe}
+                              onChange={(e) => setCustomToolExe(e.target.value)}
+                            />
+                            <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "2px", display: "block" }}>
+                              Checks system PATH or file directory.
+                            </span>
+                          </div>
+
+                          <div>
+                            <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "4px" }}>
+                              Runtime
+                            </label>
+                            <select
+                              className="input-field"
+                              value={customToolRuntime}
+                              onChange={(e) => setCustomToolRuntime(e.target.value)}
+                            >
+                              <option value="standalone">Standalone / PATH CLI</option>
+                              <option value="python3">Python 3 Script</option>
+                              <option value="node">Node.js Script</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "4px" }}>
+                              Timeout (s)
+                            </label>
+                            <input
+                              type="number"
+                              className="input-field"
+                              value={customToolTimeout}
+                              min={5}
+                              max={300}
+                              onChange={(e) => setCustomToolTimeout(parseInt(e.target.value) || 30)}
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "4px" }}>
+                            Description & Purpose
+                          </label>
+                          <input
+                            className="input-field"
+                            placeholder="e.g. Scans source code and containers for known CVEs"
+                            value={customToolDesc}
+                            onChange={(e) => setCustomToolDesc(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div style={{ display: "flex", gap: "8px", marginBottom: "10px" }}>
+                          <span style={{ fontSize: "0.78rem", color: "var(--text-dim)", alignSelf: "center" }}>Preset Templates:</span>
+                          <button className="btn btn-secondary" style={{ padding: "3px 8px", fontSize: "0.75rem" }} onClick={() => loadPluginTemplate("python")}>
+                            Python 3
+                          </button>
+                          <button className="btn btn-secondary" style={{ padding: "3px 8px", fontSize: "0.75rem" }} onClick={() => loadPluginTemplate("node")}>
+                            Node.js
+                          </button>
+                          <button className="btn btn-secondary" style={{ padding: "3px 8px", fontSize: "0.75rem" }} onClick={() => loadPluginTemplate("binary")}>
+                            Compiled Binary (.exe)
+                          </button>
+                        </div>
+
+                        <textarea
+                          rows={12}
+                          value={newPluginJson}
+                          onChange={(e) => setNewPluginJson(e.target.value)}
+                          placeholder="Paste manifest.json content here..."
+                          style={{
+                            width: "100%",
+                            fontFamily: "monospace",
+                            fontSize: "0.8rem",
+                            backgroundColor: "#080c14",
+                            color: "#a5f3fc",
+                            border: "1px solid var(--border-color)",
+                            borderRadius: "6px",
+                            padding: "10px",
+                            marginBottom: "12px",
+                            resize: "vertical",
+                          }}
+                        />
+                      </div>
+                    )}
 
                     {pluginRegisterStatus && (
                       <div
@@ -1173,9 +1328,254 @@ export default function App() {
                       >
                         Cancel
                       </button>
-                      <button className="btn btn-primary" onClick={handleRegisterPlugin}>
-                        <CheckCircle2 size={14} /> Validate & Register Plugin
+                      {pluginModalMode === "form" ? (
+                        <button className="btn btn-primary" onClick={handleRegisterQuickTool}>
+                          <CheckCircle2 size={14} /> Register & Enable Tool
+                        </button>
+                      ) : (
+                        <button className="btn btn-primary" onClick={handleRegisterPlugin}>
+                          <CheckCircle2 size={14} /> Validate & Register Manifest
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* MODAL: UNIVERSAL TOOL INTEGRATION GUIDE */}
+              {showIntegrationGuide && (
+                <div
+                  style={{
+                    position: "fixed",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: "rgba(0, 0, 0, 0.8)",
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    zIndex: 9999,
+                    backdropFilter: "blur(5px)",
+                  }}
+                >
+                  <div
+                    className="card"
+                    style={{
+                      width: "780px",
+                      maxWidth: "94vw",
+                      maxHeight: "88vh",
+                      overflowY: "auto",
+                      boxShadow: "0 25px 50px rgba(0,0,0,0.7)",
+                      border: "1px solid var(--border-color)",
+                      padding: "24px",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+                      <h3 style={{ fontSize: "1.2rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "10px" }}>
+                        <BookOpen size={20} color="var(--accent-cyan)" /> Universal Tool Integration Playbook
+                      </h3>
+                      <button
+                        className="btn btn-secondary"
+                        style={{ padding: "4px 8px", fontSize: "0.8rem" }}
+                        onClick={() => setShowIntegrationGuide(false)}
+                      >
+                        ✕
                       </button>
+                    </div>
+
+                    <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginBottom: "16px" }}>
+                      AppSec Nexus is designed as an open DevSecOps workbench. You can easily plug in any command-line scanner, network inspector, or custom script installed on your computer.
+                    </p>
+
+                    {/* GUIDE NAVIGATION TABS */}
+                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "16px", borderBottom: "1px solid var(--border-color)", paddingBottom: "10px" }}>
+                      <button
+                        className={`btn ${guideTab === "cli" ? "btn-primary" : "btn-secondary"}`}
+                        style={{ padding: "5px 10px", fontSize: "0.78rem" }}
+                        onClick={() => setGuideTab("cli")}
+                      >
+                        1. CLI & Standalone Tools
+                      </button>
+                      <button
+                        className={`btn ${guideTab === "python" ? "btn-primary" : "btn-secondary"}`}
+                        style={{ padding: "5px 10px", fontSize: "0.78rem" }}
+                        onClick={() => setGuideTab("python")}
+                      >
+                        2. Python Security Scripts
+                      </button>
+                      <button
+                        className={`btn ${guideTab === "burp_zap" ? "btn-primary" : "btn-secondary"}`}
+                        style={{ padding: "5px 10px", fontSize: "0.78rem" }}
+                        onClick={() => setGuideTab("burp_zap")}
+                      >
+                        3. Burp Suite & OWASP ZAP
+                      </button>
+                      <button
+                        className={`btn ${guideTab === "wireshark" ? "btn-primary" : "btn-secondary"}`}
+                        style={{ padding: "5px 10px", fontSize: "0.78rem" }}
+                        onClick={() => setGuideTab("wireshark")}
+                      >
+                        4. Wireshark & PCAP Traffic
+                      </button>
+                      <button
+                        className={`btn ${guideTab === "mobile" ? "btn-primary" : "btn-secondary"}`}
+                        style={{ padding: "5px 10px", fontSize: "0.78rem" }}
+                        onClick={() => setGuideTab("mobile")}
+                      >
+                        5. Android Mobile (APK)
+                      </button>
+                    </div>
+
+                    {/* TAB CONTENT: 1. CLI TOOLS */}
+                    {guideTab === "cli" && (
+                      <div style={{ fontSize: "0.85rem", lineHeight: "1.6", color: "var(--text-main)" }}>
+                        <h4 style={{ fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "8px" }}>
+                          Integrating Standalone CLI Tools (Trivy, Semgrep, Gitleaks, etc.)
+                        </h4>
+                        <ol style={{ paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                          <li>
+                            <strong>Install the tool on your machine:</strong>
+                            <div style={{ background: "#080c14", padding: "8px 12px", borderRadius: "6px", fontFamily: "monospace", marginTop: "4px" }}>
+                              winget install AquaSecurity.Trivy<br />
+                              pip install semgrep<br />
+                              winget install gitleaks
+                            </div>
+                          </li>
+                          <li>
+                            <strong>Open the Tool Form:</strong> Click the <em>"Register Plugin"</em> button at the top of the Tool Hub.
+                          </li>
+                          <li>
+                            <strong>Enter Tool Details:</strong>
+                            <ul style={{ paddingLeft: "16px", marginTop: "4px" }}>
+                              <li><strong>Tool Name:</strong> e.g. <code>Trivy Vulnerability Scanner</code></li>
+                              <li><strong>Command Name:</strong> Enter the command name (e.g. <code>trivy</code>) or full file path (e.g. <code>C:\tools\scanner.exe</code>).</li>
+                              <li><strong>Runtime:</strong> Select <code>Standalone / PATH CLI</code>.</li>
+                            </ul>
+                          </li>
+                          <li>
+                            <strong>Run the Scan:</strong> Select your target in the Scan Console and click <strong>Run Plugin</strong>. AppSec Nexus executes the command, streams console output live, and automatically parses any CVE or security alert keywords!
+                          </li>
+                        </ol>
+                      </div>
+                    )}
+
+                    {/* TAB CONTENT: 2. PYTHON SCRIPTS */}
+                    {guideTab === "python" && (
+                      <div style={{ fontSize: "0.85rem", lineHeight: "1.6", color: "var(--text-main)" }}>
+                        <h4 style={{ fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "8px" }}>
+                          Writing Custom Python Security Auditors
+                        </h4>
+                        <p style={{ color: "var(--text-muted)", marginBottom: "8px" }}>
+                          Python plugins run using your local Python 3 installation. They receive the target address as the first argument (<code>sys.argv[1]</code>).
+                        </p>
+                        <div style={{ background: "#080c14", padding: "10px 14px", borderRadius: "6px", fontFamily: "monospace", fontSize: "0.78rem", overflowX: "auto" }}>
+                          <span style={{ color: "var(--accent-cyan)" }}># sample_audit.py</span><br />
+                          import sys, json, urllib.request<br /><br />
+                          target = sys.argv[1]<br />
+                          print(json.dumps(&#123;<br />
+                          &nbsp;&nbsp;"target": target,<br />
+                          &nbsp;&nbsp;"findings": [&#123;<br />
+                          &nbsp;&nbsp;&nbsp;&nbsp;"title": "Custom Security Check Passed",<br />
+                          &nbsp;&nbsp;&nbsp;&nbsp;"severity": "Info",<br />
+                          &nbsp;&nbsp;&nbsp;&nbsp;"summary": "Audited target headers successfully.",<br />
+                          &nbsp;&nbsp;&nbsp;&nbsp;"evidence": "Response status 200 OK",<br />
+                          &nbsp;&nbsp;&nbsp;&nbsp;"cwe": "CWE-200",<br />
+                          &nbsp;&nbsp;&nbsp;&nbsp;"remediation": "No remediation required."<br />
+                          &nbsp;&nbsp;&#125;],<br />
+                          &nbsp;&nbsp;"logs": ["Audit complete!"]<br />
+                          &#125;, indent=2))
+                        </div>
+                      </div>
+                    )}
+
+                    {/* TAB CONTENT: 3. BURP SUITE & ZAP */}
+                    {guideTab === "burp_zap" && (
+                      <div style={{ fontSize: "0.85rem", lineHeight: "1.6", color: "var(--text-main)" }}>
+                        <h4 style={{ fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "8px" }}>
+                          Burp Suite & OWASP ZAP Ingestion & Proxy Chaining
+                        </h4>
+                        <ol style={{ paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                          <li>
+                            <strong>Upstream Proxy Inspection:</strong> Route browsers or testing scripts through Burp Suite at <code>http://127.0.0.1:8080</code> to view and intercept live HTTP history.
+                          </li>
+                          <li>
+                            <strong>Export Findings from Burp Suite:</strong> In Burp, go to <em>Target &gt; Site map</em>, right-click on your target or issues list, and select <em>Export issues as XML</em>.
+                          </li>
+                          <li>
+                            <strong>Export Findings from OWASP ZAP:</strong> In ZAP, select <em>Report &gt; Generate Report</em> and choose <em>JSON</em> format.
+                          </li>
+                          <li>
+                            <strong>1-Click Import in AppSec Nexus:</strong> Navigate to the <strong>Import Reports</strong> tab, select your format, paste the content, and click <strong>Parse & Import Findings</strong>. All vulnerabilities are automatically ingested and paired with the local **Ollama AI Remediation** engine!
+                          </li>
+                        </ol>
+                      </div>
+                    )}
+
+                    {/* TAB CONTENT: 4. WIRESHARK & PCAP */}
+                    {guideTab === "wireshark" && (
+                      <div style={{ fontSize: "0.85rem", lineHeight: "1.6", color: "var(--text-main)" }}>
+                        <h4 style={{ fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "8px" }}>
+                          Wireshark & Network Packet Inspection
+                        </h4>
+                        <ol style={{ paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                          <li>
+                            <strong>Capture Network Packets:</strong> Use Wireshark or <code>tcpdump</code> to record network traffic, then save the capture as a <code>.pcap</code> or <code>.pcapng</code> file.
+                          </li>
+                          <li>
+                            <strong>Configure Target in AppSec Nexus:</strong> In <em>Configure Authorized Target</em>, enter the full path to your capture file (e.g. <code>C:\captures\network_traffic.pcap</code>).
+                          </li>
+                          <li>
+                            <strong>Execute PCAP Auditor:</strong> Select the <strong>Wireshark PCAP & Network Traffic Auditor</strong> plugin and click Run.
+                          </li>
+                          <li>
+                            <strong>Automatic Leak Detection:</strong> The auditor flags unencrypted HTTP Basic Auth credentials, FTP/Telnet plaintext passwords, deprecated SSL 3.0 / TLS 1.0 sessions, and open cleartext ports.
+                          </li>
+                        </ol>
+                      </div>
+                    )}
+
+                    {/* TAB CONTENT: 5. MOBILE SECURITY */}
+                    {guideTab === "mobile" && (
+                      <div style={{ fontSize: "0.85rem", lineHeight: "1.6", color: "var(--text-main)" }}>
+                        <h4 style={{ fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "8px" }}>
+                          Android APK Static Security Auditing
+                        </h4>
+                        <ol style={{ paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                          <li>
+                            <strong>Add Target:</strong> In <em>Configure Authorized Target</em>, set the Target Address to the local <code>.apk</code> path (e.g. <code>C:\downloads\my_app.apk</code>).
+                          </li>
+                          <li>
+                            <strong>Run Android APK Auditor:</strong> Select <code>android-apk-auditor</code> and start the audit.
+                          </li>
+                          <li>
+                            <strong>Security Coverage:</strong> Automatically inspects AndroidManifest.xml flags (<code>debuggable</code>, <code>allowBackup</code>, <code>usesCleartextTraffic</code>), flags high-risk permissions (SMS, microphone, GPS), detects exported components (CWE-926), and extracts hardcoded API keys and tokens from <code>classes.dex</code> bytecode.
+                          </li>
+                        </ol>
+                      </div>
+                    )}
+
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "20px", paddingTop: "14px", borderTop: "1px solid var(--border-color)" }}>
+                      <span style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>
+                        Documentation file also saved at <code>docs/TOOL_INTEGRATION_GUIDE.md</code>
+                      </span>
+                      <div style={{ display: "flex", gap: "8px" }}>
+                        <button
+                          className="btn btn-secondary"
+                          onClick={() => setShowIntegrationGuide(false)}
+                        >
+                          Close Guide
+                        </button>
+                        <button
+                          className="btn btn-primary"
+                          onClick={() => {
+                            setShowIntegrationGuide(false);
+                            setShowPluginModal(true);
+                          }}
+                        >
+                          <PlusCircle size={14} /> Open Tool Registration
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
