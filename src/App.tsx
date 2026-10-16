@@ -27,7 +27,9 @@ import {
   RefreshCw,
   Radio,
   BookOpen,
-  GraduationCap
+  GraduationCap,
+  Copy,
+  Check
 } from "lucide-react";
 import "./App.css";
 import { Target, ToolInfo, PluginInfo, FeedUpdateResult, Finding, ScanResult, FindingStatus, DiscoveredEndpoint, ModelPullProgress } from "./types";
@@ -37,7 +39,16 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<
     "targets" | "tools" | "crawler" | "scanner" | "findings" | "importer" | "mentor" | "history" | "academy"
   >("targets");
-  const [academyTab, setAcademyTab] = useState<"cyber" | "networking" | "linux" | "windows">("cyber");
+  const [academyTab, setAcademyTab] = useState<"cyber" | "networking" | "linux" | "windows" | "differences" | "scenarios" | "commands">("cyber");
+  const [copiedCmd, setCopiedCmd] = useState<string>("");
+
+  function copyCmd(cmdText: string) {
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(cmdText);
+      setCopiedCmd(cmdText);
+      setTimeout(() => setCopiedCmd(""), 2000);
+    }
+  }
 
   const [targets, setTargets] = useState<Target[]>([]);
   const [selectedTarget, setSelectedTarget] = useState<Target | null>(null);
@@ -2394,31 +2405,52 @@ export default function App() {
                 <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", borderBottom: "1px solid var(--border-color)", paddingBottom: "12px" }}>
                   <button
                     className={`btn ${academyTab === "cyber" ? "btn-primary" : "btn-secondary"}`}
-                    style={{ fontSize: "0.82rem", padding: "6px 14px" }}
+                    style={{ fontSize: "0.82rem", padding: "6px 12px" }}
                     onClick={() => setAcademyTab("cyber")}
                   >
-                    🛡️ 1. Cybersecurity Core & OWASP
+                    🛡️ 1. Cyber Core & OWASP
                   </button>
                   <button
                     className={`btn ${academyTab === "networking" ? "btn-primary" : "btn-secondary"}`}
-                    style={{ fontSize: "0.82rem", padding: "6px 14px" }}
+                    style={{ fontSize: "0.82rem", padding: "6px 12px" }}
                     onClick={() => setAcademyTab("networking")}
                   >
-                    🌐 2. Networking Mastery & OSI
+                    🌐 2. Networking & OSI
                   </button>
                   <button
                     className={`btn ${academyTab === "linux" ? "btn-primary" : "btn-secondary"}`}
-                    style={{ fontSize: "0.82rem", padding: "6px 14px" }}
+                    style={{ fontSize: "0.82rem", padding: "6px 12px" }}
                     onClick={() => setAcademyTab("linux")}
                   >
-                    🐧 3. Linux System Security
+                    🐧 3. Linux Security
                   </button>
                   <button
                     className={`btn ${academyTab === "windows" ? "btn-primary" : "btn-secondary"}`}
-                    style={{ fontSize: "0.82rem", padding: "6px 14px" }}
+                    style={{ fontSize: "0.82rem", padding: "6px 12px" }}
                     onClick={() => setAcademyTab("windows")}
                   >
-                    🪟 4. Windows Security Architecture
+                    🪟 4. Windows & Kerberos
+                  </button>
+                  <button
+                    className={`btn ${academyTab === "differences" ? "btn-primary" : "btn-secondary"}`}
+                    style={{ fontSize: "0.82rem", padding: "6px 12px" }}
+                    onClick={() => setAcademyTab("differences")}
+                  >
+                    ⚖️ 5. Key Differences & Tables
+                  </button>
+                  <button
+                    className={`btn ${academyTab === "scenarios" ? "btn-primary" : "btn-secondary"}`}
+                    style={{ fontSize: "0.82rem", padding: "6px 12px" }}
+                    onClick={() => setAcademyTab("scenarios")}
+                  >
+                    🚨 6. Real-World Breach Scenarios
+                  </button>
+                  <button
+                    className={`btn ${academyTab === "commands" ? "btn-primary" : "btn-secondary"}`}
+                    style={{ fontSize: "0.82rem", padding: "6px 12px" }}
+                    onClick={() => setAcademyTab("commands")}
+                  >
+                    📋 7. Command Cheat Sheets
                   </button>
                 </div>
               </div>
@@ -2426,21 +2458,22 @@ export default function App() {
               {/* MODULE 1: CYBERSECURITY FOUNDATIONS */}
               {academyTab === "cyber" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  {/* CIA TRIAD & CORE PRINCIPLES */}
                   <div className="card">
                     <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "12px" }}>
                       The Core Security Pillars & Design Principles
                     </h3>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px", marginBottom: "14px" }}>
                       <div style={{ background: "var(--bg-secondary)", padding: "14px", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
                         <div style={{ fontWeight: 600, color: "var(--accent-cyan)", marginBottom: "4px" }}>Confidentiality (C)</div>
                         <div style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>
-                          Ensures sensitive data is readable only by authorized entities. Enforced via encryption (AES-256, TLS 1.3) and strict Access Control Lists.
+                          Ensures sensitive data is readable only by authorized entities. Enforced via encryption (AES-256, TLS 1.3) and strict Access Control Lists (ACLs).
                         </div>
                       </div>
                       <div style={{ background: "var(--bg-secondary)", padding: "14px", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
                         <div style={{ fontWeight: 600, color: "var(--accent-emerald)", marginBottom: "4px" }}>Integrity (I)</div>
                         <div style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>
-                          Guarantees that information has not been modified or tampered with. Enforced via cryptographic hashing (SHA-256) and digital signatures.
+                          Guarantees that information has not been modified or tampered with. Enforced via cryptographic hashing (SHA-256 HMAC) and digital signatures.
                         </div>
                       </div>
                       <div style={{ background: "var(--bg-secondary)", padding: "14px", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
@@ -2450,50 +2483,111 @@ export default function App() {
                         </div>
                       </div>
                     </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px" }}>
+                      <div style={{ background: "rgba(6, 182, 212, 0.08)", padding: "12px", borderRadius: "6px", borderLeft: "3px solid var(--accent-cyan)" }}>
+                        <strong style={{ fontSize: "0.85rem", color: "var(--accent-cyan)" }}>Zero Trust Architecture:</strong>
+                        <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", margin: "4px 0 0 0" }}>
+                          "Never Trust, Always Verify." Every entity, whether inside or outside the internal network perimeter, must be authenticated, authorized, and continuously validated before access is granted.
+                        </p>
+                      </div>
+                      <div style={{ background: "rgba(16, 185, 129, 0.08)", padding: "12px", borderRadius: "6px", borderLeft: "3px solid var(--accent-emerald)" }}>
+                        <strong style={{ fontSize: "0.85rem", color: "var(--accent-emerald)" }}>Defense-in-Depth:</strong>
+                        <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", margin: "4px 0 0 0" }}>
+                          Layering multiple distinct defensive controls (Perimeter Firewall &rarr; WAF &rarr; TLS 1.3 &rarr; Micro-segmentation &rarr; RBAC &rarr; DB Field Encryption) so single-point failures never lead to total breach.
+                        </p>
+                      </div>
+                      <div style={{ background: "rgba(245, 158, 11, 0.08)", padding: "12px", borderRadius: "6px", borderLeft: "3px solid var(--accent-amber)" }}>
+                        <strong style={{ fontSize: "0.85rem", color: "var(--accent-amber)" }}>Principle of Least Privilege (PoLP):</strong>
+                        <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", margin: "4px 0 0 0" }}>
+                          Every user, service account, and background daemon must be restricted to the exact bare minimum set of permissions required to execute its legitimate function.
+                        </p>
+                      </div>
+                    </div>
                   </div>
 
+                  {/* DIAGRAM: STRIDE THREAT MODELING */}
+                  <div className="card">
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "8px" }}>
+                      STRIDE Threat Modeling Architecture (Visual Matrix)
+                    </h3>
+                    <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", marginBottom: "12px" }}>
+                      Developed by Microsoft, STRIDE is the industry standard framework for identifying threats during application architecture design:
+                    </p>
+                    <div style={{ background: "#080c14", padding: "12px", borderRadius: "8px", fontFamily: "monospace", fontSize: "0.78rem", overflowX: "auto", border: "1px solid var(--border-color)", lineHeight: "1.4" }}>
+                      <pre style={{ margin: 0, color: "#a5f3fc" }}>{`+-------------------------------------------------------------------------------------------------+
+| Threat Category        | Security Property  | Attacker Action Example         | Defensive Countermeasure |
++------------------------+--------------------+---------------------------------+--------------------------+
+| [S] Spoofing           | Authenticity       | Impersonating legitimate user   | Strong MFA, PKI Client   |
+| [T] Tampering          | Integrity          | Altering wire transaction sums  | SHA-256 HMAC, Signatures |
+| [R] Repudiation        | Non-Repudiation    | Denying having sent a request   | Append-only audit logs   |
+| [I] Info Disclosure    | Confidentiality    | Leaking customer credentials    | AES-256, TLS 1.3 encrypt |
+| [D] Denial of Service  | Availability       | SYN flood crashing web app      | Rate limiting, WAF       |
+| [E] Elevation of Priv  | Authorization      | SUID root or token escalation   | Least privilege, AppArmor|
++-------------------------------------------------------------------------------------------------+`}</pre>
+                    </div>
+                  </div>
+
+                  {/* OWASP TOP 10 WITH CODE EXAMPLES */}
                   <div className="card">
                     <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "12px" }}>
-                      OWASP Top 10 Web Vulnerabilities
+                      OWASP Top 10 Web Vulnerabilities & Code Hardening
                     </h3>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                      {/* SQLi */}
                       <div style={{ background: "var(--bg-secondary)", padding: "14px", borderRadius: "8px", borderLeft: "4px solid var(--accent-rose)" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontWeight: 600 }}>SQL Injection (SQLi) • CWE-89</span>
-                          <span className="badge badge-critical">Critical</span>
+                          <span style={{ fontWeight: 600, fontSize: "0.95rem" }}>1. SQL Injection (SQLi) &bull; CWE-89</span>
+                          <span className="badge badge-critical">Critical &bull; CVSS 9.8</span>
                         </div>
-                        <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", margin: "6px 0" }}>
-                          Attacker manipulates database queries by supplying untrusted input that concatenates directly into raw SQL statements.
+                        <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", margin: "6px 0 10px 0" }}>
+                          Attacker manipulates database queries by supplying untrusted input that concatenates directly into raw SQL syntax, enabling unauthorized data dumping or administrative authentication bypass.
                         </p>
-                        <div style={{ background: "#080c14", padding: "8px 12px", borderRadius: "6px", fontFamily: "monospace", fontSize: "0.78rem" }}>
-                          <span style={{ color: "var(--accent-rose)" }}>Vulnerable:</span> cursor.execute(f"SELECT * FROM users WHERE name = '&#123;user&#125;'")<br />
-                          <span style={{ color: "var(--accent-emerald)" }}>Secure (Parameterized):</span> cursor.execute("SELECT * FROM users WHERE name = %s", (user,))
+                        <div style={{ background: "#080c14", padding: "10px 14px", borderRadius: "6px", fontFamily: "monospace", fontSize: "0.78rem", border: "1px solid var(--border-color)" }}>
+                          <div style={{ color: "var(--accent-rose)", marginBottom: "4px" }}>
+                            <strong>❌ Vulnerable (Raw String Concatenation):</strong>
+                          </div>
+                          <code>query = f"SELECT id, email FROM users WHERE username = '&#123;user_input&#125;'"</code>
+                          <div style={{ color: "var(--accent-emerald)", marginTop: "8px", marginBottom: "4px" }}>
+                            <strong>✅ Secure (Parameterized Prepared Statement):</strong>
+                          </div>
+                          <code>query = "SELECT id, email FROM users WHERE username = %s" ; cursor.execute(query, (user_input,))</code>
                         </div>
                       </div>
 
+                      {/* XSS */}
                       <div style={{ background: "var(--bg-secondary)", padding: "14px", borderRadius: "8px", borderLeft: "4px solid var(--accent-amber)" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontWeight: 600 }}>Cross-Site Scripting (XSS) • CWE-79</span>
-                          <span className="badge badge-high">High</span>
+                          <span style={{ fontWeight: 600, fontSize: "0.95rem" }}>2. Cross-Site Scripting (XSS) &bull; CWE-79</span>
+                          <span className="badge badge-high">High &bull; CVSS 7.5</span>
                         </div>
-                        <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", margin: "6px 0" }}>
-                          Application serves unescaped user input into browser HTML, allowing execution of malicious JavaScript to steal session tokens.
+                        <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", margin: "6px 0 10px 0" }}>
+                          Application accepts untrusted user input and embeds it into browser HTML without sanitization, allowing attacker JavaScript to run in the victim's session context and exfiltrate session cookies.
                         </p>
-                        <div style={{ background: "#080c14", padding: "8px 12px", borderRadius: "6px", fontFamily: "monospace", fontSize: "0.78rem" }}>
-                          <span style={{ color: "var(--accent-emerald)" }}>Remediation:</span> Context-aware HTML escaping, Strict CSP (Content-Security-Policy), and HttpOnly cookie flags.
+                        <div style={{ background: "#080c14", padding: "10px 14px", borderRadius: "6px", fontFamily: "monospace", fontSize: "0.78rem", border: "1px solid var(--border-color)" }}>
+                          <div style={{ color: "var(--accent-rose)", marginBottom: "4px" }}>
+                            <strong>❌ Vulnerable:</strong> <code>element.innerHTML = userInput;</code>
+                          </div>
+                          <div style={{ color: "var(--accent-emerald)", marginTop: "6px", marginBottom: "4px" }}>
+                            <strong>✅ Secure:</strong> <code>element.textContent = userInput;</code>
+                          </div>
+                          <div style={{ fontSize: "0.75rem", color: "var(--accent-cyan)", marginTop: "6px" }}>
+                            Enforce HTTP header: <code>Content-Security-Policy: default-src 'self'; script-src 'self';</code> + Cookie flag <code>HttpOnly</code>.
+                          </div>
                         </div>
                       </div>
 
+                      {/* SSRF */}
                       <div style={{ background: "var(--bg-secondary)", padding: "14px", borderRadius: "8px", borderLeft: "4px solid var(--accent-amber)" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontWeight: 600 }}>Server-Side Request Forgery (SSRF) • CWE-918</span>
-                          <span className="badge badge-high">High</span>
+                          <span style={{ fontWeight: 600, fontSize: "0.95rem" }}>3. Server-Side Request Forgery (SSRF) &bull; CWE-918</span>
+                          <span className="badge badge-high">High &bull; CVSS 8.6</span>
                         </div>
-                        <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", margin: "6px 0" }}>
-                          Server fetches remote URLs based on user input without restricting destination IP addresses, exposing cloud metadata (169.254.169.254).
+                        <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", margin: "6px 0 10px 0" }}>
+                          Server fetches remote resources using user-supplied URLs without verifying destination IP addresses. Attackers target link-local cloud metadata (<code style={{ color: "var(--accent-cyan)" }}>http://169.254.169.254/latest/meta-data/</code>) to extract IAM cloud tokens.
                         </p>
-                        <div style={{ background: "#080c14", padding: "8px 12px", borderRadius: "6px", fontFamily: "monospace", fontSize: "0.78rem" }}>
-                          <span style={{ color: "var(--accent-emerald)" }}>Remediation:</span> Enforce domain whitelisting, block RFC 1918 private IPs, and disable client HTTP redirects.
+                        <div style={{ background: "#080c14", padding: "10px 14px", borderRadius: "6px", fontFamily: "monospace", fontSize: "0.78rem", border: "1px solid var(--border-color)" }}>
+                          <strong>Defense Architecture:</strong> Resolve DNS &rarr; verify destination IP is NOT in RFC 1918 (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16) or 169.254.0.0/16 &rarr; require AWS IMDSv2 token header.
                         </div>
                       </div>
                     </div>
@@ -2504,6 +2598,7 @@ export default function App() {
               {/* MODULE 2: NETWORKING MASTERY */}
               {academyTab === "networking" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  {/* OSI TABLE */}
                   <div className="card">
                     <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "12px" }}>
                       OSI 7-Layer Model vs TCP/IP Protocol Stack
@@ -2516,7 +2611,7 @@ export default function App() {
                             <th>OSI Name</th>
                             <th>Data Unit (PDU)</th>
                             <th>Key Protocols</th>
-                            <th>Security Concerns</th>
+                            <th>Primary Security Concerns & Attacks</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -2525,79 +2620,168 @@ export default function App() {
                             <td>Application</td>
                             <td>Data / Message</td>
                             <td>HTTP, HTTPS, DNS, SSH, SMTP</td>
-                            <td>SQLi, XSS, CSRF, Auth bypass</td>
+                            <td>SQLi, XSS, CSRF, SSRF, Auth Bypass</td>
                           </tr>
                           <tr>
                             <td><strong>6</strong></td>
                             <td>Presentation</td>
                             <td>Formatted Data</td>
                             <td>TLS/SSL, ASCII, JSON, JPEG</td>
-                            <td>Weak ciphers, insecure deserialization</td>
+                            <td>Insecure deserialization, weak cipher negotiation</td>
                           </tr>
                           <tr>
                             <td><strong>5</strong></td>
                             <td>Session</td>
                             <td>Sessions</td>
                             <td>RPC, NetBIOS, Sockets</td>
-                            <td>Session hijacking, credential replay</td>
+                            <td>Session hijacking, credential token replay</td>
                           </tr>
                           <tr>
                             <td><strong>4</strong></td>
                             <td>Transport</td>
                             <td>Segments (TCP) / Datagrams (UDP)</td>
                             <td>TCP, UDP</td>
-                            <td>SYN flood DDoS, port scanning</td>
+                            <td>SYN Flood DDoS, Port Scanning, RST hijacking</td>
                           </tr>
                           <tr>
                             <td><strong>3</strong></td>
                             <td>Network</td>
                             <td>Packets</td>
                             <td>IPv4, IPv6, ICMP, IPsec</td>
-                            <td>IP spoofing, ICMP redirect attacks</td>
+                            <td>IP spoofing, ICMP redirect, route poisoning</td>
                           </tr>
                           <tr>
                             <td><strong>2</strong></td>
                             <td>Data Link</td>
                             <td>Frames</td>
-                            <td>Ethernet (MAC), Wi-Fi, ARP</td>
-                            <td>ARP poisoning, MAC flooding</td>
+                            <td>Ethernet (MAC), Wi-Fi (802.11), ARP</td>
+                            <td>ARP poisoning, MAC address flooding, Rogue AP</td>
                           </tr>
                           <tr>
                             <td><strong>1</strong></td>
                             <td>Physical</td>
-                            <td>Bits / Signals</td>
-                            <td>Cables, Fiber, Radio Waves</td>
-                            <td>Wiretapping, physical tampering</td>
+                            <td>Bits / Electrical Pulses</td>
+                            <td>Fiber, Twisted Pair Cables, Radio</td>
+                            <td>Physical wiretapping, rogue hardware implants</td>
                           </tr>
                         </tbody>
                       </table>
                     </div>
                   </div>
 
+                  {/* DIAGRAM: TCP 3-WAY HANDSHAKE */}
+                  <div className="card">
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "8px" }}>
+                      TCP 3-Way Handshake & 4-Way Teardown (Sequence Diagram)
+                    </h3>
+                    <div style={{ background: "#080c14", padding: "12px", borderRadius: "8px", fontFamily: "monospace", fontSize: "0.78rem", overflowX: "auto", border: "1px solid var(--border-color)", lineHeight: "1.4" }}>
+                      <pre style={{ margin: 0, color: "#a5f3fc" }}>{`         TCP Connection Establishment (3-Way Handshake)
+  CLIENT                                                 SERVER
+    |                                                      |
+    | ────────── SYN (Seq = 100) ────────────────────────> |  1. Client sends SYN (Synchronize initial sequence)
+    |                                                      |
+    | <───────── SYN-ACK (Seq = 300, Ack = 101) ────────── |  2. Server responds with SYN + ACK
+    |                                                      |
+    | ────────── ACK (Seq = 101, Ack = 301) ─────────────> |  3. Client acknowledges. Connection ESTABLISHED!
+    |                                                      |
+    | <====== Bi-Directional Reliable Data Stream ======>  |
+    |                                                      |
+         TCP Connection Termination (4-Way Teardown)
+    |                                                      |
+    | ────────── FIN (Seq = 500) ────────────────────────> |  1. Client requests orderly connection close
+    |                                                      |
+    | <───────── ACK (Ack = 501) ───────────────────────── |  2. Server acknowledges receipt
+    |                                                      |
+    | <───────── FIN (Seq = 700) ───────────────────────── |  3. Server completes sending and closes
+    |                                                      |
+    | ────────── ACK (Ack = 701) ────────────────────────> |  4. Client acknowledges. State CLOSED!`}</pre>
+                    </div>
+                  </div>
+
+                  {/* DIAGRAM: TLS 1.3 HANDSHAKE */}
+                  <div className="card">
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "8px" }}>
+                      TLS 1.3 Cryptographic Handshake (1-RTT Sequence)
+                    </h3>
+                    <div style={{ background: "#080c14", padding: "12px", borderRadius: "8px", fontFamily: "monospace", fontSize: "0.78rem", overflowX: "auto", border: "1px solid var(--border-color)", lineHeight: "1.4" }}>
+                      <pre style={{ margin: 0, color: "#6ee7b7" }}>{`Client                                                   Server
+  |                                                        |
+  | ── ClientHello (Supported Ciphers + ECDH Key Share) ─> |  1. Client proposes ciphers & ephemeral public key
+  |                                                        |
+  | <─ ServerHello (Chosen Cipher + Server Key Share) ──── |  2. Server returns matching ECDH key share
+  | <─ {EncryptedExtensions} ───────────────────────────── |  3. Subsequent handshake messages ENCRYPTED!
+  | <─ {Certificate} + {CertificateVerify} ─────────────── |  4. Server sends X.509 cert and digital signature
+  | <─ {Finished} ──────────────────────────────────────── |  5. Server validates handshake authenticity
+  |                                                        |
+  | ── {Finished} ───────────────────────────────────────> |  6. Client confirms key derivation.
+  |                                                        |
+  | <============= Encrypted Application Data ============>|     Full Session Encrypted (AES-GCM-256)!`}</pre>
+                    </div>
+                  </div>
+
+                  {/* SUBNETTING TABLE & PORTS */}
                   <div className="card">
                     <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "12px" }}>
-                      TCP 3-Way Handshake & Subnetting Cheat Sheet
+                      Subnetting, CIDR & Common Port Reference
                     </h3>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "16px" }}>
-                      <div style={{ background: "var(--bg-secondary)", padding: "14px", borderRadius: "8px" }}>
-                        <div style={{ fontWeight: 600, color: "var(--accent-cyan)", marginBottom: "8px" }}>The TCP 3-Way Handshake</div>
-                        <div style={{ background: "#080c14", padding: "10px", borderRadius: "6px", fontFamily: "monospace", fontSize: "0.78rem" }}>
-                          Client ──[ SYN ]─────────────&gt; Server<br />
-                          Client &lt;─[ SYN-ACK ]───────── Server<br />
-                          Client ──[ ACK ]─────────────&gt; Server<br />
-                          <span style={{ color: "var(--accent-emerald)" }}>✓ TCP Connection Established!</span>
+                      <div>
+                        <div style={{ fontWeight: 600, color: "var(--accent-cyan)", marginBottom: "8px" }}>
+                          CIDR Calculation: Hosts = 2^(32 - Prefix) - 2
                         </div>
+                        <table className="data-table" style={{ fontSize: "0.78rem" }}>
+                          <thead>
+                            <tr>
+                              <th>CIDR</th>
+                              <th>Subnet Mask</th>
+                              <th>Usable Hosts</th>
+                              <th>Typical Use</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td><code>/30</code></td>
+                              <td>255.255.255.252</td>
+                              <td><strong>2</strong></td>
+                              <td>Router point-to-point links</td>
+                            </tr>
+                            <tr>
+                              <td><code>/28</code></td>
+                              <td>255.255.255.240</td>
+                              <td><strong>14</strong></td>
+                              <td>Isolated DMZ cluster</td>
+                            </tr>
+                            <tr>
+                              <td><code>/24</code></td>
+                              <td>255.255.255.0</td>
+                              <td><strong>254</strong></td>
+                              <td>Standard office LAN</td>
+                            </tr>
+                            <tr>
+                              <td><code>/16</code></td>
+                              <td>255.255.0.0</td>
+                              <td><strong>65,534</strong></td>
+                              <td>Cloud VPC (AWS/Azure)</td>
+                            </tr>
+                          </tbody>
+                        </table>
                       </div>
 
-                      <div style={{ background: "var(--bg-secondary)", padding: "14px", borderRadius: "8px" }}>
-                        <div style={{ fontWeight: 600, color: "var(--accent-cyan)", marginBottom: "8px" }}>RFC 1918 Private IP Ranges</div>
-                        <ul style={{ fontSize: "0.82rem", color: "var(--text-muted)", paddingLeft: "16px", margin: 0 }}>
-                          <li><code>10.0.0.0/8</code> (10.0.0.0 – 10.255.255.255)</li>
-                          <li><code>172.16.0.0/12</code> (172.16.0.0 – 172.31.255.255)</li>
-                          <li><code>192.168.0.0/16</code> (192.168.0.0 – 192.168.255.255)</li>
-                          <li><code>127.0.0.1</code> (Loopback / Localhost)</li>
-                          <li><code>169.254.0.0/16</code> (Link-Local / Cloud Metadata)</li>
+                      <div>
+                        <div style={{ fontWeight: 600, color: "var(--accent-cyan)", marginBottom: "8px" }}>
+                          RFC 1918 Private Ranges & Key Ports
+                        </div>
+                        <ul style={{ fontSize: "0.82rem", color: "var(--text-muted)", paddingLeft: "16px", margin: "0 0 10px 0" }}>
+                          <li><code>10.0.0.0/8</code> (10.0.0.0 &ndash; 10.255.255.255)</li>
+                          <li><code>172.16.0.0/12</code> (172.16.0.0 &ndash; 172.31.255.255)</li>
+                          <li><code>192.168.0.0/16</code> (192.168.0.0 &ndash; 192.168.255.255)</li>
+                          <li><code>169.254.0.0/16</code> (Link-Local & Cloud Metadata)</li>
                         </ul>
+                        <div style={{ background: "#080c14", padding: "8px 12px", borderRadius: "6px", fontFamily: "monospace", fontSize: "0.76rem" }}>
+                          Port 22: SSH &bull; Port 53: DNS &bull; Port 80: HTTP<br />
+                          Port 88: Kerberos &bull; Port 443: HTTPS &bull; Port 445: SMB<br />
+                          Port 3389: RDP &bull; Port 8080: Alternate Web
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -2607,28 +2791,64 @@ export default function App() {
               {/* MODULE 3: LINUX SECURITY */}
               {academyTab === "linux" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  {/* PERMISSIONS MATRIX */}
                   <div className="card">
-                    <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "12px" }}>
-                      Linux Permission Matrix & Octal Calculation
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "8px" }}>
+                      Linux File Permissions & Octal Calculation Matrix
                     </h3>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px", marginBottom: "16px" }}>
+                    <div style={{ background: "#080c14", padding: "12px", borderRadius: "8px", fontFamily: "monospace", fontSize: "0.8rem", overflowX: "auto", border: "1px solid var(--border-color)", marginBottom: "12px" }}>
+                      <pre style={{ margin: 0, color: "#fde047" }}>{`Permission String:  -   r w x   r - x   r - -
+                    │   └──┬──┘ └──┬──┘ └──┬──┘
+                    │      │       │       └── Others: Read (4)
+                    │      │       └────────── Group: Read + Execute (4 + 1 = 5)
+                    │      └────────────────── User/Owner: Read + Write + Execute (4 + 2 + 1 = 7)
+                    └───────────────────────── File Type: (-) Regular file, (d) Directory`}</pre>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px", marginBottom: "14px" }}>
                       <div style={{ background: "var(--bg-secondary)", padding: "12px", borderRadius: "8px" }}>
-                        <strong>Read (r) = 4</strong>: View file or list directory contents
+                        <div style={{ fontWeight: 600, color: "var(--accent-cyan)", marginBottom: "4px" }}>Read (r) = 4</div>
+                        <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>Open and view file content; or list contents inside a directory.</div>
                       </div>
                       <div style={{ background: "var(--bg-secondary)", padding: "12px", borderRadius: "8px" }}>
-                        <strong>Write (w) = 2</strong>: Modify file or create/delete files in folder
+                        <div style={{ fontWeight: 600, color: "var(--accent-emerald)", marginBottom: "4px" }}>Write (w) = 2</div>
+                        <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>Modify file content; or add, rename, and delete files inside a folder.</div>
                       </div>
                       <div style={{ background: "var(--bg-secondary)", padding: "12px", borderRadius: "8px" }}>
-                        <strong>Execute (x) = 1</strong>: Run executable binary or enter directory (cd)
+                        <div style={{ fontWeight: 600, color: "var(--accent-rose)", marginBottom: "4px" }}>Execute (x) = 1</div>
+                        <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>Run executable binary or script; or traverse (cd) into a directory.</div>
                       </div>
                     </div>
-                    <div style={{ background: "#080c14", padding: "12px", borderRadius: "6px", fontFamily: "monospace", fontSize: "0.8rem" }}>
-                      # chmod 755 script.sh &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=&gt; User: rwx(7), Group: r-x(5), Others: r-x(5)<br />
-                      # chmod 600 ~/.ssh/id_rsa &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=&gt; User: rw-(6), Group: ---(0), Others: ---(0)<br />
-                      # chmod 4755 /bin/su &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=&gt; SUID Bit (Executes as owner root!)
+
+                    {/* SPECIAL BITS: SUID, SGID, STICKY */}
+                    <div style={{ background: "#080c14", padding: "12px", borderRadius: "6px", fontFamily: "monospace", fontSize: "0.78rem", border: "1px solid var(--border-color)" }}>
+                      <div style={{ color: "var(--accent-rose)", fontWeight: 700, marginBottom: "4px" }}>
+                        Special Permission Bits (Privilege Context):
+                      </div>
+                      &bull; <strong>SUID (4000)</strong>: Executes with file owner privileges (e.g. <code>chmod 4755 /usr/bin/passwd</code> runs as root).<br />
+                      &bull; <strong>SGID (2000)</strong>: Executes with group privileges; new files created in directory inherit parent group.<br />
+                      &bull; <strong>Sticky Bit (1000)</strong>: In world-writable directories (e.g. <code>/tmp</code>), only owner or root can delete files.
                     </div>
                   </div>
 
+                  {/* LINUX FILESYSTEM HIERARCHY */}
+                  <div className="card">
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "8px" }}>
+                      Linux Filesystem Hierarchy Architecture
+                    </h3>
+                    <div style={{ background: "#080c14", padding: "12px", borderRadius: "8px", fontFamily: "monospace", fontSize: "0.78rem", overflowX: "auto", border: "1px solid var(--border-color)", lineHeight: "1.4" }}>
+                      <pre style={{ margin: 0, color: "#93c5fd" }}>{`/ (Root Directory)
+ ├── /bin & /sbin      ──> Essential user & system administrator executable binaries
+ ├── /etc              ──> System configuration files (/etc/passwd, /etc/shadow, /etc/ssh/)
+ ├── /proc             ──> Virtual filesystem exposing live kernel & process memory (/proc/[pid]/)
+ ├── /sys              ──> Virtual filesystem exposing hardware devices and kernel drivers
+ ├── /var/log          ──> System event & audit logs (/var/log/auth.log, /var/log/syslog)
+ ├── /dev              ──> Device nodes (/dev/null, /dev/urandom, /dev/sda1)
+ └── /home & /root     ──> User personal directories and root superuser home`}</pre>
+                    </div>
+                  </div>
+
+                  {/* LINUX DEFENSE COMMANDS WITH COPY BUTTONS */}
                   <div className="card">
                     <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "12px" }}>
                       Essential Linux Defense & Auditing Commands
@@ -2638,36 +2858,37 @@ export default function App() {
                         <thead>
                           <tr>
                             <th>Command</th>
-                            <th>Purpose</th>
-                            <th>Security Investigation Context</th>
+                            <th>Action</th>
+                            <th>Investigation & Threat Context</th>
                           </tr>
                         </thead>
                         <tbody>
-                          <tr>
-                            <td><code>ss -tulpn</code></td>
-                            <td>List open network ports & PIDs</td>
-                            <td>Identifies rogue or unauthorized listening services</td>
-                          </tr>
-                          <tr>
-                            <td><code>ps aux | grep -i root</code></td>
-                            <td>View running processes</td>
-                            <td>Audits high-privilege daemon executions</td>
-                          </tr>
-                          <tr>
-                            <td><code>find / -perm -4000 2&gt;/dev/null</code></td>
-                            <td>Find all SUID binaries</td>
-                            <td>Locates privilege escalation targets</td>
-                          </tr>
-                          <tr>
-                            <td><code>tail -f /var/log/auth.log</code></td>
-                            <td>Monitor authentication logs</td>
-                            <td>Detects brute-force SSH attempts and sudo escalation</td>
-                          </tr>
-                          <tr>
-                            <td><code>last -n 20</code></td>
-                            <td>Show recent system logins</td>
-                            <td>Audits administrator access history</td>
-                          </tr>
+                          {[
+                            { cmd: "ss -tulpn", desc: "List open listening ports & process IDs", reason: "Identifies rogue services or backdoors" },
+                            { cmd: "lsof -i :80", desc: "Find exact process holding port 80", reason: "Verifies authentic web server executable" },
+                            { cmd: "find / -perm -4000 -type f 2>/dev/null", desc: "Audit all SUID binaries on filesystem", reason: "Detects privilege escalation vectors" },
+                            { cmd: "awk -F: '($3 == 0) {print $1}' /etc/passwd", desc: "Find rogue accounts with UID 0", reason: "Catches backdoor root user creation" },
+                            { cmd: "tail -f /var/log/auth.log", desc: "Monitor live authentication attempts", reason: "Detects brute-force SSH and sudo abuse" },
+                            { cmd: "last -n 20", desc: "Show recent user login history", reason: "Audits administrative logon sessions" }
+                          ].map((item, idx) => (
+                            <tr key={idx}>
+                              <td>
+                                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                  <code>{item.cmd}</code>
+                                  <button
+                                    className="btn btn-secondary"
+                                    style={{ padding: "2px 6px", fontSize: "0.7rem", display: "flex", alignItems: "center", gap: "4px" }}
+                                    onClick={() => copyCmd(item.cmd)}
+                                  >
+                                    {copiedCmd === item.cmd ? <Check size={12} color="var(--accent-emerald)" /> : <Copy size={12} />}
+                                    {copiedCmd === item.cmd ? "Copied" : "Copy"}
+                                  </button>
+                                </div>
+                              </td>
+                              <td>{item.desc}</td>
+                              <td>{item.reason}</td>
+                            </tr>
+                          ))}
                         </tbody>
                       </table>
                     </div>
@@ -2678,85 +2899,691 @@ export default function App() {
               {/* MODULE 4: WINDOWS SECURITY */}
               {academyTab === "windows" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  {/* RING 3 VS RING 0 DIAGRAM */}
                   <div className="card">
-                    <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "12px" }}>
-                      Windows Architecture & Access Control
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "8px" }}>
+                      Windows Architecture: User Mode (Ring 3) vs Kernel Mode (Ring 0)
                     </h3>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px", marginBottom: "16px" }}>
-                      <div style={{ background: "var(--bg-secondary)", padding: "14px", borderRadius: "8px" }}>
-                        <div style={{ fontWeight: 600, color: "var(--accent-cyan)", marginBottom: "4px" }}>User Mode (Ring 3)</div>
-                        <div style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>
-                          Isolated process address spaces. Applications cannot touch physical hardware directly; must call the Win32 API / NT Native API.
-                        </div>
-                      </div>
-                      <div style={{ background: "var(--bg-secondary)", padding: "14px", borderRadius: "8px" }}>
-                        <div style={{ fontWeight: 600, color: "var(--accent-rose)", marginBottom: "4px" }}>Kernel Mode (Ring 0)</div>
-                        <div style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>
-                          The NT Executive, device drivers, and HAL. Unrestricted CPU and memory access. Vulnerabilities here lead to kernel-level persistence.
-                        </div>
-                      </div>
-                      <div style={{ background: "var(--bg-secondary)", padding: "14px", borderRadius: "8px" }}>
-                        <div style={{ fontWeight: 600, color: "var(--accent-emerald)", marginBottom: "4px" }}>SIDs & Access Tokens</div>
-                        <div style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>
-                          Every user has a unique Security Identifier (SID). When logging in, Windows issues an Access Token containing group SIDs and privileges.
-                        </div>
-                      </div>
+                    <div style={{ background: "#080c14", padding: "12px", borderRadius: "8px", fontFamily: "monospace", fontSize: "0.78rem", overflowX: "auto", border: "1px solid var(--border-color)", lineHeight: "1.4" }}>
+                      <pre style={{ margin: 0, color: "#67e8f9" }}>{`+-----------------------------------------------------------------------------------+
+| USER MODE (Ring 3)                                                                |
+|   Applications (Browsers, IDEs)    Windows Services (svchost.exe, lsass.exe)      |
+|   Subsystem DLLs (kernel32.dll, user32.dll, ntdll.dll)                            |
++-----------------------------------------------------------------------------------+
+                                │  (Syscall Gate: SYSENTER / SYSCALL instruction)
++-----------------------------------------------------------------------------------+
+| KERNEL MODE (Ring 0)                                                              |
+|   Executive Subsystems (Process Manager, Memory Mgr, Security Reference Monitor)  |
+|   NT Kernel (ntoskrnl.exe)                                                        |
+|   Hardware Abstraction Layer (HAL.dll) & Device Drivers (.sys)                    |
++-----------------------------------------------------------------------------------+`}</pre>
                     </div>
                   </div>
 
+                  {/* KERBEROS 5 PROTOCOL DIAGRAM */}
+                  <div className="card">
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "8px" }}>
+                      Kerberos 5 Active Directory Authentication Flow (Sequence Diagram)
+                    </h3>
+                    <div style={{ background: "#080c14", padding: "12px", borderRadius: "8px", fontFamily: "monospace", fontSize: "0.78rem", overflowX: "auto", border: "1px solid var(--border-color)", lineHeight: "1.4" }}>
+                      <pre style={{ margin: 0, color: "#f472b6" }}>{`Client                      Domain Controller (KDC)                 Target File Server
+  |                                   |                                     |
+  | ── 1. AS-REQ (Auth Request) ────> |                                     |
+  | <─ 2. AS-REP (Returns TGT) ────── |                                     |
+  |                                   |                                     |
+  | ── 3. TGS-REQ (Sends TGT) ──────> |                                     |
+  | <─ 4. TGS-REP (Service Ticket) ── |                                     |
+  |                                                                         |
+  | ── 5. AP-REQ (Presents Service Ticket to Target Server) ──────────────> |
+  | <─ 6. AP-REP (Mutual Authentication Complete; Session Encrypted!) ───── |`}</pre>
+                    </div>
+                  </div>
+
+                  {/* EVENT IDS & SYSMON */}
                   <div className="card">
                     <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "12px" }}>
-                      Critical Windows Security Event IDs & Sysmon
+                      Critical Windows Security Event IDs & Sysmon Cheat Sheet
                     </h3>
                     <div style={{ overflowX: "auto" }}>
                       <table className="data-table" style={{ fontSize: "0.82rem" }}>
                         <thead>
                           <tr>
-                            <th>Source</th>
+                            <th>Channel</th>
                             <th>Event ID</th>
-                            <th>Description</th>
-                            <th>Security Threat Detection</th>
+                            <th>Meaning</th>
+                            <th>Threat Detection Value</th>
                           </tr>
                         </thead>
                         <tbody>
                           <tr>
-                            <td>Security Log</td>
+                            <td>Security</td>
                             <td><code>4624</code></td>
                             <td>Successful Logon</td>
-                            <td>Audit logon type (Type 2=Interactive, Type 3=Network/SMB, Type 10=RDP)</td>
+                            <td>Audit logon types: 2 (Interactive), 3 (Network/SMB), 10 (RDP)</td>
                           </tr>
                           <tr>
-                            <td>Security Log</td>
+                            <td>Security</td>
                             <td><code>4625</code></td>
                             <td>Failed Logon Attempt</td>
-                            <td>Brute force / password spraying attacks</td>
+                            <td>Spikes indicate brute-force or password spraying attacks</td>
                           </tr>
                           <tr>
-                            <td>Security Log</td>
+                            <td>Security</td>
                             <td><code>4672</code></td>
                             <td>Special Privileges Assigned</td>
-                            <td>Administrator elevation detection</td>
+                            <td>Detects administrator elevation</td>
+                          </tr>
+                          <tr>
+                            <td>Security</td>
+                            <td><code>4688</code></td>
+                            <td>Process Creation</td>
+                            <td>Audit process execution trees and command line arguments</td>
                           </tr>
                           <tr>
                             <td>Sysmon</td>
                             <td><code>Event 1</code></td>
-                            <td>Process Creation</td>
-                            <td>Captures command line flags, parent PID, and file hashes</td>
+                            <td>Process Create</td>
+                            <td>Captures command line flags, parent PID, and SHA-256 hashes</td>
                           </tr>
                           <tr>
                             <td>Sysmon</td>
                             <td><code>Event 3</code></td>
                             <td>Network Connection</td>
-                            <td>Detects outbound C2 connections initiated by processes</td>
+                            <td>Detects outbound C2 beaconing from unexpected binaries</td>
                           </tr>
                           <tr>
                             <td>Sysmon</td>
                             <td><code>Event 11</code></td>
                             <td>File Created</td>
-                            <td>Detects malware drops and ransomware file creation</td>
+                            <td>Detects malware drops and ransomware file creation in AppData</td>
                           </tr>
                         </tbody>
                       </table>
+                    </div>
+                  </div>
+
+                  {/* POWERSHELL COMMANDS */}
+                  <div className="card">
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "12px" }}>
+                      Essential PowerShell Incident Response & Auditing Commands
+                    </h3>
+                    <div style={{ overflowX: "auto" }}>
+                      <table className="data-table" style={{ fontSize: "0.82rem" }}>
+                        <thead>
+                          <tr>
+                            <th>PowerShell Command</th>
+                            <th>Threat Hunting Purpose</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[
+                            {
+                              cmd: 'Get-NetTCPConnection -State Listen | Select-Object LocalAddress, LocalPort, OwningProcess',
+                              desc: 'Audit listening TCP ports and correlate with process IDs'
+                            },
+                            {
+                              cmd: "Get-WmiObject win32_service | Where-Object {$_.PathName -notlike '\"*' -and $_.PathName -like '* *'} | Select-Object Name, PathName",
+                              desc: 'Identify unquoted Windows service path vulnerabilities for privilege escalation'
+                            },
+                            {
+                              cmd: "Get-WinEvent -FilterHashtable @{LogName='Security'; Id=4625} -MaxEvents 15 | Select-Object TimeCreated, Message",
+                              desc: 'Inspect recent failed logon events to detect brute force attempts'
+                            },
+                            {
+                              cmd: 'Get-LocalGroupMember -Group "Administrators"',
+                              desc: 'Audit members of the local Administrators group for unauthorized users'
+                            },
+                            {
+                              cmd: 'Get-ChildItem -Path "$env:LOCALAPPDATA" -Recurse -File | Where-Object {$_.LastWriteTime -gt (Get-Date).AddDays(-1)} | Select-Object FullName -First 20',
+                              desc: 'Locate recently modified files in AppData (common malware drop location)'
+                            }
+                          ].map((item, idx) => (
+                            <tr key={idx}>
+                              <td>
+                                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                  <code style={{ fontSize: "0.76rem" }}>{item.cmd}</code>
+                                  <button
+                                    className="btn btn-secondary"
+                                    style={{ padding: "2px 6px", fontSize: "0.7rem", display: "flex", alignItems: "center", gap: "4px", flexShrink: 0 }}
+                                    onClick={() => copyCmd(item.cmd)}
+                                  >
+                                    {copiedCmd === item.cmd ? <Check size={12} color="var(--accent-emerald)" /> : <Copy size={12} />}
+                                    {copiedCmd === item.cmd ? "Copied" : "Copy"}
+                                  </button>
+                                </div>
+                              </td>
+                              <td style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>{item.desc}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* MODULE 5: KEY DIFFERENCES & COMPARISON TABLES */}
+              {academyTab === "differences" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  {/* DIFF 1: VULN VS THREAT VS EXPLOIT VS RISK */}
+                  <div className="card">
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "8px" }}>
+                      1. Vulnerability vs. Threat vs. Exploit vs. Risk
+                    </h3>
+                    <div style={{ overflowX: "auto" }}>
+                      <table className="data-table" style={{ fontSize: "0.82rem" }}>
+                        <thead>
+                          <tr>
+                            <th>Dimension</th>
+                            <th>Vulnerability</th>
+                            <th>Threat</th>
+                            <th>Exploit</th>
+                            <th>Risk</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td><strong>Definition</strong></td>
+                            <td>The flaw or security hole</td>
+                            <td>The malicious actor or hazard</td>
+                            <td>The weaponized tool or payload</td>
+                            <td>The potential business loss</td>
+                          </tr>
+                          <tr>
+                            <td><strong>In Your Control?</strong></td>
+                            <td><strong style={{ color: "var(--accent-emerald)" }}>Yes</strong> (You can patch)</td>
+                            <td><strong style={{ color: "var(--accent-rose)" }}>No</strong> (Adversaries exist)</td>
+                            <td><strong style={{ color: "var(--accent-rose)" }}>No</strong> (Payloads circulate)</td>
+                            <td><strong style={{ color: "var(--accent-emerald)" }}>Yes</strong> (You can mitigate)</td>
+                          </tr>
+                          <tr>
+                            <td><strong>Concrete Example</strong></td>
+                            <td>Missing sanitization in SQL query</td>
+                            <td>Organized cybercrime group</td>
+                            <td><code>' OR 1=1;--</code> payload script</td>
+                            <td>High risk of $1M regulatory breach fine</td>
+                          </tr>
+                          <tr>
+                            <td><strong>Defensive Action</strong></td>
+                            <td>Code review, SCA/DAST, patching</td>
+                            <td>Threat intel, geo-blocking, WAF</td>
+                            <td>WAF signatures, IPS filtering</td>
+                            <td>Defense-in-depth, cyber insurance</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* DIFF 2: ENCODING VS ENCRYPTION VS HASHING */}
+                  <div className="card">
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "8px" }}>
+                      2. Encoding vs. Encryption vs. Hashing vs. Obfuscation
+                    </h3>
+                    <div style={{ overflowX: "auto" }}>
+                      <table className="data-table" style={{ fontSize: "0.82rem" }}>
+                        <thead>
+                          <tr>
+                            <th>Operation</th>
+                            <th>Primary Goal</th>
+                            <th>Requires Key?</th>
+                            <th>Reversible?</th>
+                            <th>Standard Algorithms</th>
+                            <th>Security Impact</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td><strong>Encoding</strong></td>
+                            <td>Data format compatibility</td>
+                            <td>No</td>
+                            <td>Yes (Trivial)</td>
+                            <td>Base64, URL-encoding (%20), ASCII</td>
+                            <td><span className="badge badge-critical">Never provides security!</span></td>
+                          </tr>
+                          <tr>
+                            <td><strong>Encryption</strong></td>
+                            <td>Data Confidentiality</td>
+                            <td><strong>Yes</strong></td>
+                            <td>Yes (With key)</td>
+                            <td>AES-256-GCM, ChaCha20, RSA-4096</td>
+                            <td><span className="badge badge-low">Protects data in transit/rest</span></td>
+                          </tr>
+                          <tr>
+                            <td><strong>Hashing</strong></td>
+                            <td>Data Integrity & Passwords</td>
+                            <td>No</td>
+                            <td><strong>No</strong> (One-way)</td>
+                            <td>SHA-256, Argon2id, bcrypt, SHA-3</td>
+                            <td><span className="badge badge-low">Tamper verification; must use salts</span></td>
+                          </tr>
+                          <tr>
+                            <td><strong>Obfuscation</strong></td>
+                            <td>Slow reverse engineering</td>
+                            <td>No</td>
+                            <td>Yes (With effort)</td>
+                            <td>ProGuard, JS Obfuscator, VMProtect</td>
+                            <td><span className="badge badge-medium">Obscurity only; never rely alone</span></td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* DIFF 3: TCP VS UDP */}
+                  <div className="card">
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "8px" }}>
+                      3. TCP vs. UDP (Transport Protocols)
+                    </h3>
+                    <div style={{ overflowX: "auto" }}>
+                      <table className="data-table" style={{ fontSize: "0.82rem" }}>
+                        <thead>
+                          <tr>
+                            <th>Feature</th>
+                            <th>TCP (Transmission Control Protocol)</th>
+                            <th>UDP (User Datagram Protocol)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td><strong>Connection Model</strong></td>
+                            <td>Connection-oriented (Explicit 3-Way Handshake)</td>
+                            <td>Connectionless (Fire-and-forget datagrams)</td>
+                          </tr>
+                          <tr>
+                            <td><strong>Reliability</strong></td>
+                            <td><strong>Guaranteed</strong>: Packet ACKs and automatic retransmission</td>
+                            <td><strong>Unreliable</strong>: Lost packets dropped without notification</td>
+                          </tr>
+                          <tr>
+                            <td><strong>Packet Ordering</strong></td>
+                            <td>Strict in-order reassembly via sequence numbers</td>
+                            <td>Packets can arrive in arbitrary order</td>
+                          </tr>
+                          <tr>
+                            <td><strong>Header Size</strong></td>
+                            <td>20 to 60 bytes (Complex flags and state fields)</td>
+                            <td>8 bytes (Source/dest port, length, checksum)</td>
+                          </tr>
+                          <tr>
+                            <td><strong>Typical Applications</strong></td>
+                            <td>HTTPS (Web), SSH (Shell), SFTP (Files), Databases</td>
+                            <td>DNS queries (Port 53), VoIP calls, Live Video, Gaming, DHCP</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* DIFF 4: SYMMETRIC VS ASYMMETRIC CRYPTO */}
+                  <div className="card">
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "8px" }}>
+                      4. Symmetric vs. Asymmetric Cryptography
+                    </h3>
+                    <div style={{ overflowX: "auto" }}>
+                      <table className="data-table" style={{ fontSize: "0.82rem" }}>
+                        <thead>
+                          <tr>
+                            <th>Dimension</th>
+                            <th>Symmetric Encryption</th>
+                            <th>Asymmetric (Public Key) Encryption</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td><strong>Key Mechanism</strong></td>
+                            <td>Single shared secret key for encryption and decryption</td>
+                            <td>Key pair: Public key (encrypt) + Private key (decrypt)</td>
+                          </tr>
+                          <tr>
+                            <td><strong>Speed & Efficiency</strong></td>
+                            <td>Extremely fast (Hardware-accelerated with AES-NI)</td>
+                            <td>100x to 1000x slower (Complex elliptic curve math)</td>
+                          </tr>
+                          <tr>
+                            <td><strong>Key Exchange</strong></td>
+                            <td>Difficult: Must transmit secret key securely</td>
+                            <td>Trivial: Public key can be openly published to the internet</td>
+                          </tr>
+                          <tr>
+                            <td><strong>Primary Usage</strong></td>
+                            <td>Bulk payload encryption (TLS data streams, disk BitLocker)</td>
+                            <td>Key exchange (ECDH), digital signatures, SSH identities</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* DIFF 5: NTLM VS KERBEROS */}
+                  <div className="card">
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "8px" }}>
+                      5. NTLM vs. Kerberos 5 (Windows Authentication)
+                    </h3>
+                    <div style={{ overflowX: "auto" }}>
+                      <table className="data-table" style={{ fontSize: "0.82rem" }}>
+                        <thead>
+                          <tr>
+                            <th>Feature</th>
+                            <th>NTLM (NT LAN Manager)</th>
+                            <th>Kerberos 5 (Active Directory)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td><strong>Architecture</strong></td>
+                            <td>3-Way Challenge-Response (Type 1, 2, 3)</td>
+                            <td>Centralized Ticket-Granting Service (KDC / TGT)</td>
+                          </tr>
+                          <tr>
+                            <td><strong>Mutual Authentication</strong></td>
+                            <td>No: Only client authenticates; server identity unverified</td>
+                            <td><strong>Yes</strong>: Mutual authentication between client and server</td>
+                          </tr>
+                          <tr>
+                            <td><strong>Pass-the-Hash Risk</strong></td>
+                            <td><strong style={{ color: "var(--accent-rose)" }}>High</strong>: NTLM responses easily relayed over SMB</td>
+                            <td><strong style={{ color: "var(--accent-emerald)" }}>Mitigated</strong>: Time-stamped tickets prevent replay</td>
+                          </tr>
+                          <tr>
+                            <td><strong>Port / Protocol</strong></td>
+                            <td>SMB / RPC (Ports 445, 135)</td>
+                            <td>Kerberos (TCP/UDP Port 88)</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* MODULE 6: REAL-WORLD BREACH SCENARIOS */}
+              {academyTab === "scenarios" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  {/* SCENARIO 1: EQUIFAX */}
+                  <div className="card">
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                      <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-rose)", margin: 0 }}>
+                        Case 1: Equifax Apache Struts Breach (CVE-2017-5638)
+                      </h3>
+                      <span className="badge badge-critical">147 Million Records Leaked</span>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "12px", marginBottom: "12px" }}>
+                      <div style={{ background: "var(--bg-secondary)", padding: "10px", borderRadius: "6px" }}>
+                        <strong>Attack Vector:</strong> OGNL expression injection in Apache Struts Jakarta Multipart parser via crafted <code>Content-Type</code> headers.
+                      </div>
+                      <div style={{ background: "var(--bg-secondary)", padding: "10px", borderRadius: "6px" }}>
+                        <strong>Root Cause:</strong> The security patch had been available for 2 months, but unmaintained asset inventory delayed deployment.
+                      </div>
+                      <div style={{ background: "var(--bg-secondary)", padding: "10px", borderRadius: "6px" }}>
+                        <strong>Architecture Flaw:</strong> Flat internal network allowed compromised web server to query 48 unrelated internal database clusters.
+                      </div>
+                    </div>
+                    <div style={{ background: "rgba(16, 185, 129, 0.1)", padding: "10px 14px", borderRadius: "6px", borderLeft: "3px solid var(--accent-emerald)", fontSize: "0.82rem" }}>
+                      <strong>Defensive Lessons:</strong> Automated Software Composition Analysis (SCA) to discover vulnerable third-party dependencies + strict internal micro-segmentation.
+                    </div>
+                  </div>
+
+                  {/* SCENARIO 2: CAPITAL ONE */}
+                  <div className="card">
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                      <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-amber)", margin: 0 }}>
+                        Case 2: Capital One AWS Cloud Metadata SSRF Breach
+                      </h3>
+                      <span className="badge badge-high">100 Million Card Applications</span>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "12px", marginBottom: "12px" }}>
+                      <div style={{ background: "var(--bg-secondary)", padding: "10px", borderRadius: "6px" }}>
+                        <strong>Attack Vector:</strong> Server-Side Request Forgery (SSRF) flaw in a misconfigured ModSecurity WAF EC2 instance.
+                      </div>
+                      <div style={{ background: "var(--bg-secondary)", padding: "10px", borderRadius: "6px" }}>
+                        <strong>Root Cause:</strong> The EC2 instance queried AWS IMDSv1 at <code>169.254.169.254</code> to extract temporary IAM administrative credentials.
+                      </div>
+                      <div style={{ background: "var(--bg-secondary)", padding: "10px", borderRadius: "6px" }}>
+                        <strong>Permission Defect:</strong> The WAF IAM role had overly broad permissions (<code>s3:ListAllMyBuckets</code> and read access to all customer S3 buckets).
+                      </div>
+                    </div>
+                    <div style={{ background: "rgba(16, 185, 129, 0.1)", padding: "10px 14px", borderRadius: "6px", borderLeft: "3px solid var(--accent-emerald)", fontSize: "0.82rem" }}>
+                      <strong>Defensive Lessons:</strong> Enforce AWS IMDSv2 (requires session token headers that SSRF cannot spoof) + Least Privilege on IAM roles.
+                    </div>
+                  </div>
+
+                  {/* SCENARIO 3: TARGET HVAC */}
+                  <div className="card">
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                      <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-amber)", margin: 0 }}>
+                        Case 3: Target Third-Party HVAC Vendor Credential Pivot
+                      </h3>
+                      <span className="badge badge-high">40 Million Payment Cards</span>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "12px", marginBottom: "12px" }}>
+                      <div style={{ background: "var(--bg-secondary)", padding: "10px", borderRadius: "6px" }}>
+                        <strong>Initial Access:</strong> Phishing email carrying Citadel malware compromised credentials of a third-party HVAC refrigeration contractor.
+                      </div>
+                      <div style={{ background: "var(--bg-secondary)", padding: "10px", borderRadius: "6px" }}>
+                        <strong>Lateral Movement:</strong> Contractor had access to Target billing portal, but no network isolation separated the billing portal from Point-of-Sale (POS) terminals.
+                      </div>
+                      <div style={{ background: "var(--bg-secondary)", padding: "10px", borderRadius: "6px" }}>
+                        <strong>Exploitation:</strong> Attackers deployed RAM memory-scraping malware across cash register registers to capture unencrypted card swipes.
+                      </div>
+                    </div>
+                    <div style={{ background: "rgba(16, 185, 129, 0.1)", padding: "10px 14px", borderRadius: "6px", borderLeft: "3px solid var(--accent-emerald)", fontSize: "0.82rem" }}>
+                      <strong>Defensive Lessons:</strong> Enforce Zero Trust network segmentation between vendor portals and PCI-DSS cardholder environments + Mandatory MFA on all external contractor logins.
+                    </div>
+                  </div>
+
+                  {/* SCENARIO 4: SOLARWINDS */}
+                  <div className="card">
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                      <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", margin: 0 }}>
+                        Case 4: SolarWinds Sunburst CI/CD Supply-Chain Backdoor
+                      </h3>
+                      <span className="badge badge-critical">18,000 Enterprise Customers</span>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "12px", marginBottom: "12px" }}>
+                      <div style={{ background: "var(--bg-secondary)", padding: "10px", borderRadius: "6px" }}>
+                        <strong>Attack Vector:</strong> Compromised internal TeamCity build server; injected backdoor DLL into official software update during compilation.
+                      </div>
+                      <div style={{ background: "var(--bg-secondary)", padding: "10px", borderRadius: "6px" }}>
+                        <strong>Bypassed Defense:</strong> The malicious artifact was signed with legitimate SolarWinds digital certificates, bypassing anti-virus integrity checks.
+                      </div>
+                      <div style={{ background: "var(--bg-secondary)", padding: "10px", borderRadius: "6px" }}>
+                        <strong>Egress C2:</strong> The DLL remained dormant for two weeks, then initiated DNS-based C2 communication to receive stage-2 payloads.
+                      </div>
+                    </div>
+                    <div style={{ background: "rgba(16, 185, 129, 0.1)", padding: "10px 14px", borderRadius: "6px", borderLeft: "3px solid var(--accent-emerald)", fontSize: "0.82rem" }}>
+                      <strong>Defensive Lessons:</strong> Reproducible, deterministic CI/CD builds + strict egress filtering to prevent infrastructure servers from beaconing outbound.
+                    </div>
+                  </div>
+
+                  {/* SCENARIO 5: NOTPETYA */}
+                  <div className="card">
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                      <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-rose)", margin: 0 }}>
+                        Case 5: NotPetya Ransomware & Fast Lateral Movement
+                      </h3>
+                      <span className="badge badge-critical">$10 Billion Global Damage</span>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "12px", marginBottom: "12px" }}>
+                      <div style={{ background: "var(--bg-secondary)", padding: "10px", borderRadius: "6px" }}>
+                        <strong>Initial Infection:</strong> Poisoned software update for Ukrainian accounting package (M.E.Doc).
+                      </div>
+                      <div style={{ background: "var(--bg-secondary)", padding: "10px", borderRadius: "6px" }}>
+                        <strong>Lateral Propagation:</strong> Dumped credentials from memory via Mimikatz, combined with EternalBlue (MS17-010 SMB exploit) to infect entire LANs within seconds.
+                      </div>
+                      <div style={{ background: "var(--bg-secondary)", padding: "10px", borderRadius: "6px" }}>
+                        <strong>Destructive Payload:</strong> Overwrote Master Boot Record (MBR) and encrypted file tables without retaining recovery keys.
+                      </div>
+                    </div>
+                    <div style={{ background: "rgba(16, 185, 129, 0.1)", padding: "10px 14px", borderRadius: "6px", borderLeft: "3px solid var(--accent-emerald)", fontSize: "0.82rem" }}>
+                      <strong>Defensive Lessons:</strong> Completely disable legacy SMBv1 + enable Windows Credential Guard to prevent memory dumping of LSASS credentials.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* MODULE 7: MASTER COMMAND CHEAT SHEETS */}
+              {academyTab === "commands" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  <div className="card">
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "8px" }}>
+                      Essential Cybersecurity & System Administration Command Matrix
+                    </h3>
+                    <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", marginBottom: "16px" }}>
+                      Click the "Copy" button beside any command to immediately copy it to your clipboard for execution in your local terminal or PowerShell prompt.
+                    </p>
+
+                    {/* SECTION: LINUX AUDITING */}
+                    <div style={{ marginBottom: "20px" }}>
+                      <div style={{ fontWeight: 600, color: "var(--accent-cyan)", marginBottom: "8px", fontSize: "0.9rem" }}>
+                        🐧 Linux Defense & Auditing Commands
+                      </div>
+                      <div style={{ overflowX: "auto" }}>
+                        <table className="data-table" style={{ fontSize: "0.8rem" }}>
+                          <thead>
+                            <tr>
+                              <th style={{ width: "45%" }}>Command</th>
+                              <th>Function & Security Value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {[
+                              { cmd: "ss -tulpn", desc: "List all listening TCP/UDP sockets with process IDs" },
+                              { cmd: "lsof -i :80", desc: "Identify process holding web port 80" },
+                              { cmd: "find / -perm -4000 -type f 2>/dev/null", desc: "Audit all SUID root binaries on disk" },
+                              { cmd: "find / -writable -type d 2>/dev/null", desc: "Find world-writable directories (privilege escalation risks)" },
+                              { cmd: "awk -F: '($3 == 0) {print $1}' /etc/passwd", desc: "Audit for rogue backdoor accounts with UID 0 (root)" },
+                              { cmd: "tail -n 50 /var/log/auth.log", desc: "Inspect recent SSH and sudo authentication attempts" },
+                              { cmd: "lastlog", desc: "Show most recent login timestamp for every user on the system" },
+                              { cmd: "ps aux | grep -i root", desc: "List all processes currently running with root privileges" }
+                            ].map((item, idx) => (
+                              <tr key={idx}>
+                                <td>
+                                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                    <code>{item.cmd}</code>
+                                    <button
+                                      className="btn btn-secondary"
+                                      style={{ padding: "2px 6px", fontSize: "0.7rem", display: "flex", alignItems: "center", gap: "4px", flexShrink: 0 }}
+                                      onClick={() => copyCmd(item.cmd)}
+                                    >
+                                      {copiedCmd === item.cmd ? <Check size={12} color="var(--accent-emerald)" /> : <Copy size={12} />}
+                                      {copiedCmd === item.cmd ? "Copied" : "Copy"}
+                                    </button>
+                                  </div>
+                                </td>
+                                <td style={{ color: "var(--text-muted)" }}>{item.desc}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* SECTION: WINDOWS POWERSHELL */}
+                    <div style={{ marginBottom: "20px" }}>
+                      <div style={{ fontWeight: 600, color: "var(--accent-cyan)", marginBottom: "8px", fontSize: "0.9rem" }}>
+                        🪟 Windows PowerShell Incident Response Commands
+                      </div>
+                      <div style={{ overflowX: "auto" }}>
+                        <table className="data-table" style={{ fontSize: "0.8rem" }}>
+                          <thead>
+                            <tr>
+                              <th style={{ width: "55%" }}>PowerShell Command</th>
+                              <th>Function & Security Value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {[
+                              {
+                                cmd: "Get-NetTCPConnection -State Listen | Select-Object LocalAddress, LocalPort, OwningProcess",
+                                desc: "List all listening ports and owning process IDs"
+                              },
+                              {
+                                cmd: "Get-WmiObject win32_service | Where-Object {$_.PathName -notlike '\"*' -and $_.PathName -like '* *'} | Select-Object Name, PathName",
+                                desc: "Scan for unquoted service paths (privilege escalation vector)"
+                              },
+                              {
+                                cmd: "Get-WinEvent -FilterHashtable @{LogName='Security'; Id=4625} -MaxEvents 15 | Select-Object TimeCreated, Message",
+                                desc: "Detect brute-force logon attempts in Windows Security log"
+                              },
+                              {
+                                cmd: 'Get-LocalGroupMember -Group "Administrators"',
+                                desc: "Audit all members with local administrator rights"
+                              },
+                              {
+                                cmd: 'Get-ChildItem -Path "$env:LOCALAPPDATA" -Recurse -File | Where-Object {$_.LastWriteTime -gt (Get-Date).AddDays(-1)} | Select-Object FullName -First 20',
+                                desc: "Find files modified in user AppData in the last 24 hours"
+                              },
+                              {
+                                cmd: "Get-NetIPConfiguration | Select-Object InterfaceAlias, IPv4Address, IPv4DefaultGateway, DNSServer",
+                                desc: "Inspect network adapters, gateway, and DNS configuration"
+                              }
+                            ].map((item, idx) => (
+                              <tr key={idx}>
+                                <td>
+                                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                    <code>{item.cmd}</code>
+                                    <button
+                                      className="btn btn-secondary"
+                                      style={{ padding: "2px 6px", fontSize: "0.7rem", display: "flex", alignItems: "center", gap: "4px", flexShrink: 0 }}
+                                      onClick={() => copyCmd(item.cmd)}
+                                    >
+                                      {copiedCmd === item.cmd ? <Check size={12} color="var(--accent-emerald)" /> : <Copy size={12} />}
+                                      {copiedCmd === item.cmd ? "Copied" : "Copy"}
+                                    </button>
+                                  </div>
+                                </td>
+                                <td style={{ color: "var(--text-muted)" }}>{item.desc}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* SECTION: NETWORKING & DIAGNOSTICS */}
+                    <div>
+                      <div style={{ fontWeight: 600, color: "var(--accent-cyan)", marginBottom: "8px", fontSize: "0.9rem" }}>
+                        🌐 Network Diagnostic & Protocol Commands
+                      </div>
+                      <div style={{ overflowX: "auto" }}>
+                        <table className="data-table" style={{ fontSize: "0.8rem" }}>
+                          <thead>
+                            <tr>
+                              <th style={{ width: "45%" }}>Command</th>
+                              <th>Function & Security Value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {[
+                              { cmd: "ping -c 4 8.8.8.8", desc: "Check network reachability, latency, and packet loss" },
+                              { cmd: "traceroute 1.1.1.1", desc: "Trace routing hops between host and target (tracert on Windows)" },
+                              { cmd: "nslookup -type=TXT example.com", desc: "Query DNS TXT records for SPF, DKIM, and domain verification" },
+                              { cmd: "dig example.com +trace", desc: "Trace full DNS resolution from root servers down to authoritative answer" },
+                              { cmd: "curl -Iv https://example.com", desc: "Inspect raw TLS negotiation, certificate issuer, and HTTP response headers" },
+                              { cmd: "curl -s -D - -o /dev/null https://example.com", desc: "Audit security headers (HSTS, CSP, X-Frame-Options)" },
+                              { cmd: "tcpdump -nn -i eth0 port 443", desc: "Live capture packet headers on encrypted HTTPS port" }
+                            ].map((item, idx) => (
+                              <tr key={idx}>
+                                <td>
+                                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                    <code>{item.cmd}</code>
+                                    <button
+                                      className="btn btn-secondary"
+                                      style={{ padding: "2px 6px", fontSize: "0.7rem", display: "flex", alignItems: "center", gap: "4px", flexShrink: 0 }}
+                                      onClick={() => copyCmd(item.cmd)}
+                                    >
+                                      {copiedCmd === item.cmd ? <Check size={12} color="var(--accent-emerald)" /> : <Copy size={12} />}
+                                      {copiedCmd === item.cmd ? "Copied" : "Copy"}
+                                    </button>
+                                  </div>
+                                </td>
+                                <td style={{ color: "var(--text-muted)" }}>{item.desc}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   </div>
                 </div>
