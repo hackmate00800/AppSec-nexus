@@ -12,10 +12,12 @@ import {
   Lock,
   Unlock,
   Download,
-  History
+  History,
+  FileCode,
+  ArrowDownCircle
 } from "lucide-react";
 import "./App.css";
-import { Target, ToolInfo, Finding, ScanResult } from "./types";
+import { Target, ToolInfo, Finding, ScanResult, FindingStatus } from "./types";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<"targets" | "tools" | "findings" | "scanner" | "mentor" | "history">("targets");
@@ -45,28 +47,59 @@ export default function App() {
   const [aiExplanation, setAiExplanation] = useState<string>("");
   const [aiLoading, setAiLoading] = useState(false);
   const [reportStatus, setReportStatus] = useState<string>("");
+  const [pullingModel, setPullingModel] = useState<string>("");
+  const [pullStatus, setPullStatus] = useState<string>("");
 
-  async function handleExportReport() {
-    if (!selectedTarget) {
-      alert("Please select a target first.");
-      return;
-    }
-    try {
-      const filename = await invoke<string>("export_report", {
-        targetId: selectedTarget.id,
-      });
-      setReportStatus(`Report successfully exported: ${filename}`);
-      setTimeout(() => setReportStatus(""), 8000);
-    } catch (err: any) {
-      alert("Failed to export report: " + err.toString());
-    }
-  }
+  const isTauriApp = typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__);
 
   useEffect(() => {
     loadInitialData();
   }, []);
 
   async function loadInitialData() {
+    if (!isTauriApp) {
+      console.warn("Running in Web Preview mode. Displaying sample data.");
+      setTools([
+        {
+          id: "baseline",
+          name: "Native Baseline Security Checks",
+          version: "1.0.0",
+          category: "Passive / Headers",
+          is_available: true,
+          path: "internal://rust",
+          description: "Built-in scanner checking CSP, CORS, HSTS, cookie flags, and robots.txt.",
+        },
+        {
+          id: "nuclei",
+          name: "ProjectDiscovery Nuclei",
+          version: "3.11.1",
+          category: "Vulnerability Scanner",
+          is_available: true,
+          path: "tools/bin/nuclei.exe",
+          description: "Template-based vulnerability scanner for CVEs and exposures.",
+        },
+        {
+          id: "httpx",
+          name: "ProjectDiscovery httpx",
+          version: "1.12.0",
+          category: "Service & Tech Prober",
+          is_available: true,
+          path: "tools/bin/httpx.exe",
+          description: "Fast HTTP prober for service reachability and tech detection.",
+        },
+        {
+          id: "nmap",
+          name: "Nmap Network Scanner",
+          version: "7.92",
+          category: "Port & Service Discovery",
+          is_available: true,
+          path: "tools/bin/nmap/nmap-7.92/nmap.exe",
+          description: "Network discovery and service version audit.",
+        },
+      ]);
+      return;
+    }
+
     try {
       const toolsList = await invoke<ToolInfo[]>("get_tools");
       setTools(toolsList);
@@ -97,6 +130,11 @@ export default function App() {
   async function handleCreateTarget(e: React.FormEvent) {
     e.preventDefault();
     setTargetError("");
+    if (!isTauriApp) {
+      alert("Target creation requires the native desktop window.");
+      return;
+    }
+
     try {
       const newTarget = await invoke<Target>("create_target", {
         name: targetName || targetUrl,
@@ -118,6 +156,11 @@ export default function App() {
       return;
     }
 
+    if (!isTauriApp) {
+      alert("Live scans require running inside the native desktop application (appsec-nexus.exe).");
+      return;
+    }
+
     setIsScanning(true);
     setActiveTool(toolId);
     setScanLogs([`Starting ${toolId} scan against ${selectedTarget.primary_url}...`]);
@@ -130,7 +173,6 @@ export default function App() {
 
       setScanLogs((prev) => [...prev, ...result.logs, `Completed in ${result.duration_ms} ms.`]);
 
-      // Refresh findings and history
       const updatedFindings = await invoke<Finding[]>("get_findings");
       setFindings(updatedFindings);
 
@@ -140,6 +182,66 @@ export default function App() {
       setScanLogs((prev) => [...prev, `[ERROR] Scan aborted: ${err.toString()}`]);
     } finally {
       setIsScanning(false);
+    }
+  }
+
+  async function handleExportReport() {
+    if (!selectedTarget) {
+      alert("Please select a target first.");
+      return;
+    }
+    try {
+      const filename = await invoke<string>("export_report", {
+        targetId: selectedTarget.id,
+      });
+      setReportStatus(`HTML report exported: ${filename}`);
+      setTimeout(() => setReportStatus(""), 8000);
+    } catch (err: any) {
+      alert("Failed to export report: " + err.toString());
+    }
+  }
+
+  async function handleExportJson() {
+    if (!selectedTarget) {
+      alert("Please select a target first.");
+      return;
+    }
+    try {
+      const filename = await invoke<string>("export_report_json", {
+        targetId: selectedTarget.id,
+      });
+      setReportStatus(`JSON report exported: ${filename}`);
+      setTimeout(() => setReportStatus(""), 8000);
+    } catch (err: any) {
+      alert("Failed to export JSON report: " + err.toString());
+    }
+  }
+
+  async function handleUpdateFindingStatus(findingId: string, status: FindingStatus) {
+    try {
+      await invoke("update_finding_status", { findingId, status });
+      setFindings((prev) =>
+        prev.map((f) => (f.id === findingId ? { ...f, status } : f))
+      );
+    } catch (err: any) {
+      console.error("Failed to update finding status:", err);
+    }
+  }
+
+  async function handlePullModel(modelName: string) {
+    setPullingModel(modelName);
+    setPullStatus(`Downloading '${modelName}' into local Ollama... Please wait.`);
+    try {
+      const msg = await invoke<string>("pull_ai_model", { model: modelName });
+      setPullStatus(msg);
+      const [available, models] = await invoke<[boolean, string[]]>("get_ai_status");
+      setAiAvailable(available);
+      setAiModels(models);
+      setSelectedModel(modelName);
+    } catch (err: any) {
+      setPullStatus(`Download failed: ${err.toString()}`);
+    } finally {
+      setPullingModel("");
     }
   }
 
@@ -167,18 +269,25 @@ export default function App() {
 
   return (
     <div className="app-container">
+      {/* Browser Warning Banner */}
+      {!isTauriApp && (
+        <div style={{ backgroundColor: "rgba(245, 158, 11, 0.2)", color: "#facc15", padding: "6px 20px", fontSize: "0.8rem", textAlign: "center", borderBottom: "1px solid rgba(245, 158, 11, 0.4)" }}>
+          ⚠️ You are viewing AppSec Nexus in a web browser preview. For native OS process execution, Nmap, and SQLite storage, switch to the <strong>appsec-nexus.exe</strong> desktop window.
+        </div>
+      )}
+
       {/* Top Header */}
       <header className="top-nav">
         <div className="brand">
           <Shield className="brand-icon" size={24} />
           <span>AppSec Nexus</span>
-          <span style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>v0.1.0</span>
+          <span style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>Desktop Platform</span>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
           {selectedTarget && (
             <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem" }}>
-              <span style={{ color: "var(--text-dim)" }}>Active Target:</span>
+              <span style={{ color: "var(--text-dim)" }}>Target:</span>
               <span style={{ fontWeight: 600 }}>{selectedTarget.primary_url}</span>
               {selectedTarget.scope.allow_local_lab ? (
                 <span className="badge badge-lab">
@@ -491,7 +600,7 @@ export default function App() {
                   <div>
                     <h2 className="card-title" style={{ margin: 0 }}>
                       <AlertTriangle size={20} color="var(--accent-amber)" />
-                      Unified Findings & Evidence ({findings.length})
+                      Unified Findings & Deduplication ({findings.length})
                     </h2>
                     {reportStatus && (
                       <div style={{ color: "var(--accent-emerald)", fontSize: "0.8rem", marginTop: "4px" }}>
@@ -505,7 +614,14 @@ export default function App() {
                       onClick={handleExportReport}
                       disabled={findings.length === 0}
                     >
-                      <Download size={14} /> Export HTML Report
+                      <Download size={14} /> Export HTML
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={handleExportJson}
+                      disabled={findings.length === 0}
+                    >
+                      <FileCode size={14} /> Export JSON
                     </button>
                     <button className="btn btn-secondary" onClick={loadInitialData}>
                       <RotateCcw size={14} /> Refresh
@@ -523,6 +639,7 @@ export default function App() {
                       <tr>
                         <th>Severity</th>
                         <th>Vulnerability</th>
+                        <th>Status</th>
                         <th>Source Tool</th>
                         <th>Affected Asset</th>
                         <th>CWE</th>
@@ -548,8 +665,28 @@ export default function App() {
                             </span>
                           </td>
                           <td style={{ fontWeight: 600 }}>{f.title}</td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <select
+                              value={f.status}
+                              onChange={(e) => handleUpdateFindingStatus(f.id, e.target.value as FindingStatus)}
+                              style={{
+                                background: "var(--bg-secondary)",
+                                color: "var(--text-main)",
+                                border: "1px solid var(--border-color)",
+                                borderRadius: "4px",
+                                padding: "3px 6px",
+                                fontSize: "0.75rem",
+                              }}
+                            >
+                              <option value="New">New</option>
+                              <option value="Confirmed">Confirmed</option>
+                              <option value="NeedsReview">Needs Review</option>
+                              <option value="AcceptedRisk">Accepted Risk</option>
+                              <option value="Fixed">Fixed</option>
+                            </select>
+                          </td>
                           <td style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>{f.source_tool}</td>
-                          <td style={{ color: "var(--text-dim)", fontSize: "0.8rem", maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          <td style={{ color: "var(--text-dim)", fontSize: "0.8rem", maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                             {f.affected_asset}
                           </td>
                           <td>
@@ -589,7 +726,7 @@ export default function App() {
                 Powered by your local LLM runtime (Ollama / llama.cpp). All code analysis, stack trace explanations, and remediation advice stay 100% on your laptop.
               </p>
 
-              <div style={{ display: "flex", gap: "12px", marginBottom: "16px" }}>
+              <div style={{ display: "flex", gap: "12px", marginBottom: "16px", flexWrap: "wrap" }}>
                 <div>
                   <label style={{ fontSize: "0.75rem", color: "var(--text-dim)", display: "block", marginBottom: "4px" }}>
                     Explanation Persona
@@ -598,7 +735,7 @@ export default function App() {
                     className="input-field"
                     value={aiMode}
                     onChange={(e: any) => setAiMode(e.target.value)}
-                    style={{ width: "220px" }}
+                    style={{ width: "240px" }}
                   >
                     <option value="beginner">Beginner / Learner Mode (Simple Analogies)</option>
                     <option value="advanced">Senior Pentester Mode (Remediation & Code)</option>
@@ -613,7 +750,7 @@ export default function App() {
                     className="input-field"
                     value={selectedModel}
                     onChange={(e) => setSelectedModel(e.target.value)}
-                    style={{ width: "220px" }}
+                    style={{ width: "240px" }}
                   >
                     {aiModels.length === 0 ? (
                       <option value="">No local models detected</option>
@@ -622,6 +759,44 @@ export default function App() {
                     )}
                   </select>
                 </div>
+              </div>
+
+              {/* Quick Model Download Section */}
+              <div style={{ background: "rgba(6, 182, 212, 0.08)", border: "1px solid rgba(6, 182, 212, 0.2)", borderRadius: "8px", padding: "14px", marginBottom: "18px" }}>
+                <div style={{ fontWeight: 600, fontSize: "0.85rem", marginBottom: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <ArrowDownCircle size={15} color="var(--accent-cyan)" /> Quick-Download Recommended Local Security Models:
+                </div>
+                <div style={{ display: "flex", gap: "10px", marginTop: "8px" }}>
+                  <button
+                    className="btn btn-secondary"
+                    style={{ fontSize: "0.78rem" }}
+                    disabled={Boolean(pullingModel)}
+                    onClick={() => handlePullModel("llama3:8b")}
+                  >
+                    Pull Llama 3 (8B)
+                  </button>
+                  <button
+                    className="btn btn-secondary"
+                    style={{ fontSize: "0.78rem" }}
+                    disabled={Boolean(pullingModel)}
+                    onClick={() => handlePullModel("qwen2.5-coder:7b")}
+                  >
+                    Pull Qwen 2.5 Coder (7B)
+                  </button>
+                  <button
+                    className="btn btn-secondary"
+                    style={{ fontSize: "0.78rem" }}
+                    disabled={Boolean(pullingModel)}
+                    onClick={() => handlePullModel("mistral:7b")}
+                  >
+                    Pull Mistral (7B)
+                  </button>
+                </div>
+                {pullStatus && (
+                  <div style={{ fontSize: "0.8rem", color: "var(--accent-cyan)", marginTop: "8px" }}>
+                    {pullStatus}
+                  </div>
+                )}
               </div>
 
               {selectedFinding ? (

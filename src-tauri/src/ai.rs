@@ -152,4 +152,29 @@ impl AiMentor {
 
         Ok(resp_json.response)
     }
+
+    pub async fn pull_model(&self, model: &str) -> Result<String, String> {
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(600))
+            .build()
+            .map_err(|e| e.to_string())?;
+
+        let req = serde_json::json!({
+            "name": model,
+            "stream": false
+        });
+
+        let res = client
+            .post(format!("{}/api/pull", self.base_url))
+            .json(&req)
+            .send()
+            .await
+            .map_err(|e| format!("Failed to initiate model download: {}", e))?;
+
+        if res.status().is_success() {
+            Ok(format!("Model '{}' successfully downloaded and ready for offline use!", model))
+        } else {
+            Err(format!("Ollama returned error: HTTP {}", res.status()))
+        }
+    }
 }

@@ -253,4 +253,13 @@ impl Database {
         }
         Ok(history)
     }
+
+    pub fn update_finding_status(&self, id: &str, status: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE findings SET status = ?1 WHERE id = ?2",
+            params![status, id],
+        )?;
+        Ok(())
+    }
 }

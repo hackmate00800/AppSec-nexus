@@ -204,6 +204,59 @@ async fn explain_finding(
         .await
 }
 
+#[tauri::command]
+fn update_finding_status(
+    state: State<'_, AppState>,
+    finding_id: String,
+    status: String,
+) -> Result<(), String> {
+    state.db.update_finding_status(&finding_id, &status).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn export_report_json(state: State<'_, AppState>, target_id: String) -> Result<String, String> {
+    let targets = state.db.get_targets().map_err(|e| e.to_string())?;
+    let target = targets
+        .into_iter()
+        .find(|t| t.id == target_id)
+        .ok_or_else(|| "Target not found".to_string())?;
+
+    let findings = state.db.get_findings().map_err(|e| e.to_string())?;
+    let target_findings: Vec<_> = findings
+        .into_iter()
+        .filter(|f| f.target_id == target_id)
+        .collect();
+
+    let json_val = serde_json::json!({
+        "target": target,
+        "findings_count": target_findings.len(),
+        "findings": target_findings,
+        "exported_at": chrono::Utc::now().to_rfc3339()
+    });
+
+    let json_string = serde_json::to_string_pretty(&json_val)
+        .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
+
+    let sanitized_name = target.name.replace(|c: char| !c.is_alphanumeric(), "_");
+    let filename = format!(
+        "AppSec_Findings_{}_{}.json",
+        sanitized_name,
+        chrono::Utc::now().format("%Y%m%d_%H%M%S")
+    );
+
+    std::fs::write(&filename, json_string)
+        .map_err(|e| format!("Failed to write JSON report: {}", e))?;
+    Ok(filename)
+}
+
+#[tauri::command]
+async fn pull_ai_model(
+    state: State<'_, AppState>,
+    model: String,
+) -> Result<String, String> {
+    state.ai_mentor.pull_model(&model).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut base_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -236,7 +289,10 @@ pub fn run() {
             get_ai_status,
             explain_finding,
             export_report,
-            get_scan_history
+            get_scan_history,
+            update_finding_status,
+            export_report_json,
+            pull_ai_model
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
