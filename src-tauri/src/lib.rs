@@ -428,15 +428,16 @@ pub fn run() {
         use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS};
         use windows_sys::Win32::System::Threading::CreateMutexA;
         use windows_sys::Win32::UI::WindowsAndMessaging::{
-            FindWindowA, SetForegroundWindow, ShowWindow, SW_RESTORE,
+            FindWindowW, IsWindowVisible, SetForegroundWindow, ShowWindow, SW_RESTORE,
         };
+        use std::os::windows::process::CommandExt;
 
         unsafe {
             let mutex_name = b"AppSecNexusLocalInstanceMutex\0";
             let handle = CreateMutexA(std::ptr::null(), 1, mutex_name.as_ptr());
             if GetLastError() == ERROR_ALREADY_EXISTS {
                 let msg = format!(
-                    "Another instance detected for PID {}. Attempting to focus existing window...\n",
+                    "Another instance detected for PID {}. Checking if existing window is visible...\n",
                     std::process::id()
                 );
                 let _ = std::fs::OpenOptions::new()
@@ -449,21 +450,62 @@ pub fn run() {
                         f.flush()
                     });
 
-                let win_title = b"AppSec Nexus - Cybersecurity & Web Pentesting\0";
+                let win_title: Vec<u16> = "AppSec Nexus - Cybersecurity & Web Pentesting\0"
+                    .encode_utf16()
+                    .collect();
+                let mut brought_to_front = false;
                 for _ in 0..6 {
-                    let hwnd = FindWindowA(std::ptr::null(), win_title.as_ptr());
-                    if !hwnd.is_null() {
+                    let hwnd = FindWindowW(std::ptr::null(), win_title.as_ptr());
+                    if !hwnd.is_null() && IsWindowVisible(hwnd) != 0 {
                         ShowWindow(hwnd, SW_RESTORE);
                         SetForegroundWindow(hwnd);
+                        brought_to_front = true;
                         break;
                     }
-                    std::thread::sleep(std::time::Duration::from_millis(150));
+                    std::thread::sleep(std::time::Duration::from_millis(100));
                 }
+
+                if brought_to_front {
+                    let msg = "Existing visible window focused successfully. Exiting secondary launcher.\n";
+                    let _ = std::fs::OpenOptions::new()
+                        .append(true)
+                        .create(true)
+                        .open(&log_file)
+                        .and_then(|mut f| {
+                            use std::io::Write;
+                            let _ = f.write_all(msg.as_bytes());
+                            f.flush()
+                        });
+
+                    if !handle.is_null() {
+                        CloseHandle(handle);
+                    }
+                    return;
+                }
+
+                // If no visible window was found, the previous instance is an orphaned background zombie.
+                // Terminate the stale background instance so the user can open the app fresh:
+                let msg = "No visible window found for existing instance. Cleaning up stale process to launch fresh...\n";
+                let _ = std::fs::OpenOptions::new()
+                    .append(true)
+                    .create(true)
+                    .open(&log_file)
+                    .and_then(|mut f| {
+                        use std::io::Write;
+                        let _ = f.write_all(msg.as_bytes());
+                        f.flush()
+                    });
+
+                let current_pid = std::process::id();
+                let _ = std::process::Command::new("taskkill")
+                    .args(&["/F", "/FI", &format!("PID ne {}", current_pid), "/IM", "AppSec-Nexus.exe"])
+                    .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                    .output();
 
                 if !handle.is_null() {
                     CloseHandle(handle);
                 }
-                return;
+                std::thread::sleep(std::time::Duration::from_millis(300));
             }
         }
     }
@@ -516,12 +558,18 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .on_window_event(move |window, event| {
-            let msg = format!("WINDOW EVENT on {:?}: {:?}\n", window.label(), event);
-            let _ = std::fs::OpenOptions::new().append(true).create(true).open(&event_log).and_then(|mut f| {
-                use std::io::Write;
-                let _ = f.write_all(msg.as_bytes());
-                f.flush()
-            });
+            match event {
+                tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed => {
+                    let msg = format!("WINDOW CLOSE/DESTROY on {:?} - terminating process cleanly\n", window.label());
+                    let _ = std::fs::OpenOptions::new().append(true).create(true).open(&event_log).and_then(|mut f| {
+                        use std::io::Write;
+                        let _ = f.write_all(msg.as_bytes());
+                        f.flush()
+                    });
+                    std::process::exit(0);
+                }
+                _ => {}
+            }
         })
         .setup(move |app| {
             use tauri::Manager;
@@ -578,24 +626,25 @@ pub fn run() {
 
     app.run(move |_app_handle, event| {
         match &event {
-            tauri::RunEvent::WindowEvent { label, event, .. } => {
-                let msg = format!("RUN EVENT WindowEvent on {}: {:?}\n", label, event);
-                let _ = std::fs::OpenOptions::new().append(true).create(true).open(&run_log).and_then(|mut f| {
-                    use std::io::Write;
-                    let _ = f.write_all(msg.as_bytes());
-                    f.flush()
-                });
+            tauri::RunEvent::WindowEvent { label: _, event, .. } => {
+                match event {
+                    tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed => {
+                        std::process::exit(0);
+                    }
+                    _ => {}
+                }
             }
-            tauri::RunEvent::ExitRequested { code, .. } => {
-                let msg = format!("RUN EVENT ExitRequested with code: {:?}\n", code);
+            tauri::RunEvent::ExitRequested { code: _, .. } => {
+                let msg = "RUN EVENT ExitRequested - terminating process cleanly\n";
                 let _ = std::fs::OpenOptions::new().append(true).create(true).open(&run_log).and_then(|mut f| {
                     use std::io::Write;
                     let _ = f.write_all(msg.as_bytes());
                     f.flush()
                 });
+                std::process::exit(0);
             }
             tauri::RunEvent::Exit => {
-                let msg = format!("RUN EVENT Exit - exiting process cleanly\n");
+                let msg = "RUN EVENT Exit - exiting process cleanly\n";
                 let _ = std::fs::OpenOptions::new().append(true).create(true).open(&run_log).and_then(|mut f| {
                     use std::io::Write;
                     let _ = f.write_all(msg.as_bytes());
