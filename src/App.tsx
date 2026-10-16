@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 import {
   Shield,
@@ -22,7 +23,7 @@ import {
   ExternalLink
 } from "lucide-react";
 import "./App.css";
-import { Target, ToolInfo, Finding, ScanResult, FindingStatus, DiscoveredEndpoint } from "./types";
+import { Target, ToolInfo, Finding, ScanResult, FindingStatus, DiscoveredEndpoint, ModelPullProgress } from "./types";
 
 
 export default function App() {
@@ -76,12 +77,39 @@ export default function App() {
   const [reportStatus, setReportStatus] = useState<string>("");
   const [pullingModel, setPullingModel] = useState<string>("");
   const [pullStatus, setPullStatus] = useState<string>("");
+  const [pullProgress, setPullProgress] = useState<ModelPullProgress | null>(null);
 
   const isTauriApp = isTauri();
 
   useEffect(() => {
     loadInitialData();
   }, []);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    if (isTauriApp) {
+      listen<ModelPullProgress>("ollama-pull-progress", (event) => {
+        setPullProgress(event.payload);
+        if (event.payload.done) {
+          setPullStatus(`Model '${event.payload.model}' ready for offline use!`);
+          setPullingModel("");
+          invoke<[boolean, string[]]>("get_ai_status").then(([avail, models]) => {
+            setAiAvailable(avail);
+            setAiModels(models);
+            setSelectedModel(event.payload.model);
+          });
+        } else if (event.payload.error) {
+          setPullStatus(`Download failed: ${event.payload.error}`);
+          setPullingModel("");
+        }
+      }).then((u) => {
+        unlisten = u;
+      });
+    }
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, [isTauriApp]);
 
   useEffect(() => {
     if (selectedTarget && isTauriApp) {
@@ -330,16 +358,34 @@ export default function App() {
     }
   }
 
-  async function handlePullModel(modelName: string) {
-    setPullingModel(modelName);
-    setPullStatus(`Downloading '${modelName}' into local Ollama... Please wait.`);
+  async function handleRefreshAiStatus() {
     try {
-      const msg = await invoke<string>("pull_ai_model", { model: modelName });
-      setPullStatus(msg);
       const [available, models] = await invoke<[boolean, string[]]>("get_ai_status");
       setAiAvailable(available);
       setAiModels(models);
-      setSelectedModel(modelName);
+      if (models.length > 0 && !selectedModel) {
+        setSelectedModel(models[0]);
+      }
+    } catch (err: any) {
+      console.error("Failed to refresh AI status:", err);
+    }
+  }
+
+  async function handlePullModel(modelName: string) {
+    setPullingModel(modelName);
+    setPullStatus(`Connecting to local Ollama and downloading '${modelName}'...`);
+    setPullProgress({
+      model: modelName,
+      status: "Connecting...",
+      completed: 0,
+      total: 0,
+      percentage: 0,
+      done: false
+    });
+    try {
+      const msg = await invoke<string>("pull_ai_model", { model: modelName });
+      setPullStatus(msg);
+      await handleRefreshAiStatus();
     } catch (err: any) {
       setPullStatus(`Download failed: ${err.toString()}`);
     } finally {
@@ -1171,7 +1217,7 @@ export default function App() {
                 Powered by your local LLM runtime (Ollama / llama.cpp). All code analysis, stack trace explanations, and remediation advice stay 100% on your laptop.
               </p>
 
-              <div style={{ display: "flex", gap: "12px", marginBottom: "16px", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: "12px", marginBottom: "16px", flexWrap: "wrap", alignItems: "flex-end" }}>
                 <div>
                   <label style={{ fontSize: "0.75rem", color: "var(--text-dim)", display: "block", marginBottom: "4px" }}>
                     Explanation Persona
@@ -1191,18 +1237,40 @@ export default function App() {
                   <label style={{ fontSize: "0.75rem", color: "var(--text-dim)", display: "block", marginBottom: "4px" }}>
                     Select Local Model
                   </label>
-                  <select
-                    className="input-field"
-                    value={selectedModel}
-                    onChange={(e) => setSelectedModel(e.target.value)}
-                    style={{ width: "240px" }}
-                  >
-                    {aiModels.length === 0 ? (
-                      <option value="">No local models detected</option>
-                    ) : (
-                      aiModels.map((m) => <option key={m} value={m}>{m}</option>)
-                    )}
-                  </select>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <select
+                      className="input-field"
+                      value={selectedModel}
+                      onChange={(e) => setSelectedModel(e.target.value)}
+                      style={{ width: "240px" }}
+                    >
+                      {aiModels.length === 0 ? (
+                        <option value="">No local models detected</option>
+                      ) : (
+                        aiModels.map((m) => <option key={m} value={m}>{m}</option>)
+                      )}
+                    </select>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={handleRefreshAiStatus}
+                      title="Refresh Ollama Models List"
+                      style={{ padding: "8px 10px", display: "flex", alignItems: "center", gap: "4px" }}
+                    >
+                      <RotateCcw size={14} /> Refresh
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ paddingBottom: "8px", fontSize: "0.8rem" }}>
+                  {aiAvailable ? (
+                    <span style={{ color: "var(--accent-emerald)", display: "flex", alignItems: "center", gap: "4px" }}>
+                      ● Ollama Online ({aiModels.length} model{aiModels.length !== 1 ? "s" : ""})
+                    </span>
+                  ) : (
+                    <span style={{ color: "var(--accent-rose)", display: "flex", alignItems: "center", gap: "4px" }}>
+                      ● Ollama Offline (Run 'ollama serve')
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -1211,7 +1279,31 @@ export default function App() {
                 <div style={{ fontWeight: 600, fontSize: "0.85rem", marginBottom: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
                   <ArrowDownCircle size={15} color="var(--accent-cyan)" /> Quick-Download Recommended Local Security Models:
                 </div>
-                <div style={{ display: "flex", gap: "10px", marginTop: "8px" }}>
+                <div style={{ display: "flex", gap: "8px", marginTop: "8px", flexWrap: "wrap" }}>
+                  <button
+                    className="btn btn-secondary"
+                    style={{ fontSize: "0.78rem" }}
+                    disabled={Boolean(pullingModel)}
+                    onClick={() => handlePullModel("llama3.2:1b")}
+                  >
+                    Pull Llama 3.2 (1B - 1.3GB Fast)
+                  </button>
+                  <button
+                    className="btn btn-secondary"
+                    style={{ fontSize: "0.78rem" }}
+                    disabled={Boolean(pullingModel)}
+                    onClick={() => handlePullModel("qwen2.5-coder:1.5b")}
+                  >
+                    Pull Qwen 2.5 Coder (1.5B - 1.0GB)
+                  </button>
+                  <button
+                    className="btn btn-secondary"
+                    style={{ fontSize: "0.78rem" }}
+                    disabled={Boolean(pullingModel)}
+                    onClick={() => handlePullModel("llama3.2:3b")}
+                  >
+                    Pull Llama 3.2 (3B - 2.0GB)
+                  </button>
                   <button
                     className="btn btn-secondary"
                     style={{ fontSize: "0.78rem" }}
@@ -1237,7 +1329,41 @@ export default function App() {
                     Pull Mistral (7B)
                   </button>
                 </div>
-                {pullStatus && (
+
+                {/* Real-time Download Progress Bar */}
+                {pullProgress && (
+                  <div style={{ marginTop: "12px", background: "rgba(15, 23, 42, 0.7)", padding: "12px", borderRadius: "6px", border: "1px solid rgba(6, 182, 212, 0.3)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.82rem", marginBottom: "6px" }}>
+                      <span style={{ fontWeight: 600, color: "var(--accent-cyan)" }}>
+                        {pullProgress.model}: {pullProgress.status}
+                      </span>
+                      <span style={{ fontWeight: 700, color: pullProgress.done ? "var(--accent-emerald)" : "var(--accent-cyan)" }}>
+                        {pullProgress.percentage.toFixed(1)}%
+                      </span>
+                    </div>
+
+                    <div style={{ width: "100%", height: "8px", background: "rgba(255, 255, 255, 0.1)", borderRadius: "4px", overflow: "hidden" }}>
+                      <div
+                        style={{
+                          width: `${Math.min(100, Math.max(pullProgress.percentage, 0))}%`,
+                          height: "100%",
+                          background: pullProgress.done ? "var(--accent-emerald)" : "linear-gradient(90deg, #06b6d4, #10b981)",
+                          borderRadius: "4px",
+                          transition: "width 0.2s ease-in-out"
+                        }}
+                      />
+                    </div>
+
+                    {pullProgress.total > 0 && (
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "4px" }}>
+                        <span>{(pullProgress.completed / (1024 * 1024)).toFixed(1)} MB / {(pullProgress.total / (1024 * 1024)).toFixed(1)} MB</span>
+                        <span>{pullProgress.done ? "Complete ✓" : "Downloading layer..."}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {pullStatus && !pullProgress && (
                   <div style={{ fontSize: "0.8rem", color: "var(--accent-cyan)", marginTop: "8px" }}>
                     {pullStatus}
                   </div>

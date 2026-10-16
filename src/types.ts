@@ -65,3 +65,13 @@ export interface DiscoveredEndpoint {
   discovered_at: string;
 }
 
+export interface ModelPullProgress {
+  model: string;
+  status: string;
+  completed: number;
+  total: number;
+  percentage: number;
+  done: boolean;
+  error?: string;
+}
+

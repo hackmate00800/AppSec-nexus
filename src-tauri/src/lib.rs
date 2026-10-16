@@ -254,10 +254,11 @@ fn export_report_json(state: State<'_, AppState>, target_id: String) -> Result<S
 
 #[tauri::command]
 async fn pull_ai_model(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     model: String,
 ) -> Result<String, String> {
-    state.ai_mentor.pull_model(&model).await
+    state.ai_mentor.pull_model(&model, app).await
 }
 
 #[tauri::command]

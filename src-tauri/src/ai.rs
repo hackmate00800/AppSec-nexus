@@ -29,6 +29,27 @@ pub struct OllamaModel {
     pub size: Option<u64>,
 }
 
+#[derive(Serialize, Clone, Debug)]
+pub struct ModelPullProgress {
+    pub model: String,
+    pub status: String,
+    pub completed: u64,
+    pub total: u64,
+    pub percentage: f32,
+    pub done: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+struct OllamaPullStreamChunk {
+    status: Option<String>,
+    #[allow(dead_code)]
+    digest: Option<String>,
+    total: Option<u64>,
+    completed: Option<u64>,
+    error: Option<String>,
+}
+
 impl AiMentor {
     pub fn new() -> Self {
         Self {
@@ -153,28 +174,98 @@ impl AiMentor {
         Ok(resp_json.response)
     }
 
-    pub async fn pull_model(&self, model: &str) -> Result<String, String> {
+    pub async fn pull_model(&self, model: &str, app: tauri::AppHandle) -> Result<String, String> {
+        use tauri::Emitter;
+
         let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(600))
+            .timeout(Duration::from_secs(1800))
             .build()
             .map_err(|e| e.to_string())?;
 
         let req = serde_json::json!({
             "name": model,
-            "stream": false
+            "stream": true
         });
 
-        let res = client
+        let mut res = client
             .post(format!("{}/api/pull", self.base_url))
             .json(&req)
             .send()
             .await
             .map_err(|e| format!("Failed to initiate model download: {}", e))?;
 
-        if res.status().is_success() {
-            Ok(format!("Model '{}' successfully downloaded and ready for offline use!", model))
-        } else {
-            Err(format!("Ollama returned error: HTTP {}", res.status()))
+        if !res.status().is_success() {
+            return Err(format!("Ollama returned error: HTTP {}", res.status()));
         }
+
+        let mut buffer = String::new();
+
+        while let Some(chunk) = res.chunk().await.map_err(|e| e.to_string())? {
+            let chunk_str = String::from_utf8_lossy(&chunk);
+            buffer.push_str(&chunk_str);
+
+            while let Some(newline_pos) = buffer.find('\n') {
+                let line = buffer[..newline_pos].trim().to_string();
+                buffer = buffer[newline_pos + 1..].to_string();
+
+                if line.is_empty() {
+                    continue;
+                }
+
+                if let Ok(data) = serde_json::from_str::<OllamaPullStreamChunk>(&line) {
+                    if let Some(err) = data.error {
+                        let _ = app.emit("ollama-pull-progress", ModelPullProgress {
+                            model: model.to_string(),
+                            status: format!("Error: {}", err),
+                            completed: 0,
+                            total: 0,
+                            percentage: 0.0,
+                            done: true,
+                            error: Some(err.clone()),
+                        });
+                        return Err(err);
+                    }
+
+                    let status = data.status.unwrap_or_else(|| "downloading".to_string());
+                    let completed = data.completed.unwrap_or(0);
+                    let total = data.total.unwrap_or(0);
+                    let percentage = if total > 0 {
+                        ((completed as f64 / total as f64) * 100.0) as f32
+                    } else {
+                        0.0
+                    };
+
+                    let is_done = status == "success";
+
+                    let progress = ModelPullProgress {
+                        model: model.to_string(),
+                        status: status.clone(),
+                        completed,
+                        total,
+                        percentage,
+                        done: is_done,
+                        error: None,
+                    };
+
+                    let _ = app.emit("ollama-pull-progress", &progress);
+
+                    if is_done {
+                        return Ok(format!("Model '{}' successfully downloaded and ready for offline use!", model));
+                    }
+                }
+            }
+        }
+
+        let _ = app.emit("ollama-pull-progress", ModelPullProgress {
+            model: model.to_string(),
+            status: "Completed".to_string(),
+            completed: 100,
+            total: 100,
+            percentage: 100.0,
+            done: true,
+            error: None,
+        });
+
+        Ok(format!("Model '{}' downloaded and ready for use!", model))
     }
 }
