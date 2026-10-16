@@ -40,7 +40,29 @@ impl ScopeValidator {
     }
 
     pub fn validate_target(url_str: &str, scope: &ScopeConfig) -> Result<String, String> {
-        let parsed = Url::parse(url_str).map_err(|e| format!("Invalid URL: {}", e))?;
+        let trimmed = url_str.trim();
+        if trimmed.is_empty() {
+            return Err("Target URL or path cannot be empty".to_string());
+        }
+
+        // 1. Check if it's a local file or path (e.g., APK or local source directory)
+        let path = std::path::Path::new(trimmed);
+        if path.exists() || trimmed.ends_with(".apk") || trimmed.starts_with("file://") {
+            return Ok(trimmed.to_string());
+        }
+
+        // 2. Prepend scheme if missing (e.g. "example.com" -> "https://example.com", "localhost:8080" -> "http://localhost:8080")
+        let normalized = if !trimmed.contains("://") {
+            if trimmed.starts_with("localhost") || trimmed.starts_with("127.0.0.1") {
+                format!("http://{}", trimmed)
+            } else {
+                format!("https://{}", trimmed)
+            }
+        } else {
+            trimmed.to_string()
+        };
+
+        let parsed = Url::parse(&normalized).map_err(|e| format!("Invalid URL: {}", e))?;
 
         if parsed.scheme() != "http" && parsed.scheme() != "https" {
             return Err("Only http and https schemes are supported".to_string());
@@ -149,6 +171,16 @@ mod tests {
         // Excluded path
         let excluded_res = ScopeValidator::validate_target("http://127.0.0.1:8080/logout", &scope);
         assert!(excluded_res.is_err());
+
+        // Bare domain auto-normalization
+        let bare_res = ScopeValidator::validate_target("example.com", &scope);
+        assert!(bare_res.is_ok());
+        assert_eq!(bare_res.unwrap(), "https://example.com/");
+
+        // Local APK target path
+        let apk_res = ScopeValidator::validate_target("sample_vulnerable.apk", &scope);
+        assert!(apk_res.is_ok());
+        assert_eq!(apk_res.unwrap(), "sample_vulnerable.apk");
     }
 }
 

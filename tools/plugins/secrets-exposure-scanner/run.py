@@ -15,9 +15,63 @@ PATTERNS = [
     ("Generic Authorization Bearer", r"(?i)bearer\s+[a-zA-Z0-9_\-\.]{20,}", "Medium", "CWE-522")
 ]
 
-def scan_secrets(url):
+import os
+
+def scan_secrets(target):
     findings = []
-    logs = [f"Scanning page markup and scripts for secret leaks at {url}"]
+    logs = []
+    
+    # Check if target is a local file or directory
+    if os.path.exists(target):
+        logs.append(f"Scanning local filesystem target: {target}")
+        files_to_scan = []
+        if os.path.isfile(target):
+            files_to_scan.append(target)
+        else:
+            for root, _, files in os.walk(target):
+                for f in files:
+                    # Skip common vendor/build directories
+                    if any(ignored in root for ignored in [".git", "node_modules", "target", "dist", "build"]):
+                        continue
+                    files_to_scan.append(os.path.join(root, f))
+                    if len(files_to_scan) >= 200:
+                        break
+                if len(files_to_scan) >= 200:
+                    break
+                    
+        logs.append(f"Evaluating {len(files_to_scan)} local files for secrets...")
+        for fpath in files_to_scan:
+            try:
+                with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
+                    content = f.read(512 * 1024)
+                for name, pattern, severity, cwe in PATTERNS:
+                    matches = re.findall(pattern, content)
+                    if matches:
+                        unique_matches = list(set(matches))[:2]
+                        for m in unique_matches:
+                            masked = m[:6] + "..." + m[-4:] if len(m) > 12 else m[:3] + "..."
+                            findings.append({
+                                "title": f"Hardcoded Secret Exposure: {name}",
+                                "severity": severity,
+                                "confidence": 95,
+                                "summary": f"A potential {name} was detected in file '{os.path.basename(fpath)}'.",
+                                "evidence": f"File: {fpath}\nToken: '{masked}'",
+                                "cwe": cwe,
+                                "remediation": "Revoke the exposed key immediately and store credentials in environment variables."
+                            })
+                            logs.append(f"[!] Found {name} in {fpath}: {masked}")
+            except Exception as e:
+                logs.append(f"Could not read {fpath}: {e}")
+                
+        logs.append(f"Local secrets scan complete. {len(findings)} exposures detected.")
+        return {"target": target, "findings": findings, "logs": logs}
+
+    # Otherwise treat as URL
+    url = target
+    if not url.startswith("http://") and not url.startswith("https://"):
+        url = "https://" + url
+        
+    logs.append(f"Scanning page markup and scripts for secret leaks at {url}")
     
     ctx = ssl.create_default_context()
     ctx.check_hostname = False

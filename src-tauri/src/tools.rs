@@ -125,13 +125,24 @@ impl ToolManager {
     }
 
     fn find_nmap_path(&self) -> Option<String> {
-        let local_nmap = self.bin_dir.join("nmap").join("nmap-7.92").join("nmap.exe");
-        if local_nmap.exists() {
-            return Some(local_nmap.to_string_lossy().to_string());
+        let candidates = [
+            self.bin_dir.join("nmap").join("nmap-7.92").join("nmap.exe"),
+            self.bin_dir.join("nmap.exe"),
+            PathBuf::from(r"C:\Program Files (x86)\Nmap\nmap.exe"),
+            PathBuf::from(r"C:\Program Files\Nmap\nmap.exe"),
+        ];
+        for candidate in &candidates {
+            if candidate.exists() {
+                return Some(candidate.to_string_lossy().to_string());
+            }
         }
-        let fallback = self.bin_dir.join("nmap.exe");
-        if fallback.exists() {
-            return Some(fallback.to_string_lossy().to_string());
+        if let Ok(path_var) = std::env::var("PATH") {
+            for dir in std::env::split_paths(&path_var) {
+                let p = dir.join("nmap.exe");
+                if p.exists() {
+                    return Some(p.to_string_lossy().to_string());
+                }
+            }
         }
         None
     }

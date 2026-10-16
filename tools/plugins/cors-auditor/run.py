@@ -7,6 +7,9 @@ import ssl
 
 def check_cors(target_url):
     findings = []
+    if not target_url.startswith("http://") and not target_url.startswith("https://"):
+        target_url = "https://" + target_url
+        
     logs = [f"Initiating CORS Misconfiguration Audit on {target_url}"]
     
     ctx = ssl.create_default_context()

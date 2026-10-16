@@ -1,0 +1,16 @@
+{
+  "id": "pcap-traffic-auditor",
+  "name": "Wireshark PCAP & Network Traffic Auditor",
+  "version": "1.0.0",
+  "publisher": "AppSec Nexus Network Lab",
+  "runtime": "python3",
+  "executable": "run.py",
+  "capabilities": ["network_security", "pcap_analysis", "credential_leak_detection", "packet_audit"],
+  "permissions": {
+    "network": ["none"],
+    "filesystem": ["target_file_read_only"],
+    "environment": ["none"]
+  },
+  "timeout_seconds": 45,
+  "description": "Analyzes Wireshark network capture files (.pcap/.pcapng) or endpoints for cleartext credentials (HTTP Basic Auth, FTP, Telnet), plaintext protocols, and weak TLS handshakes."
+}

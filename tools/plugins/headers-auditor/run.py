@@ -8,6 +8,9 @@ from datetime import datetime
 
 def audit_headers(url):
     findings = []
+    if not url.startswith("http://") and not url.startswith("https://"):
+        url = "https://" + url
+        
     logs = [f"Starting Security Header Audit for {url}"]
     
     ctx = ssl.create_default_context()

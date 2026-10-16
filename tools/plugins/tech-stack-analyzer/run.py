@@ -7,6 +7,9 @@ import re
 
 def analyze_tech(url):
     findings = []
+    if not url.startswith("http://") and not url.startswith("https://"):
+        url = "https://" + url
+        
     logs = [f"Fingerprinting technologies on {url}"]
     
     ctx = ssl.create_default_context()

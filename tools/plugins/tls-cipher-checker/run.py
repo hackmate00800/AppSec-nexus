@@ -4,10 +4,13 @@ import json
 import ssl
 import socket
 from urllib.parse import urlparse
-from datetime import datetime
+from datetime import datetime, timezone
 
 def audit_tls(url):
     findings = []
+    if not url.startswith("http://") and not url.startswith("https://"):
+        url = "https://" + url
+        
     logs = [f"Analyzing TLS/SSL configuration for {url}"]
     
     parsed = urlparse(url)
@@ -32,8 +35,8 @@ def audit_tls(url):
                 # Check expiration
                 not_after_str = cert.get("notAfter")
                 if not_after_str:
-                    not_after = datetime.strptime(not_after_str, "%b %d %H:%M:%S %Y %Z")
-                    days_left = (not_after - datetime.utcnow()).days
+                    not_after = datetime.strptime(not_after_str, "%b %d %H:%M:%S %Y %Z").replace(tzinfo=timezone.utc)
+                    days_left = (not_after - datetime.now(timezone.utc)).days
                     logs.append(f"Certificate expires on {not_after.isoformat()} ({days_left} days remaining)")
                     
                     if days_left < 0:

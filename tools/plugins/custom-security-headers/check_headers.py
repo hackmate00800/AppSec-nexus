@@ -10,11 +10,13 @@ import json
 import urllib.request
 import urllib.error
 import ssl
-from datetime import datetime
+from datetime import datetime, timezone
 
 def audit_url(target_url):
     findings = []
-    
+    if not target_url.startswith("http://") and not target_url.startswith("https://"):
+        target_url = "https://" + target_url
+        
     ctx = ssl.create_default_context()
     req = urllib.request.Request(
         target_url,
@@ -77,7 +79,7 @@ def main():
         
     url = sys.argv[1]
     results = audit_url(url)
-    print(json.dumps({"target": url, "findings": results, "timestamp": datetime.utcnow().isoformat()}, indent=2))
+    print(json.dumps({"target": url, "findings": results, "timestamp": datetime.now(timezone.utc).isoformat()}, indent=2))
 
 if __name__ == "__main__":
     main()

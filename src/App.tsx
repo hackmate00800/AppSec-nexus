@@ -749,11 +749,11 @@ export default function App() {
 
                   <div>
                     <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "6px" }}>
-                      Primary URL (HTTP or HTTPS)
+                      Target Address (Website URL, Domain, or Android .apk File Path)
                     </label>
                     <input
                       className="input-field"
-                      placeholder="https://example.com"
+                      placeholder="e.g. example.com, https://app.example.com, or C:\downloads\app.apk"
                       value={targetUrl}
                       onChange={(e) => setTargetUrl(e.target.value)}
                       required

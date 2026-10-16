@@ -144,7 +144,12 @@ impl PluginManager {
 
         let mut cmd = match plugin.runtime.to_lowercase().as_str() {
             "python" | "python3" => {
-                let mut c = Command::new("python");
+                let python_bin = if Path::new(r"C:\Python314\python.exe").exists() {
+                    r"C:\Python314\python.exe"
+                } else {
+                    "python"
+                };
+                let mut c = Command::new(python_bin);
                 c.arg(&exe_path).arg(target_url);
                 c
             }
