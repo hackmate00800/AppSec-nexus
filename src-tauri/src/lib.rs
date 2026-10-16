@@ -1,14 +1,17 @@
-mod ai;
-mod db;
-mod models;
-mod reports;
-mod scanners;
-mod scope;
-mod tools;
+pub mod ai;
+pub mod crawler;
+pub mod db;
+pub mod importers;
+pub mod models;
+pub mod reports;
+pub mod scanners;
+pub mod scope;
+pub mod tools;
+
 
 use ai::AiMentor;
 use db::Database;
-use models::{Finding, ScopeConfig, Target, ToolInfo};
+use models::{DiscoveredEndpoint, Finding, ScopeConfig, Target, ToolInfo};
 use scanners::BaselineScanner;
 use scope::ScopeValidator;
 use std::path::PathBuf;
@@ -257,6 +260,63 @@ async fn pull_ai_model(
     state.ai_mentor.pull_model(&model).await
 }
 
+#[tauri::command]
+async fn run_crawler(
+    state: State<'_, AppState>,
+    target_id: String,
+    max_depth: u32,
+    max_pages: u32,
+) -> Result<Vec<DiscoveredEndpoint>, String> {
+    let targets = state.db.get_targets().map_err(|e| e.to_string())?;
+    let target = targets
+        .into_iter()
+        .find(|t| t.id == target_id)
+        .ok_or_else(|| "Target not found".to_string())?;
+
+    let (endpoints, findings) = crawler::Crawler::crawl(
+        &target.id,
+        &target.primary_url,
+        &target.scope,
+        max_depth,
+        max_pages,
+    )
+    .await?;
+
+    for ep in &endpoints {
+        let _ = state.db.insert_endpoint(ep);
+    }
+
+    for f in &findings {
+        let _ = state.db.insert_finding(f);
+    }
+
+    Ok(endpoints)
+}
+
+#[tauri::command]
+fn get_endpoints(
+    state: State<'_, AppState>,
+    target_id: String,
+) -> Result<Vec<DiscoveredEndpoint>, String> {
+    state.db.get_endpoints(&target_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn import_external_report(
+    state: State<'_, AppState>,
+    target_id: String,
+    format: String,
+    data: String,
+) -> Result<usize, String> {
+    let findings = importers::ReportImporter::parse_report(&target_id, &format, &data)?;
+    let count = findings.len();
+    for f in &findings {
+        let _ = state.db.insert_finding(f);
+    }
+    Ok(count)
+}
+
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut base_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -292,7 +352,10 @@ pub fn run() {
             get_scan_history,
             update_finding_status,
             export_report_json,
-            pull_ai_model
+            pull_ai_model,
+            run_crawler,
+            get_endpoints,
+            import_external_report
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

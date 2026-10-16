@@ -14,19 +14,28 @@ import {
   Download,
   History,
   FileCode,
-  ArrowDownCircle
+  ArrowDownCircle,
+  Compass,
+  UploadCloud,
+  Search,
+  ExternalLink
 } from "lucide-react";
 import "./App.css";
-import { Target, ToolInfo, Finding, ScanResult, FindingStatus } from "./types";
+import { Target, ToolInfo, Finding, ScanResult, FindingStatus, DiscoveredEndpoint } from "./types";
+
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"targets" | "tools" | "findings" | "scanner" | "mentor" | "history">("targets");
+  const [activeTab, setActiveTab] = useState<
+    "targets" | "tools" | "crawler" | "scanner" | "findings" | "importer" | "mentor" | "history"
+  >("targets");
+
   const [targets, setTargets] = useState<Target[]>([]);
   const [selectedTarget, setSelectedTarget] = useState<Target | null>(null);
   const [tools, setTools] = useState<ToolInfo[]>([]);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [selectedFinding, setSelectedFinding] = useState<Finding | null>(null);
   const [scanHistory, setScanHistory] = useState<ScanResult[]>([]);
+  const [endpoints, setEndpoints] = useState<DiscoveredEndpoint[]>([]);
 
   // Target creation form
   const [targetName, setTargetName] = useState("");
@@ -39,7 +48,24 @@ export default function App() {
   const [scanLogs, setScanLogs] = useState<string[]>([]);
   const [activeTool, setActiveTool] = useState<string>("baseline");
 
-  // AI Mentor
+  // Crawler state
+  const [isCrawling, setIsCrawling] = useState(false);
+  const [crawlDepth, setCrawlDepth] = useState<number>(2);
+  const [crawlMaxPages, setCrawlMaxPages] = useState<number>(25);
+  const [crawlFilter, setCrawlFilter] = useState<string>("");
+
+  // Report Importer state
+  const [importFormat, setImportFormat] = useState<"zap_json" | "burp_xml" | "generic_json">("zap_json");
+  const [importContent, setImportContent] = useState<string>("");
+  const [importStatus, setImportStatus] = useState<string>("");
+  const [isImporting, setIsImporting] = useState<boolean>(false);
+
+  // Findings filters & search
+  const [findingSeverityFilter, setFindingSeverityFilter] = useState<string>("ALL");
+  const [findingStatusFilter, setFindingStatusFilter] = useState<string>("ALL");
+  const [findingSearchQuery, setFindingSearchQuery] = useState<string>("");
+
+  // AI Mentor state
   const [aiAvailable, setAiAvailable] = useState(false);
   const [aiModels, setAiModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>("");
@@ -55,6 +81,12 @@ export default function App() {
   useEffect(() => {
     loadInitialData();
   }, []);
+
+  useEffect(() => {
+    if (selectedTarget && isTauriApp) {
+      loadEndpoints(selectedTarget.id);
+    }
+  }, [selectedTarget]);
 
   async function loadInitialData() {
     if (!isTauriApp) {
@@ -127,6 +159,15 @@ export default function App() {
     }
   }
 
+  async function loadEndpoints(targetId: string) {
+    try {
+      const list = await invoke<DiscoveredEndpoint[]>("get_endpoints", { targetId });
+      setEndpoints(list);
+    } catch (err) {
+      console.error("Failed to load endpoints:", err);
+    }
+  }
+
   async function handleCreateTarget(e: React.FormEvent) {
     e.preventDefault();
     setTargetError("");
@@ -182,6 +223,66 @@ export default function App() {
       setScanLogs((prev) => [...prev, `[ERROR] Scan aborted: ${err.toString()}`]);
     } finally {
       setIsScanning(false);
+    }
+  }
+
+  async function handleRunCrawler() {
+    if (!selectedTarget) {
+      alert("Please select a target first.");
+      return;
+    }
+    if (!isTauriApp) {
+      alert("Crawler execution requires the native desktop window.");
+      return;
+    }
+
+    setIsCrawling(true);
+    try {
+      const discovered = await invoke<DiscoveredEndpoint[]>("run_crawler", {
+        targetId: selectedTarget.id,
+        maxDepth: crawlDepth,
+        maxPages: crawlMaxPages,
+      });
+      setEndpoints(discovered);
+
+      // Reload findings in case sensitive exposure findings were found
+      const updatedFindings = await invoke<Finding[]>("get_findings");
+      setFindings(updatedFindings);
+    } catch (err: any) {
+      alert(`Crawler error: ${err.toString()}`);
+    } finally {
+      setIsCrawling(false);
+    }
+  }
+
+  async function handleImportReport() {
+    if (!selectedTarget) {
+      alert("Please select a target first.");
+      return;
+    }
+    if (!importContent.trim()) {
+      alert("Please paste the report content first.");
+      return;
+    }
+
+    setIsImporting(true);
+    setImportStatus("");
+    try {
+      const count = await invoke<number>("import_external_report", {
+        targetId: selectedTarget.id,
+        format: importFormat,
+        data: importContent,
+      });
+
+      setImportStatus(`Successfully ingested ${count} findings into SQLite database.`);
+      setImportContent("");
+
+      const updatedFindings = await invoke<Finding[]>("get_findings");
+      setFindings(updatedFindings);
+    } catch (err: any) {
+      setImportStatus(`Import Error: ${err.toString()}`);
+    } finally {
+      setIsImporting(false);
     }
   }
 
@@ -267,6 +368,43 @@ export default function App() {
     }
   }
 
+  // Filtered Findings
+  const filteredFindings = findings.filter((f) => {
+    if (findingSeverityFilter !== "ALL" && f.severity !== findingSeverityFilter) {
+      return false;
+    }
+    if (findingStatusFilter !== "ALL" && f.status !== findingStatusFilter) {
+      return false;
+    }
+    if (findingSearchQuery.trim()) {
+      const q = findingSearchQuery.toLowerCase();
+      const matchTitle = f.title.toLowerCase().includes(q);
+      const matchAsset = f.affected_asset.toLowerCase().includes(q);
+      const matchTool = f.source_tool.toLowerCase().includes(q);
+      const matchCwe = (f.cwe || "").toLowerCase().includes(q);
+      return matchTitle || matchAsset || matchTool || matchCwe;
+    }
+    return true;
+  });
+
+  // Filtered Endpoints
+  const filteredEndpoints = endpoints.filter((ep) => {
+    if (!crawlFilter.trim()) return true;
+    const q = crawlFilter.toLowerCase();
+    return (
+      ep.url.toLowerCase().includes(q) ||
+      ep.method.toLowerCase().includes(q) ||
+      ep.source.toLowerCase().includes(q)
+    );
+  });
+
+  // Severity Counts
+  const critCount = findings.filter((f) => f.severity === "Critical").length;
+  const highCount = findings.filter((f) => f.severity === "High").length;
+  const medCount = findings.filter((f) => f.severity === "Medium").length;
+  const lowCount = findings.filter((f) => f.severity === "Low").length;
+  const infoCount = findings.filter((f) => f.severity === "Info").length;
+
   return (
     <div className="app-container">
       {/* Browser Warning Banner */}
@@ -319,7 +457,8 @@ export default function App() {
             className="btn btn-danger"
             onClick={() => {
               setIsScanning(false);
-              setScanLogs((prev) => [...prev, "[!] Emergency Kill Triggered: All child scan jobs terminated."]);
+              setIsCrawling(false);
+              setScanLogs((prev) => [...prev, "[!] Emergency Kill Triggered: All active scan jobs terminated."]);
             }}
           >
             Emergency Stop
@@ -348,6 +487,14 @@ export default function App() {
           </div>
 
           <div
+            className={`nav-item ${activeTab === "crawler" ? "active" : ""}`}
+            onClick={() => setActiveTab("crawler")}
+          >
+            <Compass size={18} />
+            <span>Crawler & Endpoints ({endpoints.length})</span>
+          </div>
+
+          <div
             className={`nav-item ${activeTab === "scanner" ? "active" : ""}`}
             onClick={() => setActiveTab("scanner")}
           >
@@ -361,6 +508,14 @@ export default function App() {
           >
             <AlertTriangle size={18} />
             <span>Findings ({findings.length})</span>
+          </div>
+
+          <div
+            className={`nav-item ${activeTab === "importer" ? "active" : ""}`}
+            onClick={() => setActiveTab("importer")}
+          >
+            <UploadCloud size={18} />
+            <span>Import Reports</span>
           </div>
 
           <div
@@ -534,15 +689,152 @@ export default function App() {
             </div>
           )}
 
-          {/* TAB 3: SCAN CONSOLE */}
+          {/* TAB 3: CRAWLER & ENDPOINTS */}
+          {activeTab === "crawler" && (
+            <div>
+              <div className="card">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
+                  <div>
+                    <h2 className="card-title" style={{ margin: 0 }}>
+                      <Compass size={20} color="var(--accent-cyan)" />
+                      Bounded Low-Impact Crawler & Endpoint Discovery
+                    </h2>
+                    <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginTop: "4px" }}>
+                      Safe HTML link discovery, form action harvesting, and sensitive path auditing (.git, .env, robots.txt, sitemaps).
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.82rem" }}>
+                      <span style={{ color: "var(--text-dim)" }}>Depth:</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="4"
+                        value={crawlDepth}
+                        onChange={(e) => setCrawlDepth(parseInt(e.target.value) || 2)}
+                        style={{ width: "45px", padding: "4px 6px", background: "var(--bg-secondary)", color: "var(--text-main)", border: "1px solid var(--border-color)", borderRadius: "4px" }}
+                      />
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.82rem" }}>
+                      <span style={{ color: "var(--text-dim)" }}>Max Pages:</span>
+                      <input
+                        type="number"
+                        min="5"
+                        max="100"
+                        value={crawlMaxPages}
+                        onChange={(e) => setCrawlMaxPages(parseInt(e.target.value) || 25)}
+                        style={{ width: "55px", padding: "4px 6px", background: "var(--bg-secondary)", color: "var(--text-main)", border: "1px solid var(--border-color)", borderRadius: "4px" }}
+                      />
+                    </div>
+                    <button
+                      className="btn btn-primary"
+                      disabled={isCrawling || !selectedTarget}
+                      onClick={handleRunCrawler}
+                    >
+                      <Play size={14} /> {isCrawling ? "Crawling Target..." : "Start Discovery"}
+                    </button>
+                    {selectedTarget && (
+                      <button className="btn btn-secondary" onClick={() => loadEndpoints(selectedTarget.id)}>
+                        <RotateCcw size={14} /> Refresh
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Filter box */}
+                <div style={{ display: "flex", gap: "10px", marginBottom: "14px" }}>
+                  <div style={{ position: "relative", flex: 1 }}>
+                    <Search size={15} color="var(--text-dim)" style={{ position: "absolute", left: "10px", top: "11px" }} />
+                    <input
+                      className="input-field"
+                      placeholder="Filter discovered endpoints by path, method, or source..."
+                      value={crawlFilter}
+                      onChange={(e) => setCrawlFilter(e.target.value)}
+                      style={{ paddingLeft: "32px", height: "36px", fontSize: "0.82rem" }}
+                    />
+                  </div>
+                </div>
+
+                {endpoints.length === 0 ? (
+                  <p style={{ color: "var(--text-dim)", fontSize: "0.85rem", padding: "16px 0" }}>
+                    No endpoints discovered yet. Click 'Start Discovery' above to crawl {selectedTarget?.primary_url || "target"}.
+                  </p>
+                ) : (
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Method</th>
+                        <th>Status</th>
+                        <th>Discovered URL</th>
+                        <th>Source</th>
+                        <th>Content-Type</th>
+                        <th>Discovered At</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredEndpoints.map((ep) => (
+                        <tr key={ep.id}>
+                          <td>
+                            <span
+                              style={{
+                                fontWeight: 700,
+                                fontSize: "0.75rem",
+                                color: ep.method === "POST" ? "var(--accent-amber)" : "var(--accent-cyan)",
+                              }}
+                            >
+                              {ep.method}
+                            </span>
+                          </td>
+                          <td>
+                            <span
+                              className={`badge ${
+                                ep.status_code === 200
+                                  ? "badge-locked"
+                                  : ep.status_code >= 400
+                                  ? "badge-critical"
+                                  : "badge-info"
+                              }`}
+                            >
+                              {ep.status_code || "FORM"}
+                            </span>
+                          </td>
+                          <td style={{ maxWidth: "380px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            <a
+                              href={ep.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{ color: "var(--text-main)", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                            >
+                              {ep.url} <ExternalLink size={11} color="var(--text-dim)" />
+                            </a>
+                          </td>
+                          <td>
+                            <span className="badge badge-info">{ep.source}</span>
+                          </td>
+                          <td style={{ color: "var(--text-dim)", fontSize: "0.78rem" }}>
+                            {ep.content_type || "N/A"}
+                          </td>
+                          <td style={{ color: "var(--text-dim)", fontSize: "0.75rem", fontFamily: "monospace" }}>
+                            {ep.discovered_at.slice(11, 19)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: SCAN CONSOLE */}
           {activeTab === "scanner" && (
             <div>
               <div className="card">
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
                   <h3 className="card-title" style={{ margin: 0 }}>
                     <Terminal size={18} color="var(--accent-cyan)" /> Live Scan Terminal ({activeTool})
                   </h3>
-                  <div style={{ display: "flex", gap: "10px" }}>
+                  <div style={{ display: "flex", gap: "8px" }}>
                     <button
                       className="btn btn-secondary"
                       disabled={isScanning}
@@ -571,13 +863,19 @@ export default function App() {
                     >
                       Nmap Scan
                     </button>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => setScanLogs([])}
+                    >
+                      Clear
+                    </button>
                   </div>
                 </div>
 
-                <div className="console-box" style={{ height: "420px" }}>
+                <div className="console-box" style={{ height: "450px" }}>
                   {scanLogs.length === 0 ? (
                     <div style={{ color: "var(--text-dim)" }}>
-                      // Terminal ready. Select an authorized target and click 'Run Check' above.
+                      // Terminal ready. Select an authorized target and click any scan button above.
                     </div>
                   ) : (
                     scanLogs.map((log, i) => (
@@ -592,15 +890,39 @@ export default function App() {
             </div>
           )}
 
-          {/* TAB 4: UNIFIED FINDINGS */}
+          {/* TAB 5: UNIFIED FINDINGS */}
           {activeTab === "findings" && (
             <div>
+              {/* Stat Cards */}
+              <div className="stat-grid">
+                <div className="stat-card" style={{ borderLeft: "4px solid var(--accent-rose)" }}>
+                  <span className="stat-label">Critical</span>
+                  <span className="stat-value" style={{ color: "var(--accent-rose)" }}>{critCount}</span>
+                </div>
+                <div className="stat-card" style={{ borderLeft: "4px solid #fb923c" }}>
+                  <span className="stat-label">High</span>
+                  <span className="stat-value" style={{ color: "#fb923c" }}>{highCount}</span>
+                </div>
+                <div className="stat-card" style={{ borderLeft: "4px solid #facc15" }}>
+                  <span className="stat-label">Medium</span>
+                  <span className="stat-value" style={{ color: "#facc15" }}>{medCount}</span>
+                </div>
+                <div className="stat-card" style={{ borderLeft: "4px solid #60a5fa" }}>
+                  <span className="stat-label">Low</span>
+                  <span className="stat-value" style={{ color: "#60a5fa" }}>{lowCount}</span>
+                </div>
+                <div className="stat-card" style={{ borderLeft: "4px solid #94a3b8" }}>
+                  <span className="stat-label">Info</span>
+                  <span className="stat-value" style={{ color: "#94a3b8" }}>{infoCount}</span>
+                </div>
+              </div>
+
               <div className="card">
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
                   <div>
                     <h2 className="card-title" style={{ margin: 0 }}>
                       <AlertTriangle size={20} color="var(--accent-amber)" />
-                      Unified Findings & Deduplication ({findings.length})
+                      Unified Findings & Deduplication Engine ({findings.length})
                     </h2>
                     {reportStatus && (
                       <div style={{ color: "var(--accent-emerald)", fontSize: "0.8rem", marginTop: "4px" }}>
@@ -608,7 +930,7 @@ export default function App() {
                       </div>
                     )}
                   </div>
-                  <div style={{ display: "flex", gap: "10px" }}>
+                  <div style={{ display: "flex", gap: "8px" }}>
                     <button
                       className="btn btn-primary"
                       onClick={handleExportReport}
@@ -629,9 +951,63 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* Filter and Search Bar */}
+                <div className="filter-bar">
+                  <div style={{ position: "relative", minWidth: "220px", flex: 1 }}>
+                    <Search size={14} color="var(--text-dim)" style={{ position: "absolute", left: "10px", top: "10px" }} />
+                    <input
+                      className="input-field"
+                      placeholder="Search title, asset, tool, CWE..."
+                      value={findingSearchQuery}
+                      onChange={(e) => setFindingSearchQuery(e.target.value)}
+                      style={{ paddingLeft: "30px", height: "34px", fontSize: "0.8rem" }}
+                    />
+                  </div>
+
+                  <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                    <span style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>Severity:</span>
+                    {["ALL", "Critical", "High", "Medium", "Low", "Info"].map((sev) => (
+                      <button
+                        key={sev}
+                        className={`filter-chip ${findingSeverityFilter === sev ? "active" : ""}`}
+                        onClick={() => setFindingSeverityFilter(sev)}
+                      >
+                        {sev}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                    <span style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>Status:</span>
+                    <select
+                      value={findingStatusFilter}
+                      onChange={(e) => setFindingStatusFilter(e.target.value)}
+                      style={{
+                        background: "var(--bg-primary)",
+                        color: "var(--text-main)",
+                        border: "1px solid var(--border-color)",
+                        borderRadius: "6px",
+                        padding: "5px 8px",
+                        fontSize: "0.78rem",
+                      }}
+                    >
+                      <option value="ALL">All Statuses</option>
+                      <option value="New">New</option>
+                      <option value="Confirmed">Confirmed</option>
+                      <option value="NeedsReview">Needs Review</option>
+                      <option value="AcceptedRisk">Accepted Risk</option>
+                      <option value="Fixed">Fixed</option>
+                    </select>
+                  </div>
+                </div>
+
                 {findings.length === 0 ? (
                   <p style={{ color: "var(--text-dim)", fontSize: "0.85rem" }}>
                     No findings yet. Run a baseline or tool scan to discover security insights.
+                  </p>
+                ) : filteredFindings.length === 0 ? (
+                  <p style={{ color: "var(--text-dim)", fontSize: "0.85rem" }}>
+                    No findings matching your filter criteria.
                   </p>
                 ) : (
                   <table className="data-table">
@@ -647,7 +1023,7 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {findings.map((f) => (
+                      {filteredFindings.map((f) => (
                         <tr key={f.id} onClick={() => handleExplainWithAi(f)}>
                           <td>
                             <span
@@ -715,7 +1091,75 @@ export default function App() {
             </div>
           )}
 
-          {/* TAB 5: AI MENTOR */}
+          {/* TAB 6: IMPORT REPORTS */}
+          {activeTab === "importer" && (
+            <div>
+              <div className="card">
+                <h2 className="card-title">
+                  <UploadCloud size={20} color="var(--accent-cyan)" />
+                  Import Security Reports (OWASP ZAP, Burp Suite, Generic JSON)
+                </h2>
+                <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginBottom: "16px" }}>
+                  Ingest findings from external enterprise scanners into AppSec Nexus's unified SQLite database. Duplicate findings are automatically deduplicated using cryptographic SHA-256 fingerprinting.
+                </p>
+
+                <div style={{ display: "flex", gap: "14px", marginBottom: "14px" }}>
+                  <div>
+                    <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "4px" }}>
+                      Select Report Format
+                    </label>
+                    <select
+                      className="input-field"
+                      value={importFormat}
+                      onChange={(e: any) => setImportFormat(e.target.value)}
+                      style={{ width: "240px" }}
+                    >
+                      <option value="zap_json">OWASP ZAP (JSON Alert Export)</option>
+                      <option value="burp_xml">Burp Suite Professional (XML Issues)</option>
+                      <option value="generic_json">AppSec Nexus / Generic (JSON)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: "16px" }}>
+                  <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "6px" }}>
+                    Paste Report Content (XML or JSON)
+                  </label>
+                  <textarea
+                    className="textarea-field"
+                    rows={12}
+                    placeholder={
+                      importFormat === "zap_json"
+                        ? '{\n  "@version": "2.14.0",\n  "site": [\n    {\n      "@name": "https://example.com",\n      "alerts": [\n        { "alert": "Cross-Site Scripting", "riskcode": "3", "cweid": "79", "uri": "https://example.com/search" }\n      ]\n    }\n  ]\n}'
+                        : importFormat === "burp_xml"
+                        ? '<issues>\n  <issue>\n    <name>SQL Injection</name>\n    <severity>High</severity>\n    <host ip="93.184.216.34">https://example.com</host>\n    <path>/login</path>\n    <issueDetail>Error based SQL injection detected.</issueDetail>\n  </issue>\n</issues>'
+                        : '[\n  {\n    "title": "Insecure Direct Object Reference",\n    "severity": "High",\n    "affected_asset": "https://example.com/api/users/12",\n    "evidence": "User ID parameter tampered without authorization.",\n    "source_tool": "Manual Audit",\n    "cwe": "CWE-639"\n  }\n]'
+                    }
+                    value={importContent}
+                    onChange={(e) => setImportContent(e.target.value)}
+                  />
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <button
+                    className="btn btn-primary"
+                    disabled={isImporting || !selectedTarget || !importContent.trim()}
+                    onClick={handleImportReport}
+                  >
+                    <UploadCloud size={14} /> {isImporting ? "Parsing & Ingesting..." : "Import into SQLite Database"}
+                  </button>
+
+                  {importStatus && (
+                    <div style={{ fontSize: "0.85rem", color: importStatus.startsWith("Import Error") ? "var(--accent-rose)" : "var(--accent-emerald)" }}>
+                      {importStatus}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 7: AI MENTOR */}
           {activeTab === "mentor" && (
             <div className="card">
               <h2 className="card-title">
@@ -830,7 +1274,7 @@ export default function App() {
             </div>
           )}
 
-          {/* TAB 6: AUDIT & SCAN HISTORY */}
+          {/* TAB 8: AUDIT & SCAN HISTORY */}
           {activeTab === "history" && (
             <div>
               <div className="card">

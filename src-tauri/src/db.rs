@@ -1,4 +1,4 @@
-use crate::models::{Finding, FindingSeverity, FindingStatus, ScanResult, Target};
+use crate::models::{DiscoveredEndpoint, Finding, FindingSeverity, FindingStatus, ScanResult, Target};
 use rusqlite::{params, Connection, Result};
 use std::sync::Mutex;
 
@@ -55,6 +55,21 @@ impl Database {
                 findings_count INTEGER NOT NULL,
                 duration_ms INTEGER NOT NULL,
                 created_at TEXT NOT NULL
+            )",
+            [],
+        )?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS discovered_endpoints (
+                id TEXT PRIMARY KEY,
+                target_id TEXT NOT NULL,
+                url TEXT NOT NULL,
+                method TEXT NOT NULL,
+                status_code INTEGER NOT NULL,
+                content_type TEXT,
+                source TEXT NOT NULL,
+                discovered_at TEXT NOT NULL,
+                UNIQUE(target_id, url, method)
             )",
             [],
         )?;
@@ -262,4 +277,51 @@ impl Database {
         )?;
         Ok(())
     }
+
+    pub fn insert_endpoint(&self, endpoint: &DiscoveredEndpoint) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO discovered_endpoints (id, target_id, url, method, status_code, content_type, source, discovered_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                endpoint.id,
+                endpoint.target_id,
+                endpoint.url,
+                endpoint.method,
+                endpoint.status_code,
+                endpoint.content_type,
+                endpoint.source,
+                endpoint.discovered_at,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_endpoints(&self, target_id: &str) -> Result<Vec<DiscoveredEndpoint>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, target_id, url, method, status_code, content_type, source, discovered_at FROM discovered_endpoints WHERE target_id = ?1 ORDER BY discovered_at DESC"
+        )?;
+        let rows = stmt.query_map(params![target_id], |row| {
+            Ok(DiscoveredEndpoint {
+                id: row.get(0)?,
+                target_id: row.get(1)?,
+                url: row.get(2)?,
+                method: row.get(3)?,
+                status_code: row.get(4)?,
+                content_type: row.get(5)?,
+                source: row.get(6)?,
+                discovered_at: row.get(7)?,
+            })
+        })?;
+
+        let mut endpoints = Vec::new();
+        for r in rows {
+            if let Ok(ep) = r {
+                endpoints.push(ep);
+            }
+        }
+        Ok(endpoints)
+    }
 }
+

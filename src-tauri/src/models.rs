@@ -135,3 +135,16 @@ pub struct ScanResult {
     pub findings_count: usize,
     pub duration_ms: u64,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiscoveredEndpoint {
+    pub id: String,
+    pub target_id: String,
+    pub url: String,
+    pub method: String,
+    pub status_code: u16,
+    pub content_type: Option<String>,
+    pub source: String,
+    pub discovered_at: String,
+}
+

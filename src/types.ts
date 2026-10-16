@@ -53,3 +53,15 @@ export interface ScanResult {
   findings_count: number;
   duration_ms: number;
 }
+
+export interface DiscoveredEndpoint {
+  id: string;
+  target_id: string;
+  url: string;
+  method: string;
+  status_code: number;
+  content_type?: string;
+  source: string;
+  discovered_at: string;
+}
+

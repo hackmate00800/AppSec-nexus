@@ -104,3 +104,51 @@ impl ScopeValidator {
         Ok(parsed.to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn test_private_ip_detection() {
+        let loopback = IpAddr::from_str("127.0.0.1").unwrap();
+        assert!(ScopeValidator::is_private_or_sensitive_ip(&loopback));
+
+        let metadata = IpAddr::from_str("169.254.169.254").unwrap();
+        assert!(ScopeValidator::is_private_or_sensitive_ip(&metadata));
+
+        let class_a = IpAddr::from_str("10.0.1.5").unwrap();
+        assert!(ScopeValidator::is_private_or_sensitive_ip(&class_a));
+
+        let class_c = IpAddr::from_str("192.168.1.1").unwrap();
+        assert!(ScopeValidator::is_private_or_sensitive_ip(&class_c));
+
+        let public_dns = IpAddr::from_str("1.1.1.1").unwrap();
+        assert!(!ScopeValidator::is_private_or_sensitive_ip(&public_dns));
+    }
+
+    #[test]
+    fn test_scope_validation_blocking() {
+        let mut scope = ScopeConfig::default();
+        scope.allow_local_lab = false;
+
+        // Block loopback without lab mode
+        let res = ScopeValidator::validate_target("http://127.0.0.1:8080/test", &scope);
+        assert!(res.is_err());
+
+        // Allow when lab mode active
+        scope.allow_local_lab = true;
+        let res_lab = ScopeValidator::validate_target("http://127.0.0.1:8080/test", &scope);
+        assert!(res_lab.is_ok());
+
+        // Disallowed scheme
+        let ftp_res = ScopeValidator::validate_target("ftp://example.com/file", &scope);
+        assert!(ftp_res.is_err());
+
+        // Excluded path
+        let excluded_res = ScopeValidator::validate_target("http://127.0.0.1:8080/logout", &scope);
+        assert!(excluded_res.is_err());
+    }
+}
+
