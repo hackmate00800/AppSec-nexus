@@ -181,3 +181,13 @@ pub struct PluginInfo {
     pub is_available: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeedUpdateResult {
+    pub success: bool,
+    pub nuclei_updated: bool,
+    pub nuclei_output: String,
+    pub cisa_kev_count: usize,
+    pub last_updated: String,
+    pub message: String,
+}
+

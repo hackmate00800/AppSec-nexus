@@ -1,0 +1,16 @@
+{
+  "id": "android-apk-auditor",
+  "name": "Android APK & Mobile Security Auditor",
+  "version": "1.0.0",
+  "publisher": "AppSec Nexus Mobile Lab",
+  "runtime": "python3",
+  "executable": "run.py",
+  "capabilities": ["mobile_security", "apk_analysis", "owasp_mobile_top10", "static_analysis"],
+  "permissions": {
+    "network": ["none"],
+    "filesystem": ["target_file_read_only"],
+    "environment": ["none"]
+  },
+  "timeout_seconds": 45,
+  "description": "Static analysis of Android APK packages auditing AndroidManifest.xml (debuggable, allowBackup, cleartext traffic, exported components), dangerous permissions, and hardcoded secrets (OWASP Mobile Top 10)."
+}

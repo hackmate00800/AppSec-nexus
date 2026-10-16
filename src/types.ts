@@ -96,3 +96,12 @@ export interface PluginInfo {
   is_available: boolean;
 }
 
+export interface FeedUpdateResult {
+  success: boolean;
+  nuclei_updated: boolean;
+  nuclei_output: string;
+  cisa_kev_count: number;
+  last_updated: string;
+  message: string;
+}
+

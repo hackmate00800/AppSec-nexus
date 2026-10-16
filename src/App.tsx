@@ -23,10 +23,12 @@ import {
   ExternalLink,
   Puzzle,
   PlusCircle,
-  CheckCircle2
+  CheckCircle2,
+  RefreshCw,
+  Radio
 } from "lucide-react";
 import "./App.css";
-import { Target, ToolInfo, PluginInfo, Finding, ScanResult, FindingStatus, DiscoveredEndpoint, ModelPullProgress } from "./types";
+import { Target, ToolInfo, PluginInfo, FeedUpdateResult, Finding, ScanResult, FindingStatus, DiscoveredEndpoint, ModelPullProgress } from "./types";
 
 
 export default function App() {
@@ -43,6 +45,10 @@ export default function App() {
   const [newPluginJson, setNewPluginJson] = useState<string>("");
   const [pluginRegisterStatus, setPluginRegisterStatus] = useState<string>("");
   const [selectedPluginToRun, setSelectedPluginToRun] = useState<string>("");
+  const [isUpdatingFeeds, setIsUpdatingFeeds] = useState<boolean>(false);
+  const [feedStatus, setFeedStatus] = useState<string>("");
+  const [feedLastUpdated, setFeedLastUpdated] = useState<string>("");
+  const [cisaKevCount, setCisaKevCount] = useState<number>(1250);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [selectedFinding, setSelectedFinding] = useState<Finding | null>(null);
   const [scanHistory, setScanHistory] = useState<ScanResult[]>([]);
@@ -284,6 +290,29 @@ export default function App() {
       }, 1200);
     } catch (err: any) {
       setPluginRegisterStatus(`Error: ${err.toString()}`);
+    }
+  }
+
+  async function handleSyncThreatFeeds() {
+    if (!isTauriApp) {
+      setFeedStatus("Desktop environment required to update threat feeds.");
+      return;
+    }
+    setIsUpdatingFeeds(true);
+    setFeedStatus("Syncing Nuclei CVE templates and CISA Known Exploited Vulnerabilities catalog...");
+    try {
+      const res = await invoke<FeedUpdateResult>("update_threat_feeds");
+      setCisaKevCount(res.cisa_kev_count);
+      setFeedLastUpdated(new Date().toLocaleTimeString());
+      setFeedStatus(res.message);
+      // Reload plugins in case new plugins were added
+      const updatedPlugins = await invoke<PluginInfo[]>("get_plugins");
+      setPlugins(updatedPlugins);
+      setTimeout(() => setFeedStatus(""), 7000);
+    } catch (err: any) {
+      setFeedStatus(`Feed sync failed: ${err.toString()}`);
+    } finally {
+      setIsUpdatingFeeds(false);
     }
   }
 
@@ -828,6 +857,16 @@ export default function App() {
                   <button
                     className="btn btn-secondary"
                     style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.82rem" }}
+                    disabled={isUpdatingFeeds}
+                    onClick={handleSyncThreatFeeds}
+                  >
+                    <RefreshCw size={14} className={isUpdatingFeeds ? "spin" : ""} color="var(--accent-cyan)" />
+                    {isUpdatingFeeds ? "Syncing Feeds..." : "Sync Threat Feeds & CVEs"}
+                  </button>
+
+                  <button
+                    className="btn btn-secondary"
+                    style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.82rem" }}
                     onClick={() => {
                       loadPluginTemplate("python");
                       setShowPluginModal(true);
@@ -837,6 +876,54 @@ export default function App() {
                   </button>
                 </div>
               </div>
+
+              {/* THREAT INTELLIGENCE FEED BANNER */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  background: "rgba(56, 189, 248, 0.08)",
+                  border: "1px solid rgba(56, 189, 248, 0.25)",
+                  borderRadius: "8px",
+                  padding: "10px 14px",
+                  marginBottom: "16px",
+                  flexWrap: "wrap",
+                  gap: "8px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <Radio size={16} color="var(--accent-cyan)" />
+                  <div>
+                    <span style={{ fontWeight: 600, fontSize: "0.85rem", color: "var(--accent-cyan)" }}>
+                      Live Vulnerability Intelligence:
+                    </span>{" "}
+                    <span style={{ fontSize: "0.82rem", color: "var(--text-main)" }}>
+                      10,000+ Nuclei Community Templates • {cisaKevCount}+ CISA Known Exploited Vulnerabilities (KEV) Catalog
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>
+                  {feedLastUpdated ? `Last Synced: ${feedLastUpdated}` : "Auto-Sync: Ready"}
+                </div>
+              </div>
+
+              {feedStatus && (
+                <div
+                  style={{
+                    fontSize: "0.82rem",
+                    padding: "8px 12px",
+                    borderRadius: "6px",
+                    marginBottom: "16px",
+                    backgroundColor: feedStatus.includes("failed") ? "rgba(239, 68, 68, 0.15)" : "rgba(16, 185, 129, 0.15)",
+                    color: feedStatus.includes("failed") ? "var(--accent-red)" : "var(--accent-emerald)",
+                    border: `1px solid ${feedStatus.includes("failed") ? "rgba(239, 68, 68, 0.3)" : "rgba(16, 185, 129, 0.3)"}`,
+                  }}
+                >
+                  {feedStatus}
+                </div>
+              )}
 
               {/* VIEW 1: CORE TOOLS */}
               {toolHubTab === "tools" && (

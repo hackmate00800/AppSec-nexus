@@ -1,6 +1,7 @@
 pub mod ai;
 pub mod crawler;
 pub mod db;
+pub mod feeds;
 pub mod importers;
 pub mod models;
 pub mod plugins;
@@ -11,7 +12,8 @@ pub mod tools;
 
 use ai::AiMentor;
 use db::Database;
-use models::{DiscoveredEndpoint, Finding, PluginInfo, ScopeConfig, Target, ToolInfo};
+use feeds::ThreatFeedManager;
+use models::{DiscoveredEndpoint, FeedUpdateResult, Finding, PluginInfo, ScopeConfig, Target, ToolInfo};
 use plugins::PluginManager;
 use scanners::BaselineScanner;
 use scope::ScopeValidator;
@@ -25,7 +27,13 @@ pub struct AppState {
     db: Arc<Database>,
     tool_mgr: ToolManager,
     plugin_mgr: PluginManager,
+    feed_mgr: ThreatFeedManager,
     ai_mentor: AiMentor,
+}
+
+#[tauri::command]
+async fn update_threat_feeds(state: State<'_, AppState>) -> Result<FeedUpdateResult, String> {
+    state.feed_mgr.sync_threat_feeds().await
 }
 
 #[tauri::command]
@@ -488,14 +496,16 @@ pub fn run() {
             Database::init(":memory:").expect("Failed to initialize SQLite fallback")
         }
     };
-    let tool_mgr = ToolManager::new(tools_bin);
+    let tool_mgr = ToolManager::new(tools_bin.clone());
     let plugin_mgr = PluginManager::new(plugins_dir);
+    let feed_mgr = ThreatFeedManager::new(tools_bin);
     let ai_mentor = AiMentor::new();
 
     let state = AppState {
         db: Arc::new(db),
         tool_mgr,
         plugin_mgr,
+        feed_mgr,
         ai_mentor,
     };
 
@@ -536,6 +546,7 @@ pub fn run() {
             get_plugins,
             register_plugin,
             run_plugin,
+            update_threat_feeds,
             get_targets,
             create_target,
             run_scan,
