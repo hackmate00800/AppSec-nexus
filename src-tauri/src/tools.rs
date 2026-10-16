@@ -68,7 +68,60 @@ impl ToolManager {
                 .to_string(),
         });
 
+        // 5. Ollama Local AI Engine
+        let ollama_path = Self::find_ollama_path();
+        list.push(ToolInfo {
+            id: "ollama".to_string(),
+            name: "Ollama Local AI Engine".to_string(),
+            version: "0.5.12".to_string(),
+            category: "Local LLM / Privacy AI".to_string(),
+            is_available: ollama_path.is_some(),
+            path: ollama_path.unwrap_or_else(|| "ollama".to_string()),
+            description: "Offline privacy-first AI runtime for vulnerability explanation and remediation without cloud leaks."
+                .to_string(),
+        });
+
         list
+    }
+
+    fn find_ollama_path() -> Option<String> {
+        // 1. Check WinGet package path
+        if let Ok(local_appdata) = std::env::var("LOCALAPPDATA") {
+            let winget_path = PathBuf::from(&local_appdata)
+                .join("Microsoft")
+                .join("WinGet")
+                .join("Packages");
+            if winget_path.exists() {
+                if let Ok(entries) = std::fs::read_dir(&winget_path) {
+                    for entry in entries.flatten() {
+                        let name = entry.file_name().to_string_lossy().to_string();
+                        if name.contains("Ollama") {
+                            let exe = entry.path().join("ollama.exe");
+                            if exe.exists() {
+                                return Some(exe.to_string_lossy().to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // 2. Check PATH environment
+        if let Ok(path) = std::env::var("PATH") {
+            for dir in std::env::split_paths(&path) {
+                let candidate = dir.join("ollama.exe");
+                if candidate.exists() {
+                    return Some(candidate.to_string_lossy().to_string());
+                }
+            }
+        }
+        // 3. Check active Ollama server TCP port 11434
+        if std::net::TcpStream::connect_timeout(
+            &std::net::SocketAddr::from(([127, 0, 0, 1], 11434)),
+            std::time::Duration::from_millis(300),
+        ).is_ok() {
+            return Some("http://127.0.0.1:11434 (Active Server)".to_string());
+        }
+        None
     }
 
     fn find_nmap_path(&self) -> Option<String> {

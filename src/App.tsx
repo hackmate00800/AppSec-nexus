@@ -179,9 +179,14 @@ export default function App() {
 
       const [available, models] = await invoke<[boolean, string[]]>("get_ai_status");
       setAiAvailable(available);
-      setAiModels(models);
-      if (models.length > 0) {
-        setSelectedModel(models[0]);
+      const sortedModels = [...models].sort((a, b) => {
+        if (a.includes("1b")) return -1;
+        if (b.includes("1b")) return 1;
+        return a.localeCompare(b);
+      });
+      setAiModels(sortedModels);
+      if (sortedModels.length > 0) {
+        setSelectedModel(sortedModels[0]);
       }
     } catch (err) {
       console.error("Initialization error:", err);
@@ -399,7 +404,7 @@ export default function App() {
     setAiExplanation("");
 
     try {
-      const model = selectedModel || (aiModels.length > 0 ? aiModels[0] : "llama3");
+      const model = selectedModel || (aiModels.length > 0 ? aiModels[0] : "llama3.2:1b");
       const explanation = await invoke<string>("explain_finding", {
         model,
         mode: aiMode,
@@ -407,8 +412,18 @@ export default function App() {
       });
       setAiExplanation(explanation);
     } catch (err: any) {
+      const errMsg = err?.toString() || "Unknown error";
+      const isTimeout = errMsg.toLowerCase().includes("timeout") || errMsg.toLowerCase().includes("timed out");
+      const isConn = errMsg.toLowerCase().includes("connect") || errMsg.toLowerCase().includes("refused");
+      let advice = "";
+      if (isTimeout) {
+        advice = "\n\n💡 Performance Tip: Model inference timed out. Large models (like 8B) require substantial RAM and CPU time to load. Please switch to 'llama3.2:1b' (1.3GB) in the model dropdown above for fast, lightweight responses.";
+      } else if (isConn) {
+        advice = "\n\n💡 Connection Tip: Could not reach Ollama at 127.0.0.1:11434. Please ensure Ollama is running ('ollama serve').";
+      }
+
       setAiExplanation(
-        `Local AI Mentor Note: Could not connect to local Ollama runtime. Make sure Ollama is running ('ollama serve') with a downloaded model.\n\nGuidance Summary for '${finding.title}':\n${finding.remediation}\n\nEvidence: ${finding.evidence}`
+        `Local AI Mentor Error: ${errMsg}${advice}\n\nFallback Guidance Summary for '${finding.title}':\n${finding.remediation}\n\nEvidence: ${finding.evidence}`
       );
     } finally {
       setAiLoading(false);
@@ -530,7 +545,7 @@ export default function App() {
             onClick={() => setActiveTab("tools")}
           >
             <Layers size={18} />
-            <span>Tool Hub</span>
+            <span>Tool Hub ({tools.filter((t) => t.is_available).length}/{tools.length} Installed)</span>
           </div>
 
           <div
@@ -703,8 +718,18 @@ export default function App() {
                     <div>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
                         <div style={{ fontWeight: 700, fontSize: "1rem" }}>{tool.name}</div>
-                        <span className={`badge ${tool.is_available ? "badge-locked" : "badge-critical"}`}>
-                          {tool.is_available ? "Ready" : "Missing Binary"}
+                        <span
+                          className={`badge ${tool.is_available ? "badge-locked" : "badge-critical"}`}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            backgroundColor: tool.is_available ? "rgba(16, 185, 129, 0.15)" : undefined,
+                            color: tool.is_available ? "var(--accent-emerald)" : undefined,
+                            borderColor: tool.is_available ? "rgba(16, 185, 129, 0.4)" : undefined,
+                          }}
+                        >
+                          {tool.is_available ? "✓ Installed & Ready" : "Missing Binary"}
                         </span>
                       </div>
                       <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginBottom: "8px" }}>
@@ -716,19 +741,29 @@ export default function App() {
                     </div>
 
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "12px", borderTop: "1px solid var(--border-color)" }}>
-                      <span style={{ fontSize: "0.75rem", color: "var(--text-dim)", fontFamily: "monospace" }}>
-                        {tool.path.slice(-25)}
+                      <span style={{ fontSize: "0.75rem", color: "var(--text-dim)", fontFamily: "monospace" }} title={tool.path}>
+                        {tool.path.length > 32 ? "..." + tool.path.slice(-28) : tool.path}
                       </span>
-                      <button
-                        className="btn btn-primary"
-                        disabled={!tool.is_available || isScanning}
-                        onClick={() => {
-                          setActiveTab("scanner");
-                          handleRunScan(tool.id);
-                        }}
-                      >
-                        <Play size={14} /> Run Check
-                      </button>
+                      {tool.id === "ollama" ? (
+                        <button
+                          className="btn btn-secondary"
+                          onClick={() => setActiveTab("mentor")}
+                          style={{ display: "flex", alignItems: "center", gap: "6px" }}
+                        >
+                          <Sparkles size={14} color="var(--accent-cyan)" /> Open AI Mentor
+                        </button>
+                      ) : (
+                        <button
+                          className="btn btn-primary"
+                          disabled={!tool.is_available || isScanning}
+                          onClick={() => {
+                            setActiveTab("scanner");
+                            handleRunScan(tool.id);
+                          }}
+                        >
+                          <Play size={14} /> Run Check
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1247,7 +1282,11 @@ export default function App() {
                       {aiModels.length === 0 ? (
                         <option value="">No local models detected</option>
                       ) : (
-                        aiModels.map((m) => <option key={m} value={m}>{m}</option>)
+                        aiModels.map((m) => (
+                          <option key={m} value={m}>
+                            {m} {m.includes("1b") ? "(Fast / Recommended)" : m.includes("8b") ? "(High RAM / 4.7GB)" : ""}
+                          </option>
+                        ))
                       )}
                     </select>
                     <button
@@ -1263,8 +1302,9 @@ export default function App() {
 
                 <div style={{ paddingBottom: "8px", fontSize: "0.8rem" }}>
                   {aiAvailable ? (
-                    <span style={{ color: "var(--accent-emerald)", display: "flex", alignItems: "center", gap: "4px" }}>
-                      ● Ollama Online ({aiModels.length} model{aiModels.length !== 1 ? "s" : ""})
+                    <span style={{ color: "var(--accent-emerald)", display: "flex", alignItems: "center", gap: "6px", fontWeight: 600 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: "var(--accent-emerald)", display: "inline-block" }}></span>
+                      ✓ Ollama Online & Ready ({aiModels.length} models installed)
                     </span>
                   ) : (
                     <span style={{ color: "var(--accent-rose)", display: "flex", alignItems: "center", gap: "4px" }}>
@@ -1274,60 +1314,74 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Quick Model Download Section */}
+              {/* Quick Model Download & Library Section */}
               <div style={{ background: "rgba(6, 182, 212, 0.08)", border: "1px solid rgba(6, 182, 212, 0.2)", borderRadius: "8px", padding: "14px", marginBottom: "18px" }}>
                 <div style={{ fontWeight: 600, fontSize: "0.85rem", marginBottom: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
-                  <ArrowDownCircle size={15} color="var(--accent-cyan)" /> Quick-Download Recommended Local Security Models:
+                  <ArrowDownCircle size={15} color="var(--accent-cyan)" /> Local Model Library & Quick Install:
                 </div>
                 <div style={{ display: "flex", gap: "8px", marginTop: "8px", flexWrap: "wrap" }}>
-                  <button
-                    className="btn btn-secondary"
-                    style={{ fontSize: "0.78rem" }}
-                    disabled={Boolean(pullingModel)}
-                    onClick={() => handlePullModel("llama3.2:1b")}
-                  >
-                    Pull Llama 3.2 (1B - 1.3GB Fast)
-                  </button>
-                  <button
-                    className="btn btn-secondary"
-                    style={{ fontSize: "0.78rem" }}
-                    disabled={Boolean(pullingModel)}
-                    onClick={() => handlePullModel("qwen2.5-coder:1.5b")}
-                  >
-                    Pull Qwen 2.5 Coder (1.5B - 1.0GB)
-                  </button>
-                  <button
-                    className="btn btn-secondary"
-                    style={{ fontSize: "0.78rem" }}
-                    disabled={Boolean(pullingModel)}
-                    onClick={() => handlePullModel("llama3.2:3b")}
-                  >
-                    Pull Llama 3.2 (3B - 2.0GB)
-                  </button>
-                  <button
-                    className="btn btn-secondary"
-                    style={{ fontSize: "0.78rem" }}
-                    disabled={Boolean(pullingModel)}
-                    onClick={() => handlePullModel("llama3:8b")}
-                  >
-                    Pull Llama 3 (8B)
-                  </button>
-                  <button
-                    className="btn btn-secondary"
-                    style={{ fontSize: "0.78rem" }}
-                    disabled={Boolean(pullingModel)}
-                    onClick={() => handlePullModel("qwen2.5-coder:7b")}
-                  >
-                    Pull Qwen 2.5 Coder (7B)
-                  </button>
-                  <button
-                    className="btn btn-secondary"
-                    style={{ fontSize: "0.78rem" }}
-                    disabled={Boolean(pullingModel)}
-                    onClick={() => handlePullModel("mistral:7b")}
-                  >
-                    Pull Mistral (7B)
-                  </button>
+                  {[
+                    { id: "llama3.2:1b", label: "Llama 3.2 (1B - 1.3GB Fast)" },
+                    { id: "llama3:8b", label: "Llama 3 (8B - 4.7GB)" },
+                    { id: "qwen2.5-coder:1.5b", label: "Qwen 2.5 Coder (1.5B - 1.0GB)" },
+                    { id: "llama3.2:3b", label: "Llama 3.2 (3B - 2.0GB)" },
+                    { id: "qwen2.5-coder:7b", label: "Qwen 2.5 Coder (7B)" },
+                    { id: "mistral:7b", label: "Mistral (7B)" }
+                  ].map((model) => {
+                    const isInstalled = aiModels.some(
+                      (m) => m === model.id || m.startsWith(model.id.split(":")[0])
+                    );
+                    const isSelected = selectedModel.startsWith(model.id.split(":")[0]);
+                    return (
+                      <button
+                        key={model.id}
+                        className={`btn ${isSelected ? "btn-primary" : "btn-secondary"}`}
+                        style={{
+                          fontSize: "0.78rem",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          borderColor: isInstalled ? "var(--accent-emerald)" : undefined,
+                        }}
+                        disabled={Boolean(pullingModel)}
+                        onClick={() => {
+                          if (isInstalled) {
+                            const exact =
+                              aiModels.find(
+                                (m) => m === model.id || m.startsWith(model.id.split(":")[0])
+                              ) || model.id;
+                            setSelectedModel(exact);
+                          } else {
+                            handlePullModel(model.id);
+                          }
+                        }}
+                      >
+                        {isInstalled ? (
+                          <>
+                            <span style={{ color: "var(--accent-emerald)", fontWeight: 700 }}>✓</span>
+                            <span>{model.label}</span>
+                            <span
+                              style={{
+                                fontSize: "0.68rem",
+                                opacity: 0.9,
+                                backgroundColor: isSelected ? "rgba(255,255,255,0.2)" : "rgba(16, 185, 129, 0.2)",
+                                color: isSelected ? "#fff" : "var(--accent-emerald)",
+                                padding: "1px 5px",
+                                borderRadius: "4px",
+                                fontWeight: 600,
+                              }}
+                            >
+                              {isSelected ? "Active" : "Installed"}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span>Download {model.label}</span>
+                          </>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
 
                 {/* Real-time Download Progress Bar */}

@@ -100,7 +100,7 @@ impl AiMentor {
         cwe: Option<&str>,
     ) -> Result<String, String> {
         let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(60))
+            .timeout(Duration::from_secs(300))
             .build()
             .map_err(|e| format!("Client creation error: {}", e))?;
 

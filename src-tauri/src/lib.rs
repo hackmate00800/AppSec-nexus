@@ -354,14 +354,75 @@ fn find_base_dir() -> PathBuf {
 pub fn run() {
     let base_dir = find_base_dir();
     let log_file = base_dir.join("appsec_startup.log");
-    let _ = std::fs::write(&log_file, format!("Starting AppSec Nexus at {:?}\nBase dir: {:?}\n", std::time::SystemTime::now(), base_dir));
+    let _ = std::fs::write(
+        &log_file,
+        format!(
+            "Starting AppSec Nexus PID {} at {:?}\nBase dir: {:?}\n",
+            std::process::id(),
+            std::time::SystemTime::now(),
+            base_dir
+        ),
+    );
+
+    #[cfg(target_os = "windows")]
+    {
+        use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS};
+        use windows_sys::Win32::System::Threading::CreateMutexA;
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            FindWindowA, SetForegroundWindow, ShowWindow, SW_RESTORE,
+        };
+
+        unsafe {
+            let mutex_name = b"AppSecNexusLocalInstanceMutex\0";
+            let handle = CreateMutexA(std::ptr::null(), 1, mutex_name.as_ptr());
+            if GetLastError() == ERROR_ALREADY_EXISTS {
+                let msg = format!(
+                    "Another instance detected for PID {}. Attempting to focus existing window...\n",
+                    std::process::id()
+                );
+                let _ = std::fs::OpenOptions::new()
+                    .append(true)
+                    .create(true)
+                    .open(&log_file)
+                    .and_then(|mut f| {
+                        use std::io::Write;
+                        let _ = f.write_all(msg.as_bytes());
+                        f.flush()
+                    });
+
+                let win_title = b"AppSec Nexus - Cybersecurity & Web Pentesting\0";
+                for _ in 0..6 {
+                    let hwnd = FindWindowA(std::ptr::null(), win_title.as_ptr());
+                    if !hwnd.is_null() {
+                        ShowWindow(hwnd, SW_RESTORE);
+                        SetForegroundWindow(hwnd);
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(150));
+                }
+
+                if !handle.is_null() {
+                    CloseHandle(handle);
+                }
+                return;
+            }
+        }
+    }
 
     let hook_log = log_file.clone();
     std::panic::set_hook(Box::new(move |info| {
-        let msg = format!("PANIC: {:?}\n", info);
+        let payload = if let Some(s) = info.payload().downcast_ref::<&str>() {
+            (*s).to_string()
+        } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            s.clone()
+        } else {
+            format!("{:?}", info.payload())
+        };
+        let msg = format!("PANIC: {}\nLocation: {:?}\n", payload, info.location());
         let _ = std::fs::OpenOptions::new().append(true).create(true).open(&hook_log).and_then(|mut f| {
             use std::io::Write;
-            f.write_all(msg.as_bytes())
+            let _ = f.write_all(msg.as_bytes());
+            f.flush()
         });
     }));
 
@@ -386,14 +447,16 @@ pub fn run() {
 
     let setup_log = log_file.clone();
     let event_log = log_file.clone();
+    let run_log = log_file.clone();
 
-    let run_res = tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .on_window_event(move |window, event| {
             let msg = format!("WINDOW EVENT on {:?}: {:?}\n", window.label(), event);
             let _ = std::fs::OpenOptions::new().append(true).create(true).open(&event_log).and_then(|mut f| {
                 use std::io::Write;
-                f.write_all(msg.as_bytes())
+                let _ = f.write_all(msg.as_bytes());
+                f.flush()
             });
         })
         .setup(move |app| {
@@ -402,29 +465,14 @@ pub fn run() {
             let msg = format!("SETUP: window 'main' exists = {}\n", win.is_some());
             let _ = std::fs::OpenOptions::new().append(true).create(true).open(&setup_log).and_then(|mut f| {
                 use std::io::Write;
-                f.write_all(msg.as_bytes())
+                let _ = f.write_all(msg.as_bytes());
+                f.flush()
             });
 
             if let Some(w) = win {
+                let _ = w.unminimize();
                 let _ = w.show();
                 let _ = w.set_focus();
-            } else {
-                let _ = std::fs::OpenOptions::new().append(true).create(true).open(&setup_log).and_then(|mut f| {
-                    use std::io::Write;
-                    f.write_all(b"SETUP: creating window 'main' via WebviewWindowBuilder\n")
-                });
-                let win_res = tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::default())
-                    .title("AppSec Nexus - Cybersecurity & Web Pentesting")
-                    .inner_size(1280.0, 820.0)
-                    .min_inner_size(1024.0, 700.0)
-                    .build();
-                if let Err(e) = win_res {
-                    let msg = format!("SETUP ERROR creating window 'main': {:?}\n", e);
-                    let _ = std::fs::OpenOptions::new().append(true).create(true).open(&setup_log).and_then(|mut f| {
-                        use std::io::Write;
-                        f.write_all(msg.as_bytes())
-                    });
-                }
             }
             Ok(())
         })
@@ -445,15 +493,50 @@ pub fn run() {
             run_crawler,
             get_endpoints,
             import_external_report
-        ])
-        .run(tauri::generate_context!());
+        ]);
 
-    if let Err(e) = run_res {
-        let err_msg = format!("TAURI RUN ERROR: {:?}\n", e);
-        let _ = std::fs::OpenOptions::new().append(true).create(true).open(&log_file).and_then(|mut f| {
-            use std::io::Write;
-            f.write_all(err_msg.as_bytes())
-        });
-        panic!("error while running tauri application: {:?}", e);
-    }
+    let app = match builder.build(tauri::generate_context!()) {
+        Ok(a) => a,
+        Err(e) => {
+            let msg = format!("BUILD ERROR: {:?}\n", e);
+            let _ = std::fs::OpenOptions::new().append(true).create(true).open(&log_file).and_then(|mut f| {
+                use std::io::Write;
+                let _ = f.write_all(msg.as_bytes());
+                f.flush()
+            });
+            return;
+        }
+    };
+
+    app.run(move |_app_handle, event| {
+        match &event {
+            tauri::RunEvent::WindowEvent { label, event, .. } => {
+                let msg = format!("RUN EVENT WindowEvent on {}: {:?}\n", label, event);
+                let _ = std::fs::OpenOptions::new().append(true).create(true).open(&run_log).and_then(|mut f| {
+                    use std::io::Write;
+                    let _ = f.write_all(msg.as_bytes());
+                    f.flush()
+                });
+            }
+            tauri::RunEvent::ExitRequested { code, .. } => {
+                let msg = format!("RUN EVENT ExitRequested with code: {:?}\n", code);
+                let _ = std::fs::OpenOptions::new().append(true).create(true).open(&run_log).and_then(|mut f| {
+                    use std::io::Write;
+                    let _ = f.write_all(msg.as_bytes());
+                    f.flush()
+                });
+            }
+            tauri::RunEvent::Exit => {
+                let msg = format!("RUN EVENT Exit - exiting process cleanly\n");
+                let _ = std::fs::OpenOptions::new().append(true).create(true).open(&run_log).and_then(|mut f| {
+                    use std::io::Write;
+                    let _ = f.write_all(msg.as_bytes());
+                    f.flush()
+                });
+                std::process::exit(0);
+            }
+            _ => {}
+        }
+    });
 }
+
