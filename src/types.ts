@@ -31,6 +31,7 @@ export interface Finding {
   remediation: string;
   status: FindingStatus;
   created_at: string;
+  fingerprint?: string;
 }
 
 export interface ToolInfo {

@@ -67,6 +67,51 @@ pub struct Finding {
     pub remediation: String,
     pub status: FindingStatus,
     pub created_at: String,
+    pub fingerprint: String,
+}
+
+impl Finding {
+    pub fn new(
+        target_id: String,
+        title: String,
+        severity: FindingSeverity,
+        confidence: u8,
+        affected_asset: String,
+        evidence: String,
+        source_tool: String,
+        tool_version: String,
+        cwe: Option<String>,
+        remediation: String,
+    ) -> Self {
+        let fingerprint = Self::calculate_fingerprint(&target_id, &title, &affected_asset);
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            target_id,
+            title,
+            severity,
+            confidence,
+            affected_asset,
+            evidence,
+            source_tool,
+            tool_version,
+            cwe,
+            remediation,
+            status: FindingStatus::New,
+            created_at: chrono::Utc::now().to_rfc3339(),
+            fingerprint,
+        }
+    }
+
+    pub fn calculate_fingerprint(target_id: &str, title: &str, affected_asset: &str) -> String {
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(target_id.as_bytes());
+        hasher.update(b":");
+        hasher.update(title.as_bytes());
+        hasher.update(b":");
+        hasher.update(affected_asset.as_bytes());
+        format!("{:x}", hasher.finalize())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

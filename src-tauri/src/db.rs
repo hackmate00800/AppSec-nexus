@@ -1,4 +1,4 @@
-use crate::models::{Finding, FindingSeverity, FindingStatus, Target};
+use crate::models::{Finding, FindingSeverity, FindingStatus, ScanResult, Target};
 use rusqlite::{params, Connection, Result};
 use std::sync::Mutex;
 
@@ -35,10 +35,16 @@ impl Database {
                 cwe TEXT,
                 remediation TEXT NOT NULL,
                 status TEXT NOT NULL,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                fingerprint TEXT UNIQUE
             )",
             [],
         )?;
+
+        let _ = conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_findings_fingerprint ON findings(fingerprint)",
+            [],
+        );
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS scan_history (
@@ -116,9 +122,19 @@ impl Database {
             FindingStatus::Fixed => "Fixed",
         };
 
+        let fingerprint = if finding.fingerprint.is_empty() {
+            Finding::calculate_fingerprint(&finding.target_id, &finding.title, &finding.affected_asset)
+        } else {
+            finding.fingerprint.clone()
+        };
+
         conn.execute(
-            "INSERT OR REPLACE INTO findings (id, target_id, title, severity, confidence, affected_asset, evidence, source_tool, tool_version, cwe, remediation, status, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            "INSERT INTO findings (id, target_id, title, severity, confidence, affected_asset, evidence, source_tool, tool_version, cwe, remediation, status, created_at, fingerprint)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+             ON CONFLICT(fingerprint) DO UPDATE SET
+                evidence = excluded.evidence,
+                tool_version = excluded.tool_version,
+                created_at = excluded.created_at",
             params![
                 finding.id,
                 finding.target_id,
@@ -132,7 +148,8 @@ impl Database {
                 finding.cwe,
                 finding.remediation,
                 status_str,
-                finding.created_at
+                finding.created_at,
+                fingerprint
             ],
         )?;
         Ok(())
@@ -141,7 +158,7 @@ impl Database {
     pub fn get_findings(&self) -> Result<Vec<Finding>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT id, target_id, title, severity, confidence, affected_asset, evidence, source_tool, tool_version, cwe, remediation, status, created_at FROM findings ORDER BY created_at DESC"
+            "SELECT id, target_id, title, severity, confidence, affected_asset, evidence, source_tool, tool_version, cwe, remediation, status, created_at, COALESCE(fingerprint, '') FROM findings ORDER BY created_at DESC"
         )?;
 
         let rows = stmt.query_map([], |row| {
@@ -177,6 +194,7 @@ impl Database {
                 remediation: row.get(10)?,
                 status,
                 created_at: row.get(12)?,
+                fingerprint: row.get(13)?,
             })
         })?;
 
@@ -187,5 +205,52 @@ impl Database {
             }
         }
         Ok(findings)
+    }
+
+    pub fn record_scan(&self, scan: &ScanResult) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO scan_history (id, target_url, tool, status, findings_count, duration_ms, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                scan.scan_id,
+                scan.target_url,
+                scan.tool,
+                scan.status,
+                scan.findings_count as i64,
+                scan.duration_ms as i64,
+                chrono::Utc::now().to_rfc3339()
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_scan_history(&self) -> Result<Vec<ScanResult>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, target_url, tool, status, findings_count, duration_ms FROM scan_history ORDER BY created_at DESC LIMIT 50"
+        )?;
+
+        let rows = stmt.query_map([], |row| {
+            let duration_i64: i64 = row.get(5)?;
+            let findings_i64: i64 = row.get(4)?;
+            Ok(ScanResult {
+                scan_id: row.get(0)?,
+                target_url: row.get(1)?,
+                tool: row.get(2)?,
+                status: row.get(3)?,
+                logs: Vec::new(),
+                findings_count: findings_i64 as usize,
+                duration_ms: duration_i64 as u64,
+            })
+        })?;
+
+        let mut history = Vec::new();
+        for r in rows {
+            if let Ok(h) = r {
+                history.push(h);
+            }
+        }
+        Ok(history)
     }
 }

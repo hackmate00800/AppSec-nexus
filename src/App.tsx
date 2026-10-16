@@ -11,18 +11,20 @@ import {
   Target as TargetIcon,
   Lock,
   Unlock,
-  Download
+  Download,
+  History
 } from "lucide-react";
 import "./App.css";
 import { Target, ToolInfo, Finding, ScanResult } from "./types";
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"targets" | "tools" | "findings" | "scanner" | "mentor">("targets");
+  const [activeTab, setActiveTab] = useState<"targets" | "tools" | "findings" | "scanner" | "mentor" | "history">("targets");
   const [targets, setTargets] = useState<Target[]>([]);
   const [selectedTarget, setSelectedTarget] = useState<Target | null>(null);
   const [tools, setTools] = useState<ToolInfo[]>([]);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [selectedFinding, setSelectedFinding] = useState<Finding | null>(null);
+  const [scanHistory, setScanHistory] = useState<ScanResult[]>([]);
 
   // Target creation form
   const [targetName, setTargetName] = useState("");
@@ -78,6 +80,9 @@ export default function App() {
       const findingsList = await invoke<Finding[]>("get_findings");
       setFindings(findingsList);
 
+      const historyList = await invoke<ScanResult[]>("get_scan_history");
+      setScanHistory(historyList);
+
       const [available, models] = await invoke<[boolean, string[]]>("get_ai_status");
       setAiAvailable(available);
       setAiModels(models);
@@ -125,9 +130,12 @@ export default function App() {
 
       setScanLogs((prev) => [...prev, ...result.logs, `Completed in ${result.duration_ms} ms.`]);
 
-      // Refresh findings
+      // Refresh findings and history
       const updatedFindings = await invoke<Finding[]>("get_findings");
       setFindings(updatedFindings);
+
+      const updatedHistory = await invoke<ScanResult[]>("get_scan_history");
+      setScanHistory(updatedHistory);
     } catch (err: any) {
       setScanLogs((prev) => [...prev, `[ERROR] Scan aborted: ${err.toString()}`]);
     } finally {
@@ -252,6 +260,14 @@ export default function App() {
           >
             <Sparkles size={18} />
             <span>Local AI Mentor</span>
+          </div>
+
+          <div
+            className={`nav-item ${activeTab === "history" ? "active" : ""}`}
+            onClick={() => setActiveTab("history")}
+          >
+            <History size={18} />
+            <span>Audit History ({scanHistory.length})</span>
           </div>
         </aside>
 
@@ -636,6 +652,60 @@ export default function App() {
                   Select any finding from the 'Findings' tab to consult the AI Mentor.
                 </div>
               )}
+            </div>
+          )}
+
+          {/* TAB 6: AUDIT & SCAN HISTORY */}
+          {activeTab === "history" && (
+            <div>
+              <div className="card">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                  <h2 className="card-title" style={{ margin: 0 }}>
+                    <History size={20} color="var(--accent-cyan)" />
+                    Scan Audit History ({scanHistory.length})
+                  </h2>
+                  <button className="btn btn-secondary" onClick={loadInitialData}>
+                    <RotateCcw size={14} /> Refresh
+                  </button>
+                </div>
+
+                {scanHistory.length === 0 ? (
+                  <p style={{ color: "var(--text-dim)", fontSize: "0.85rem" }}>
+                    No scan executions recorded yet. Run a scan from the Tool Hub or Scan Console.
+                  </p>
+                ) : (
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Target URL</th>
+                        <th>Tool Used</th>
+                        <th>Status</th>
+                        <th>Findings Discovered</th>
+                        <th>Duration</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {scanHistory.map((s, idx) => (
+                        <tr key={s.scan_id || idx}>
+                          <td style={{ fontWeight: 600 }}>{s.target_url}</td>
+                          <td>
+                            <span style={{ color: "var(--accent-cyan)", fontWeight: 500 }}>
+                              {s.tool}
+                            </span>
+                          </td>
+                          <td>
+                            <span className="badge badge-locked">{s.status}</span>
+                          </td>
+                          <td style={{ fontWeight: 600 }}>{s.findings_count} findings</td>
+                          <td style={{ color: "var(--text-dim)", fontFamily: "monospace", fontSize: "0.8rem" }}>
+                            {s.duration_ms} ms
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
             </div>
           )}
         </main>

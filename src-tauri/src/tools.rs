@@ -1,4 +1,4 @@
-use crate::models::{Finding, FindingSeverity, FindingStatus, ScanResult, ToolInfo};
+use crate::models::{Finding, FindingSeverity, ScanResult, ToolInfo};
 use regex::Regex;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -170,7 +170,6 @@ impl ToolManager {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let mut logs = Vec::new();
         let mut findings = Vec::new();
-        let now = chrono::Utc::now().to_rfc3339();
 
         for line in stdout.lines() {
             if line.trim().starts_with('{') {
@@ -193,21 +192,18 @@ impl ToolManager {
                         .as_str()
                         .map(|s| s.to_string());
 
-                    findings.push(Finding {
-                        id: Uuid::new_v4().to_string(),
-                        target_id: target_id.to_string(),
+                    findings.push(Finding::new(
+                        target_id.to_string(),
                         title,
                         severity,
-                        confidence: 90,
-                        affected_asset: matched,
-                        evidence: format!("Nuclei template match. {}", desc),
-                        source_tool: "Nuclei".to_string(),
-                        tool_version: "3.11.1".to_string(),
+                        90,
+                        matched,
+                        format!("Nuclei template match. {}", desc),
+                        "Nuclei".to_string(),
+                        "3.11.1".to_string(),
                         cwe,
-                        remediation: "Review template match and apply vendor patch or configuration fix.".to_string(),
-                        status: FindingStatus::New,
-                        created_at: now.clone(),
-                    });
+                        "Review template match and apply vendor patch or configuration fix.".to_string(),
+                    ));
                 }
             }
             logs.push(Self::sanitize_log(line));
@@ -253,7 +249,6 @@ impl ToolManager {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let mut logs = Vec::new();
         let mut findings = Vec::new();
-        let now = chrono::Utc::now().to_rfc3339();
 
         let port_line_regex = Regex::new(r"^(\d+)/(tcp|udp)\s+(\w+)\s+(.*)$").unwrap();
 
@@ -266,25 +261,22 @@ impl ToolManager {
                 let service = caps.get(4).map(|m| m.as_str()).unwrap_or("");
 
                 if state == "open" {
-                    findings.push(Finding {
-                        id: Uuid::new_v4().to_string(),
-                        target_id: target_id.to_string(),
-                        title: format!("Open Network Port: {}/{} ({})", port, proto, service),
-                        severity: if port == "21" || port == "23" || port == "445" || port == "3389" {
+                    findings.push(Finding::new(
+                        target_id.to_string(),
+                        format!("Open Network Port: {}/{} ({})", port, proto, service),
+                        if port == "21" || port == "23" || port == "445" || port == "3389" {
                             FindingSeverity::Medium
                         } else {
                             FindingSeverity::Info
                         },
-                        confidence: 100,
-                        affected_asset: format!("{}:{}", host, port),
-                        evidence: format!("Nmap detected open service: {}/{} is {} running {}", port, proto, state, service),
-                        source_tool: "Nmap".to_string(),
-                        tool_version: "7.92".to_string(),
-                        cwe: Some("CWE-200".to_string()),
-                        remediation: "Close unneeded network ports or restrict access with firewall rules.".to_string(),
-                        status: FindingStatus::New,
-                        created_at: now.clone(),
-                    });
+                        100,
+                        format!("{}:{}", host, port),
+                        format!("Nmap detected open service: {}/{} is {} running {}", port, proto, state, service),
+                        "Nmap".to_string(),
+                        "7.92".to_string(),
+                        Some("CWE-200".to_string()),
+                        "Close unneeded network ports or restrict access with firewall rules.".to_string(),
+                    ));
                 }
             }
             logs.push(sanitized);

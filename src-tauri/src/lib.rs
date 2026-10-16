@@ -73,7 +73,7 @@ async fn run_scan(
     // Scope check before executing any scan
     ScopeValidator::validate_target(&target.primary_url, &target.scope)?;
 
-    match tool.as_str() {
+    let scan_res = match tool.as_str() {
         "baseline" => {
             let start = std::time::Instant::now();
             let findings = BaselineScanner::scan_url(&target.id, &target.primary_url).await?;
@@ -128,7 +128,15 @@ async fn run_scan(
             Ok(scan_res)
         }
         _ => Err(format!("Unsupported tool '{}'", tool)),
-    }
+    }?;
+
+    let _ = state.db.record_scan(&scan_res);
+    Ok(scan_res)
+}
+
+#[tauri::command]
+fn get_scan_history(state: State<'_, AppState>) -> Result<Vec<models::ScanResult>, String> {
+    state.db.get_scan_history().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -227,7 +235,8 @@ pub fn run() {
             get_findings,
             get_ai_status,
             explain_finding,
-            export_report
+            export_report,
+            get_scan_history
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
