@@ -1,0 +1,16 @@
+{
+  "id": "headers-auditor",
+  "name": "HTTP Security Headers Auditor",
+  "version": "1.2.0",
+  "publisher": "AppSec Nexus Security Lab",
+  "runtime": "python3",
+  "executable": "run.py",
+  "capabilities": ["passive_analysis", "defense_headers", "cookie_flags"],
+  "permissions": {
+    "network": ["in_scope_target_only"],
+    "filesystem": ["none"],
+    "environment": ["none"]
+  },
+  "timeout_seconds": 25,
+  "description": "Comprehensive audit of defensive headers (CSP, HSTS, X-Content-Type-Options, Permissions-Policy, Referrer-Policy, Cache-Control) and Cookie flags."
+}

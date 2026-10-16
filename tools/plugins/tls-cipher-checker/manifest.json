@@ -1,0 +1,16 @@
+{
+  "id": "tls-cipher-checker",
+  "name": "TLS/SSL Certificate & Cipher Auditor",
+  "version": "1.0.1",
+  "publisher": "AppSec Nexus Security Lab",
+  "runtime": "python3",
+  "executable": "run.py",
+  "capabilities": ["tls_audit", "certificate_inspection", "crypto_verification"],
+  "permissions": {
+    "network": ["in_scope_target_only"],
+    "filesystem": ["none"],
+    "environment": ["none"]
+  },
+  "timeout_seconds": 25,
+  "description": "Examines SSL/TLS certificate validity, expiry date, subject names, issuer chain, and protocol version compatibility."
+}

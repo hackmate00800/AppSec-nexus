@@ -3,15 +3,16 @@ pub mod crawler;
 pub mod db;
 pub mod importers;
 pub mod models;
+pub mod plugins;
 pub mod reports;
 pub mod scanners;
 pub mod scope;
 pub mod tools;
 
-
 use ai::AiMentor;
 use db::Database;
-use models::{DiscoveredEndpoint, Finding, ScopeConfig, Target, ToolInfo};
+use models::{DiscoveredEndpoint, Finding, PluginInfo, ScopeConfig, Target, ToolInfo};
+use plugins::PluginManager;
 use scanners::BaselineScanner;
 use scope::ScopeValidator;
 use std::path::PathBuf;
@@ -23,12 +24,50 @@ use uuid::Uuid;
 pub struct AppState {
     db: Arc<Database>,
     tool_mgr: ToolManager,
+    plugin_mgr: PluginManager,
     ai_mentor: AiMentor,
 }
 
 #[tauri::command]
 fn get_tools(state: State<'_, AppState>) -> Vec<ToolInfo> {
     state.tool_mgr.get_available_tools()
+}
+
+#[tauri::command]
+fn get_plugins(state: State<'_, AppState>) -> Vec<PluginInfo> {
+    state.plugin_mgr.get_plugins()
+}
+
+#[tauri::command]
+fn register_plugin(state: State<'_, AppState>, manifest_json: String) -> Result<PluginInfo, String> {
+    state.plugin_mgr.register_plugin(&manifest_json)
+}
+
+#[tauri::command]
+async fn run_plugin(
+    state: State<'_, AppState>,
+    target_id: String,
+    plugin_id: String,
+) -> Result<models::ScanResult, String> {
+    let targets = state.db.get_targets().map_err(|e| e.to_string())?;
+    let target = targets
+        .into_iter()
+        .find(|t| t.id == target_id)
+        .ok_or_else(|| "Target not found".to_string())?;
+
+    ScopeValidator::validate_target(&target.primary_url, &target.scope)?;
+
+    let (scan_res, findings) = state
+        .plugin_mgr
+        .run_plugin(&plugin_id, &target.id, &target.primary_url)
+        .await?;
+
+    for finding in &findings {
+        let _ = state.db.insert_finding(finding);
+    }
+    let _ = state.db.record_scan(&scan_res);
+
+    Ok(scan_res)
 }
 
 #[tauri::command]
@@ -130,7 +169,19 @@ async fn run_scan(
 
             Ok(scan_res)
         }
-        _ => Err(format!("Unsupported tool '{}'", tool)),
+        other => {
+            let plugin_id = other.strip_prefix("plugin:").unwrap_or(other);
+            let (scan_res, findings) = state
+                .plugin_mgr
+                .run_plugin(plugin_id, &target.id, &target.primary_url)
+                .await?;
+
+            for finding in &findings {
+                let _ = state.db.insert_finding(finding);
+            }
+
+            Ok(scan_res)
+        }
     }?;
 
     let _ = state.db.record_scan(&scan_res);
@@ -427,6 +478,7 @@ pub fn run() {
     }));
 
     let tools_bin = base_dir.join("tools").join("bin");
+    let plugins_dir = base_dir.join("tools").join("plugins");
     let db_path = base_dir.join("appsec.db");
 
     let db = match Database::init(&db_path.to_string_lossy()) {
@@ -437,11 +489,13 @@ pub fn run() {
         }
     };
     let tool_mgr = ToolManager::new(tools_bin);
+    let plugin_mgr = PluginManager::new(plugins_dir);
     let ai_mentor = AiMentor::new();
 
     let state = AppState {
         db: Arc::new(db),
         tool_mgr,
+        plugin_mgr,
         ai_mentor,
     };
 
@@ -479,6 +533,9 @@ pub fn run() {
         .manage(state)
         .invoke_handler(tauri::generate_handler![
             get_tools,
+            get_plugins,
+            register_plugin,
+            run_plugin,
             get_targets,
             create_target,
             run_scan,

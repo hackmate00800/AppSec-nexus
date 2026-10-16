@@ -1,0 +1,16 @@
+{
+  "id": "secrets-exposure-scanner",
+  "name": "Endpoint Secrets & API Token Scanner",
+  "version": "1.3.0",
+  "publisher": "AppSec Nexus Security Lab",
+  "runtime": "python3",
+  "executable": "run.py",
+  "capabilities": ["secret_detection", "token_harvesting", "credential_exposure"],
+  "permissions": {
+    "network": ["in_scope_target_only"],
+    "filesystem": ["none"],
+    "environment": ["none"]
+  },
+  "timeout_seconds": 30,
+  "description": "Scans landing page markup and linked scripts for hardcoded secrets, API tokens, AWS keys, JWTs, and private keys."
+}

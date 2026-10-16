@@ -20,10 +20,13 @@ import {
   Compass,
   UploadCloud,
   Search,
-  ExternalLink
+  ExternalLink,
+  Puzzle,
+  PlusCircle,
+  CheckCircle2
 } from "lucide-react";
 import "./App.css";
-import { Target, ToolInfo, Finding, ScanResult, FindingStatus, DiscoveredEndpoint, ModelPullProgress } from "./types";
+import { Target, ToolInfo, PluginInfo, Finding, ScanResult, FindingStatus, DiscoveredEndpoint, ModelPullProgress } from "./types";
 
 
 export default function App() {
@@ -34,6 +37,12 @@ export default function App() {
   const [targets, setTargets] = useState<Target[]>([]);
   const [selectedTarget, setSelectedTarget] = useState<Target | null>(null);
   const [tools, setTools] = useState<ToolInfo[]>([]);
+  const [plugins, setPlugins] = useState<PluginInfo[]>([]);
+  const [toolHubTab, setToolHubTab] = useState<"tools" | "plugins">("tools");
+  const [showPluginModal, setShowPluginModal] = useState<boolean>(false);
+  const [newPluginJson, setNewPluginJson] = useState<string>("");
+  const [pluginRegisterStatus, setPluginRegisterStatus] = useState<string>("");
+  const [selectedPluginToRun, setSelectedPluginToRun] = useState<string>("");
   const [findings, setFindings] = useState<Finding[]>([]);
   const [selectedFinding, setSelectedFinding] = useState<Finding | null>(null);
   const [scanHistory, setScanHistory] = useState<ScanResult[]>([]);
@@ -188,8 +197,93 @@ export default function App() {
       if (sortedModels.length > 0) {
         setSelectedModel(sortedModels[0]);
       }
+
+      const pluginsList = await invoke<PluginInfo[]>("get_plugins");
+      setPlugins(pluginsList);
+      if (pluginsList.length > 0) {
+        setSelectedPluginToRun(pluginsList[0].id);
+      }
     } catch (err) {
       console.error("Initialization error:", err);
+    }
+  }
+
+  function loadPluginTemplate(type: "python" | "node" | "binary") {
+    if (type === "python") {
+      setNewPluginJson(JSON.stringify({
+        id: "my-custom-scanner",
+        name: "My Custom Python Scanner",
+        version: "1.0.0",
+        publisher: "Security Team",
+        runtime: "python3",
+        executable: "run.py",
+        capabilities: ["custom_check", "api_audit"],
+        permissions: {
+          network: ["in_scope_target_only"],
+          filesystem: ["none"],
+          environment: ["none"]
+        },
+        timeout_seconds: 30,
+        description: "Custom Python plugin that checks specific business logic or API endpoints."
+      }, null, 2));
+    } else if (type === "node") {
+      setNewPluginJson(JSON.stringify({
+        id: "my-node-scanner",
+        name: "My Node.js Security Script",
+        version: "1.0.0",
+        publisher: "Security Team",
+        runtime: "node",
+        executable: "index.js",
+        capabilities: ["custom_check"],
+        permissions: {
+          network: ["in_scope_target_only"],
+          filesystem: ["none"],
+          environment: ["none"]
+        },
+        timeout_seconds: 30,
+        description: "Node.js plugin performing targeted HTTP assertions."
+      }, null, 2));
+    } else {
+      setNewPluginJson(JSON.stringify({
+        id: "custom-binary-tool",
+        name: "Custom Binary Scanner",
+        version: "1.0.0",
+        publisher: "Security Team",
+        runtime: "standalone",
+        executable: "scanner.exe",
+        capabilities: ["binary_audit"],
+        permissions: {
+          network: ["in_scope_target_only"],
+          filesystem: ["none"],
+          environment: ["none"]
+        },
+        timeout_seconds: 45,
+        description: "Standalone compiled binary scanner adapter."
+      }, null, 2));
+    }
+  }
+
+  async function handleRegisterPlugin() {
+    if (!newPluginJson.trim()) {
+      setPluginRegisterStatus("Please enter or load a manifest JSON first.");
+      return;
+    }
+    if (!isTauriApp) {
+      setPluginRegisterStatus("Desktop environment required to register plugins.");
+      return;
+    }
+    setPluginRegisterStatus("Validating and registering plugin...");
+    try {
+      const registered = await invoke<PluginInfo>("register_plugin", { manifestJson: newPluginJson });
+      setPlugins((prev) => [...prev.filter((p) => p.id !== registered.id), registered]);
+      setPluginRegisterStatus(`✓ Plugin '${registered.name}' registered successfully!`);
+      setTimeout(() => {
+        setShowPluginModal(false);
+        setPluginRegisterStatus("");
+        setNewPluginJson("");
+      }, 1200);
+    } catch (err: any) {
+      setPluginRegisterStatus(`Error: ${err.toString()}`);
     }
   }
 
@@ -545,7 +639,7 @@ export default function App() {
             onClick={() => setActiveTab("tools")}
           >
             <Layers size={18} />
-            <span>Tool Hub ({tools.filter((t) => t.is_available).length}/{tools.length} Installed)</span>
+            <span>Tools & Plugins ({tools.filter((t) => t.is_available).length + plugins.filter((p) => p.is_available).length} Ready)</span>
           </div>
 
           <div
@@ -703,71 +797,302 @@ export default function App() {
           {/* TAB 2: TOOL HUB */}
           {activeTab === "tools" && (
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
                 <div>
-                  <h2 style={{ fontSize: "1.2rem", fontWeight: 700 }}>Tool Hub & Adapters</h2>
-                  <p style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
-                    Security tools orchestrated by AppSec Nexus with automatic process timeouts and secret sanitization.
+                  <h2 style={{ fontSize: "1.2rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "8px" }}>
+                    <Layers size={20} color="var(--accent-cyan)" /> Tool Hub & Security Plugins
+                  </h2>
+                  <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginTop: "2px" }}>
+                    Native orchestration engines and extensible sandbox plugins for targeted web security assessments.
                   </p>
+                </div>
+
+                <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                  <div style={{ display: "flex", background: "var(--bg-secondary)", padding: "3px", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
+                    <button
+                      className={`btn ${toolHubTab === "tools" ? "btn-primary" : "btn-secondary"}`}
+                      style={{ padding: "6px 12px", fontSize: "0.8rem", borderRadius: "6px" }}
+                      onClick={() => setToolHubTab("tools")}
+                    >
+                      <Layers size={14} /> Core Tools ({tools.length})
+                    </button>
+                    <button
+                      className={`btn ${toolHubTab === "plugins" ? "btn-primary" : "btn-secondary"}`}
+                      style={{ padding: "6px 12px", fontSize: "0.8rem", borderRadius: "6px" }}
+                      onClick={() => setToolHubTab("plugins")}
+                    >
+                      <Puzzle size={14} /> Security Plugins ({plugins.length})
+                    </button>
+                  </div>
+
+                  <button
+                    className="btn btn-secondary"
+                    style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.82rem" }}
+                    onClick={() => {
+                      loadPluginTemplate("python");
+                      setShowPluginModal(true);
+                    }}
+                  >
+                    <PlusCircle size={15} color="var(--accent-cyan)" /> Register Plugin
+                  </button>
                 </div>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "16px" }}>
-                {tools.map((tool) => (
-                  <div key={tool.id} className="card" style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                    <div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
-                        <div style={{ fontWeight: 700, fontSize: "1rem" }}>{tool.name}</div>
-                        <span
-                          className={`badge ${tool.is_available ? "badge-locked" : "badge-critical"}`}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "4px",
-                            backgroundColor: tool.is_available ? "rgba(16, 185, 129, 0.15)" : undefined,
-                            color: tool.is_available ? "var(--accent-emerald)" : undefined,
-                            borderColor: tool.is_available ? "rgba(16, 185, 129, 0.4)" : undefined,
-                          }}
-                        >
-                          {tool.is_available ? "✓ Installed & Ready" : "Missing Binary"}
+              {/* VIEW 1: CORE TOOLS */}
+              {toolHubTab === "tools" && (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "16px" }}>
+                  {tools.map((tool) => (
+                    <div key={tool.id} className="card" style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+                          <div style={{ fontWeight: 700, fontSize: "1rem" }}>{tool.name}</div>
+                          <span
+                            className={`badge ${tool.is_available ? "badge-locked" : "badge-critical"}`}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              backgroundColor: tool.is_available ? "rgba(16, 185, 129, 0.15)" : undefined,
+                              color: tool.is_available ? "var(--accent-emerald)" : undefined,
+                              borderColor: tool.is_available ? "rgba(16, 185, 129, 0.4)" : undefined,
+                            }}
+                          >
+                            {tool.is_available ? "✓ Installed & Ready" : "Missing Binary"}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginBottom: "8px" }}>
+                          Category: {tool.category} • v{tool.version}
+                        </div>
+                        <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", marginBottom: "16px", lineHeight: "1.4" }}>
+                          {tool.description}
+                        </p>
+                      </div>
+
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "12px", borderTop: "1px solid var(--border-color)" }}>
+                        <span style={{ fontSize: "0.75rem", color: "var(--text-dim)", fontFamily: "monospace" }} title={tool.path}>
+                          {tool.path.length > 32 ? "..." + tool.path.slice(-28) : tool.path}
                         </span>
+                        {tool.id === "ollama" ? (
+                          <button
+                            className="btn btn-secondary"
+                            onClick={() => setActiveTab("mentor")}
+                            style={{ display: "flex", alignItems: "center", gap: "6px" }}
+                          >
+                            <Sparkles size={14} color="var(--accent-cyan)" /> Open AI Mentor
+                          </button>
+                        ) : (
+                          <button
+                            className="btn btn-primary"
+                            disabled={!tool.is_available || isScanning}
+                            onClick={() => {
+                              setActiveTab("scanner");
+                              handleRunScan(tool.id);
+                            }}
+                          >
+                            <Play size={14} /> Run Check
+                          </button>
+                        )}
                       </div>
-                      <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginBottom: "8px" }}>
-                        Category: {tool.category} • v{tool.version}
-                      </div>
-                      <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", marginBottom: "16px", lineHeight: "1.4" }}>
-                        {tool.description}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* VIEW 2: SECURITY PLUGINS */}
+              {toolHubTab === "plugins" && (
+                <div>
+                  {plugins.length === 0 ? (
+                    <div className="card" style={{ textAlign: "center", padding: "40px" }}>
+                      <Puzzle size={40} color="var(--text-dim)" style={{ margin: "0 auto 12px" }} />
+                      <h3>No Plugins Detected</h3>
+                      <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", maxWidth: "480px", margin: "8px auto" }}>
+                        Plugins live in <code>tools/plugins/&lt;plugin-id&gt;/manifest.json</code>. Click 'Register Plugin' above to add one.
                       </p>
                     </div>
+                  ) : (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: "16px" }}>
+                      {plugins.map((plugin) => (
+                        <div key={plugin.id} className="card" style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                          <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+                              <div>
+                                <div style={{ fontWeight: 700, fontSize: "1rem", display: "flex", alignItems: "center", gap: "6px" }}>
+                                  <Puzzle size={16} color="var(--accent-cyan)" /> {plugin.name}
+                                </div>
+                                <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginTop: "2px" }}>
+                                  v{plugin.version} • By {plugin.publisher}
+                                </div>
+                              </div>
+                              <span
+                                className="badge badge-locked"
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                  backgroundColor: "rgba(16, 185, 129, 0.15)",
+                                  color: "var(--accent-emerald)",
+                                  borderColor: "rgba(16, 185, 129, 0.4)",
+                                }}
+                              >
+                                ✓ Active Plugin
+                              </span>
+                            </div>
 
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "12px", borderTop: "1px solid var(--border-color)" }}>
-                      <span style={{ fontSize: "0.75rem", color: "var(--text-dim)", fontFamily: "monospace" }} title={tool.path}>
-                        {tool.path.length > 32 ? "..." + tool.path.slice(-28) : tool.path}
-                      </span>
-                      {tool.id === "ollama" ? (
-                        <button
-                          className="btn btn-secondary"
-                          onClick={() => setActiveTab("mentor")}
-                          style={{ display: "flex", alignItems: "center", gap: "6px" }}
-                        >
-                          <Sparkles size={14} color="var(--accent-cyan)" /> Open AI Mentor
-                        </button>
-                      ) : (
-                        <button
-                          className="btn btn-primary"
-                          disabled={!tool.is_available || isScanning}
-                          onClick={() => {
-                            setActiveTab("scanner");
-                            handleRunScan(tool.id);
-                          }}
-                        >
-                          <Play size={14} /> Run Check
-                        </button>
-                      )}
+                            <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", marginBottom: "12px", lineHeight: "1.4" }}>
+                              {plugin.description}
+                            </p>
+
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "12px" }}>
+                              <span className="badge badge-info" style={{ fontSize: "0.72rem" }}>
+                                Runtime: {plugin.runtime}
+                              </span>
+                              <span className="badge badge-info" style={{ fontSize: "0.72rem" }}>
+                                Timeout: {plugin.timeout_seconds}s
+                              </span>
+                              {plugin.capabilities.map((cap) => (
+                                <span key={cap} className="badge" style={{ fontSize: "0.72rem", background: "rgba(56, 189, 248, 0.1)", color: "var(--accent-cyan)" }}>
+                                  {cap}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "12px", borderTop: "1px solid var(--border-color)" }}>
+                            <span style={{ fontSize: "0.72rem", color: "var(--text-dim)", fontFamily: "monospace" }} title={plugin.executable}>
+                              {plugin.executable}
+                            </span>
+                            <button
+                              className="btn btn-primary"
+                              disabled={isScanning || !selectedTarget}
+                              onClick={() => {
+                                setActiveTab("scanner");
+                                handleRunScan(plugin.id);
+                              }}
+                              style={{ display: "flex", alignItems: "center", gap: "6px" }}
+                            >
+                              <Play size={14} /> Run Plugin
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* MODAL: REGISTER NEW PLUGIN */}
+              {showPluginModal && (
+                <div
+                  style={{
+                    position: "fixed",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: "rgba(0, 0, 0, 0.75)",
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    zIndex: 9999,
+                    backdropFilter: "blur(4px)",
+                  }}
+                >
+                  <div
+                    className="card"
+                    style={{
+                      width: "600px",
+                      maxWidth: "92vw",
+                      maxHeight: "90vh",
+                      overflowY: "auto",
+                      boxShadow: "0 20px 40px rgba(0,0,0,0.6)",
+                      border: "1px solid var(--border-color)",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                      <h3 style={{ fontSize: "1.1rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "8px" }}>
+                        <Puzzle size={18} color="var(--accent-cyan)" /> Register Custom Tool Plugin
+                      </h3>
+                      <button
+                        className="btn btn-secondary"
+                        style={{ padding: "4px 8px", fontSize: "0.8rem" }}
+                        onClick={() => {
+                          setShowPluginModal(false);
+                          setPluginRegisterStatus("");
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <p style={{ color: "var(--text-muted)", fontSize: "0.82rem", marginBottom: "12px" }}>
+                      Define your tool manifest JSON below. The manifest declares execution parameters, process timeout, and network permissions.
+                    </p>
+
+                    <div style={{ display: "flex", gap: "8px", marginBottom: "10px" }}>
+                      <span style={{ fontSize: "0.78rem", color: "var(--text-dim)", alignSelf: "center" }}>Preset Templates:</span>
+                      <button className="btn btn-secondary" style={{ padding: "3px 8px", fontSize: "0.75rem" }} onClick={() => loadPluginTemplate("python")}>
+                        Python 3
+                      </button>
+                      <button className="btn btn-secondary" style={{ padding: "3px 8px", fontSize: "0.75rem" }} onClick={() => loadPluginTemplate("node")}>
+                        Node.js
+                      </button>
+                      <button className="btn btn-secondary" style={{ padding: "3px 8px", fontSize: "0.75rem" }} onClick={() => loadPluginTemplate("binary")}>
+                        Compiled Binary (.exe)
+                      </button>
+                    </div>
+
+                    <textarea
+                      rows={14}
+                      value={newPluginJson}
+                      onChange={(e) => setNewPluginJson(e.target.value)}
+                      placeholder="Paste manifest.json content here..."
+                      style={{
+                        width: "100%",
+                        fontFamily: "monospace",
+                        fontSize: "0.8rem",
+                        backgroundColor: "#080c14",
+                        color: "#a5f3fc",
+                        border: "1px solid var(--border-color)",
+                        borderRadius: "6px",
+                        padding: "10px",
+                        marginBottom: "12px",
+                        resize: "vertical",
+                      }}
+                    />
+
+                    {pluginRegisterStatus && (
+                      <div
+                        style={{
+                          fontSize: "0.82rem",
+                          marginBottom: "12px",
+                          padding: "8px 12px",
+                          borderRadius: "4px",
+                          backgroundColor: pluginRegisterStatus.includes("Error") ? "rgba(239, 68, 68, 0.15)" : "rgba(16, 185, 129, 0.15)",
+                          color: pluginRegisterStatus.includes("Error") ? "var(--accent-red)" : "var(--accent-emerald)",
+                          border: `1px solid ${pluginRegisterStatus.includes("Error") ? "rgba(239, 68, 68, 0.3)" : "rgba(16, 185, 129, 0.3)"}`,
+                        }}
+                      >
+                        {pluginRegisterStatus}
+                      </div>
+                    )}
+
+                    <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => {
+                          setShowPluginModal(false);
+                          setPluginRegisterStatus("");
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button className="btn btn-primary" onClick={handleRegisterPlugin}>
+                        <CheckCircle2 size={14} /> Validate & Register Plugin
+                      </button>
                     </div>
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -916,7 +1241,7 @@ export default function App() {
                   <h3 className="card-title" style={{ margin: 0 }}>
                     <Terminal size={18} color="var(--accent-cyan)" /> Live Scan Terminal ({activeTool})
                   </h3>
-                  <div style={{ display: "flex", gap: "8px" }}>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
                     <button
                       className="btn btn-secondary"
                       disabled={isScanning}
@@ -945,6 +1270,38 @@ export default function App() {
                     >
                       Nmap Scan
                     </button>
+
+                    {plugins.length > 0 && (
+                      <div style={{ display: "flex", gap: "6px", alignItems: "center", marginLeft: "4px" }}>
+                        <select
+                          value={selectedPluginToRun}
+                          onChange={(e) => setSelectedPluginToRun(e.target.value)}
+                          style={{
+                            padding: "6px 10px",
+                            fontSize: "0.82rem",
+                            background: "var(--bg-secondary)",
+                            color: "var(--accent-cyan)",
+                            border: "1px solid var(--border-color)",
+                            borderRadius: "6px",
+                          }}
+                        >
+                          {plugins.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              Plugin: {p.name}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          className="btn btn-primary"
+                          disabled={isScanning || !selectedPluginToRun}
+                          onClick={() => handleRunScan(selectedPluginToRun)}
+                          style={{ display: "flex", alignItems: "center", gap: "4px" }}
+                        >
+                          <Play size={13} /> Run Plugin
+                        </button>
+                      </div>
+                    )}
+
                     <button
                       className="btn btn-secondary"
                       onClick={() => setScanLogs([])}

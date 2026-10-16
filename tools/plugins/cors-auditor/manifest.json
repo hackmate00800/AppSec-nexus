@@ -1,0 +1,16 @@
+{
+  "id": "cors-auditor",
+  "name": "CORS Misconfiguration Auditor",
+  "version": "1.1.0",
+  "publisher": "AppSec Nexus Security Lab",
+  "runtime": "python3",
+  "executable": "run.py",
+  "capabilities": ["active_probe", "cors_security", "origin_reflection"],
+  "permissions": {
+    "network": ["in_scope_target_only"],
+    "filesystem": ["none"],
+    "environment": ["none"]
+  },
+  "timeout_seconds": 25,
+  "description": "Tests CORS policies by probing Origin reflection, Null Origin trust, and credential exposure combinations (ACAC + ACAO wildcard)."
+}

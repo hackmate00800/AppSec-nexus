@@ -148,3 +148,36 @@ pub struct DiscoveredEndpoint {
     pub discovered_at: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginPermissions {
+    pub network: Vec<String>,
+    pub filesystem: Vec<String>,
+    pub environment: Vec<String>,
+}
+
+impl Default for PluginPermissions {
+    fn default() -> Self {
+        Self {
+            network: vec!["in_scope_target_only".to_string()],
+            filesystem: vec!["none".to_string()],
+            environment: vec!["none".to_string()],
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginInfo {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub publisher: String,
+    pub runtime: String, // "python3", "standalone", "node"
+    pub executable: String,
+    pub capabilities: Vec<String>,
+    pub permissions: PluginPermissions,
+    pub timeout_seconds: u64,
+    pub description: String,
+    pub path: String,
+    pub is_available: bool,
+}
+

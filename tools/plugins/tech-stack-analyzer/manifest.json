@@ -1,0 +1,16 @@
+{
+  "id": "tech-stack-analyzer",
+  "name": "Technology Stack & Framework Detector",
+  "version": "1.1.0",
+  "publisher": "AppSec Nexus Security Lab",
+  "runtime": "python3",
+  "executable": "run.py",
+  "capabilities": ["fingerprinting", "technology_audit", "version_disclosure"],
+  "permissions": {
+    "network": ["in_scope_target_only"],
+    "filesystem": ["none"],
+    "environment": ["none"]
+  },
+  "timeout_seconds": 20,
+  "description": "Analyzes HTTP headers, cookies, and DOM fingerprints to identify server software, web frameworks, CDNs, and flags sensitive version disclosures."
+}

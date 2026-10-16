@@ -1,0 +1,17 @@
+{
+  "id": "custom-security-headers",
+  "name": "Custom Security Header Auditor",
+  "version": "1.0.0",
+  "publisher": "AppSec Nexus Community",
+  "runtime": "python3",
+  "executable": "check_headers.py",
+  "supported_os": ["windows", "linux", "macos"],
+  "capabilities": ["passive_analysis", "header_audit"],
+  "permissions": {
+    "network": ["in_scope_target_only"],
+    "filesystem": ["none"],
+    "environment": ["none"]
+  },
+  "timeout_seconds": 30,
+  "description": "Demonstration custom adapter that audits HTTP response headers and returns normalized AppSec Nexus findings."
+}

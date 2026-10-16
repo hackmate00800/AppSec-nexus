@@ -75,3 +75,24 @@ export interface ModelPullProgress {
   error?: string;
 }
 
+export interface PluginPermissions {
+  network: string[];
+  filesystem: string[];
+  environment: string[];
+}
+
+export interface PluginInfo {
+  id: string;
+  name: string;
+  version: string;
+  publisher: string;
+  runtime: string;
+  executable: string;
+  capabilities: string[];
+  permissions: PluginPermissions;
+  timeout_seconds: number;
+  description: string;
+  path: string;
+  is_available: boolean;
+}
+
