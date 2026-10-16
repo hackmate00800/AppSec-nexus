@@ -317,19 +317,54 @@ fn import_external_report(
 }
 
 
+fn find_base_dir() -> PathBuf {
+    // 1. Check current directory and parents
+    if let Ok(cwd) = std::env::current_dir() {
+        if cwd.join("tools").join("bin").exists() {
+            return cwd;
+        }
+        let mut cur = cwd;
+        while let Some(parent) = cur.parent() {
+            if parent.join("tools").join("bin").exists() {
+                return parent.to_path_buf();
+            }
+            cur = parent.to_path_buf();
+        }
+    }
+    // 2. Check executable directory and parents
+    if let Ok(exe) = std::env::current_exe() {
+        let mut cur = exe;
+        while let Some(parent) = cur.parent() {
+            if parent.join("tools").join("bin").exists() {
+                return parent.to_path_buf();
+            }
+            cur = parent.to_path_buf();
+        }
+    }
+    // 3. Fallback to known development workspace if valid
+    let fallback = PathBuf::from(r"c:\Users\ankit\OneDrive\Desktop\project\AppSec");
+    if fallback.exists() {
+        return fallback;
+    }
+    PathBuf::from(".")
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let mut base_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    // If running from src-tauri, step up to project root
-    if base_dir.ends_with("src-tauri") {
-        base_dir.pop();
-    }
+    let base_dir = find_base_dir();
     let tools_bin = base_dir.join("tools").join("bin");
     let db_path = base_dir.join("appsec.db");
 
-    let db = Database::init(&db_path.to_string_lossy()).expect("Failed to initialize SQLite database");
+    let db = match Database::init(&db_path.to_string_lossy()) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("Database init failed at {:?}: {}. Using in-memory fallback.", db_path, e);
+            Database::init(":memory:").expect("Failed to initialize SQLite fallback")
+        }
+    };
     let tool_mgr = ToolManager::new(tools_bin);
     let ai_mentor = AiMentor::new();
+
 
     let state = AppState {
         db: Arc::new(db),

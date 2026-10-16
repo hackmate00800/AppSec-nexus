@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
+
 import {
   Shield,
   Terminal,
@@ -76,7 +77,7 @@ export default function App() {
   const [pullingModel, setPullingModel] = useState<string>("");
   const [pullStatus, setPullStatus] = useState<string>("");
 
-  const isTauriApp = typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__);
+  const isTauriApp = isTauri();
 
   useEffect(() => {
     loadInitialData();

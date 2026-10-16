@@ -36,3 +36,5 @@ src-tauri/target/
 # External binaries and compiler
 tools/compiler/
 tools/bin/
+*.exe
+*.dll
