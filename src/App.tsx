@@ -26,7 +26,8 @@ import {
   CheckCircle2,
   RefreshCw,
   Radio,
-  BookOpen
+  BookOpen,
+  GraduationCap
 } from "lucide-react";
 import "./App.css";
 import { Target, ToolInfo, PluginInfo, FeedUpdateResult, Finding, ScanResult, FindingStatus, DiscoveredEndpoint, ModelPullProgress } from "./types";
@@ -34,8 +35,9 @@ import { Target, ToolInfo, PluginInfo, FeedUpdateResult, Finding, ScanResult, Fi
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<
-    "targets" | "tools" | "crawler" | "scanner" | "findings" | "importer" | "mentor" | "history"
+    "targets" | "tools" | "crawler" | "scanner" | "findings" | "importer" | "mentor" | "history" | "academy"
   >("targets");
+  const [academyTab, setAcademyTab] = useState<"cyber" | "networking" | "linux" | "windows">("cyber");
 
   const [targets, setTargets] = useState<Target[]>([]);
   const [selectedTarget, setSelectedTarget] = useState<Target | null>(null);
@@ -762,6 +764,14 @@ export default function App() {
           >
             <Sparkles size={18} />
             <span>Local AI Mentor</span>
+          </div>
+
+          <div
+            className={`nav-item ${activeTab === "academy" ? "active" : ""}`}
+            onClick={() => setActiveTab("academy")}
+          >
+            <GraduationCap size={18} />
+            <span>Cyber Academy</span>
           </div>
 
           <div
@@ -2350,6 +2360,407 @@ export default function App() {
                   </table>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* TAB 8: CYBER ACADEMY & FOUNDATIONS */}
+          {activeTab === "academy" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div className="card">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "12px", marginBottom: "16px" }}>
+                  <div>
+                    <h2 style={{ fontSize: "1.25rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "8px", margin: 0 }}>
+                      <GraduationCap size={24} color="var(--accent-cyan)" /> Cybersecurity, Networking & OS Academy
+                    </h2>
+                    <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginTop: "4px" }}>
+                      Foundational knowledge and master cheat sheets for Web Security, Computer Networking, Linux, and Windows.
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <button
+                      className="btn btn-secondary"
+                      style={{ fontSize: "0.8rem", display: "flex", alignItems: "center", gap: "6px" }}
+                      onClick={() => {
+                        setActiveTab("mentor");
+                        setAiExplanation("🎓 Welcome to your Personal Cybersecurity AI Tutor!\n\nI can teach you any topic step-by-step:\n1. OWASP Top 10 Web Vulnerabilities\n2. TCP/IP, OSI 7-Layer Model & Subnetting\n3. Linux System Administration & Privilege Security\n4. Windows Active Directory, Kerberos & Sysmon\n\nPick any topic from the Cyber Academy tab, or ask me any question here to get started!");
+                      }}
+                    >
+                      <Sparkles size={14} color="var(--accent-cyan)" /> Ask AI Tutor
+                    </button>
+                  </div>
+                </div>
+
+                {/* ACADEMY SUBTABS */}
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", borderBottom: "1px solid var(--border-color)", paddingBottom: "12px" }}>
+                  <button
+                    className={`btn ${academyTab === "cyber" ? "btn-primary" : "btn-secondary"}`}
+                    style={{ fontSize: "0.82rem", padding: "6px 14px" }}
+                    onClick={() => setAcademyTab("cyber")}
+                  >
+                    🛡️ 1. Cybersecurity Core & OWASP
+                  </button>
+                  <button
+                    className={`btn ${academyTab === "networking" ? "btn-primary" : "btn-secondary"}`}
+                    style={{ fontSize: "0.82rem", padding: "6px 14px" }}
+                    onClick={() => setAcademyTab("networking")}
+                  >
+                    🌐 2. Networking Mastery & OSI
+                  </button>
+                  <button
+                    className={`btn ${academyTab === "linux" ? "btn-primary" : "btn-secondary"}`}
+                    style={{ fontSize: "0.82rem", padding: "6px 14px" }}
+                    onClick={() => setAcademyTab("linux")}
+                  >
+                    🐧 3. Linux System Security
+                  </button>
+                  <button
+                    className={`btn ${academyTab === "windows" ? "btn-primary" : "btn-secondary"}`}
+                    style={{ fontSize: "0.82rem", padding: "6px 14px" }}
+                    onClick={() => setAcademyTab("windows")}
+                  >
+                    🪟 4. Windows Security Architecture
+                  </button>
+                </div>
+              </div>
+
+              {/* MODULE 1: CYBERSECURITY FOUNDATIONS */}
+              {academyTab === "cyber" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  <div className="card">
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "12px" }}>
+                      The Core Security Pillars & Design Principles
+                    </h3>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px" }}>
+                      <div style={{ background: "var(--bg-secondary)", padding: "14px", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
+                        <div style={{ fontWeight: 600, color: "var(--accent-cyan)", marginBottom: "4px" }}>Confidentiality (C)</div>
+                        <div style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>
+                          Ensures sensitive data is readable only by authorized entities. Enforced via encryption (AES-256, TLS 1.3) and strict Access Control Lists.
+                        </div>
+                      </div>
+                      <div style={{ background: "var(--bg-secondary)", padding: "14px", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
+                        <div style={{ fontWeight: 600, color: "var(--accent-emerald)", marginBottom: "4px" }}>Integrity (I)</div>
+                        <div style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>
+                          Guarantees that information has not been modified or tampered with. Enforced via cryptographic hashing (SHA-256) and digital signatures.
+                        </div>
+                      </div>
+                      <div style={{ background: "var(--bg-secondary)", padding: "14px", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
+                        <div style={{ fontWeight: 600, color: "var(--accent-amber)", marginBottom: "4px" }}>Availability (A)</div>
+                        <div style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>
+                          Guarantees authorized users have continuous access to systems and data. Protected by backups, redundancy, rate-limiting, and DDoS scrubbing.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="card">
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "12px" }}>
+                      OWASP Top 10 Web Vulnerabilities
+                    </h3>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                      <div style={{ background: "var(--bg-secondary)", padding: "14px", borderRadius: "8px", borderLeft: "4px solid var(--accent-rose)" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontWeight: 600 }}>SQL Injection (SQLi) • CWE-89</span>
+                          <span className="badge badge-critical">Critical</span>
+                        </div>
+                        <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", margin: "6px 0" }}>
+                          Attacker manipulates database queries by supplying untrusted input that concatenates directly into raw SQL statements.
+                        </p>
+                        <div style={{ background: "#080c14", padding: "8px 12px", borderRadius: "6px", fontFamily: "monospace", fontSize: "0.78rem" }}>
+                          <span style={{ color: "var(--accent-rose)" }}>Vulnerable:</span> cursor.execute(f"SELECT * FROM users WHERE name = '&#123;user&#125;'")<br />
+                          <span style={{ color: "var(--accent-emerald)" }}>Secure (Parameterized):</span> cursor.execute("SELECT * FROM users WHERE name = %s", (user,))
+                        </div>
+                      </div>
+
+                      <div style={{ background: "var(--bg-secondary)", padding: "14px", borderRadius: "8px", borderLeft: "4px solid var(--accent-amber)" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontWeight: 600 }}>Cross-Site Scripting (XSS) • CWE-79</span>
+                          <span className="badge badge-high">High</span>
+                        </div>
+                        <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", margin: "6px 0" }}>
+                          Application serves unescaped user input into browser HTML, allowing execution of malicious JavaScript to steal session tokens.
+                        </p>
+                        <div style={{ background: "#080c14", padding: "8px 12px", borderRadius: "6px", fontFamily: "monospace", fontSize: "0.78rem" }}>
+                          <span style={{ color: "var(--accent-emerald)" }}>Remediation:</span> Context-aware HTML escaping, Strict CSP (Content-Security-Policy), and HttpOnly cookie flags.
+                        </div>
+                      </div>
+
+                      <div style={{ background: "var(--bg-secondary)", padding: "14px", borderRadius: "8px", borderLeft: "4px solid var(--accent-amber)" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontWeight: 600 }}>Server-Side Request Forgery (SSRF) • CWE-918</span>
+                          <span className="badge badge-high">High</span>
+                        </div>
+                        <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", margin: "6px 0" }}>
+                          Server fetches remote URLs based on user input without restricting destination IP addresses, exposing cloud metadata (169.254.169.254).
+                        </p>
+                        <div style={{ background: "#080c14", padding: "8px 12px", borderRadius: "6px", fontFamily: "monospace", fontSize: "0.78rem" }}>
+                          <span style={{ color: "var(--accent-emerald)" }}>Remediation:</span> Enforce domain whitelisting, block RFC 1918 private IPs, and disable client HTTP redirects.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* MODULE 2: NETWORKING MASTERY */}
+              {academyTab === "networking" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  <div className="card">
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "12px" }}>
+                      OSI 7-Layer Model vs TCP/IP Protocol Stack
+                    </h3>
+                    <div style={{ overflowX: "auto" }}>
+                      <table className="data-table" style={{ fontSize: "0.82rem" }}>
+                        <thead>
+                          <tr>
+                            <th>Layer</th>
+                            <th>OSI Name</th>
+                            <th>Data Unit (PDU)</th>
+                            <th>Key Protocols</th>
+                            <th>Security Concerns</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td><strong>7</strong></td>
+                            <td>Application</td>
+                            <td>Data / Message</td>
+                            <td>HTTP, HTTPS, DNS, SSH, SMTP</td>
+                            <td>SQLi, XSS, CSRF, Auth bypass</td>
+                          </tr>
+                          <tr>
+                            <td><strong>6</strong></td>
+                            <td>Presentation</td>
+                            <td>Formatted Data</td>
+                            <td>TLS/SSL, ASCII, JSON, JPEG</td>
+                            <td>Weak ciphers, insecure deserialization</td>
+                          </tr>
+                          <tr>
+                            <td><strong>5</strong></td>
+                            <td>Session</td>
+                            <td>Sessions</td>
+                            <td>RPC, NetBIOS, Sockets</td>
+                            <td>Session hijacking, credential replay</td>
+                          </tr>
+                          <tr>
+                            <td><strong>4</strong></td>
+                            <td>Transport</td>
+                            <td>Segments (TCP) / Datagrams (UDP)</td>
+                            <td>TCP, UDP</td>
+                            <td>SYN flood DDoS, port scanning</td>
+                          </tr>
+                          <tr>
+                            <td><strong>3</strong></td>
+                            <td>Network</td>
+                            <td>Packets</td>
+                            <td>IPv4, IPv6, ICMP, IPsec</td>
+                            <td>IP spoofing, ICMP redirect attacks</td>
+                          </tr>
+                          <tr>
+                            <td><strong>2</strong></td>
+                            <td>Data Link</td>
+                            <td>Frames</td>
+                            <td>Ethernet (MAC), Wi-Fi, ARP</td>
+                            <td>ARP poisoning, MAC flooding</td>
+                          </tr>
+                          <tr>
+                            <td><strong>1</strong></td>
+                            <td>Physical</td>
+                            <td>Bits / Signals</td>
+                            <td>Cables, Fiber, Radio Waves</td>
+                            <td>Wiretapping, physical tampering</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="card">
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "12px" }}>
+                      TCP 3-Way Handshake & Subnetting Cheat Sheet
+                    </h3>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "16px" }}>
+                      <div style={{ background: "var(--bg-secondary)", padding: "14px", borderRadius: "8px" }}>
+                        <div style={{ fontWeight: 600, color: "var(--accent-cyan)", marginBottom: "8px" }}>The TCP 3-Way Handshake</div>
+                        <div style={{ background: "#080c14", padding: "10px", borderRadius: "6px", fontFamily: "monospace", fontSize: "0.78rem" }}>
+                          Client ──[ SYN ]─────────────&gt; Server<br />
+                          Client &lt;─[ SYN-ACK ]───────── Server<br />
+                          Client ──[ ACK ]─────────────&gt; Server<br />
+                          <span style={{ color: "var(--accent-emerald)" }}>✓ TCP Connection Established!</span>
+                        </div>
+                      </div>
+
+                      <div style={{ background: "var(--bg-secondary)", padding: "14px", borderRadius: "8px" }}>
+                        <div style={{ fontWeight: 600, color: "var(--accent-cyan)", marginBottom: "8px" }}>RFC 1918 Private IP Ranges</div>
+                        <ul style={{ fontSize: "0.82rem", color: "var(--text-muted)", paddingLeft: "16px", margin: 0 }}>
+                          <li><code>10.0.0.0/8</code> (10.0.0.0 – 10.255.255.255)</li>
+                          <li><code>172.16.0.0/12</code> (172.16.0.0 – 172.31.255.255)</li>
+                          <li><code>192.168.0.0/16</code> (192.168.0.0 – 192.168.255.255)</li>
+                          <li><code>127.0.0.1</code> (Loopback / Localhost)</li>
+                          <li><code>169.254.0.0/16</code> (Link-Local / Cloud Metadata)</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* MODULE 3: LINUX SECURITY */}
+              {academyTab === "linux" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  <div className="card">
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "12px" }}>
+                      Linux Permission Matrix & Octal Calculation
+                    </h3>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px", marginBottom: "16px" }}>
+                      <div style={{ background: "var(--bg-secondary)", padding: "12px", borderRadius: "8px" }}>
+                        <strong>Read (r) = 4</strong>: View file or list directory contents
+                      </div>
+                      <div style={{ background: "var(--bg-secondary)", padding: "12px", borderRadius: "8px" }}>
+                        <strong>Write (w) = 2</strong>: Modify file or create/delete files in folder
+                      </div>
+                      <div style={{ background: "var(--bg-secondary)", padding: "12px", borderRadius: "8px" }}>
+                        <strong>Execute (x) = 1</strong>: Run executable binary or enter directory (cd)
+                      </div>
+                    </div>
+                    <div style={{ background: "#080c14", padding: "12px", borderRadius: "6px", fontFamily: "monospace", fontSize: "0.8rem" }}>
+                      # chmod 755 script.sh &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=&gt; User: rwx(7), Group: r-x(5), Others: r-x(5)<br />
+                      # chmod 600 ~/.ssh/id_rsa &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=&gt; User: rw-(6), Group: ---(0), Others: ---(0)<br />
+                      # chmod 4755 /bin/su &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=&gt; SUID Bit (Executes as owner root!)
+                    </div>
+                  </div>
+
+                  <div className="card">
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "12px" }}>
+                      Essential Linux Defense & Auditing Commands
+                    </h3>
+                    <div style={{ overflowX: "auto" }}>
+                      <table className="data-table" style={{ fontSize: "0.82rem" }}>
+                        <thead>
+                          <tr>
+                            <th>Command</th>
+                            <th>Purpose</th>
+                            <th>Security Investigation Context</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td><code>ss -tulpn</code></td>
+                            <td>List open network ports & PIDs</td>
+                            <td>Identifies rogue or unauthorized listening services</td>
+                          </tr>
+                          <tr>
+                            <td><code>ps aux | grep -i root</code></td>
+                            <td>View running processes</td>
+                            <td>Audits high-privilege daemon executions</td>
+                          </tr>
+                          <tr>
+                            <td><code>find / -perm -4000 2&gt;/dev/null</code></td>
+                            <td>Find all SUID binaries</td>
+                            <td>Locates privilege escalation targets</td>
+                          </tr>
+                          <tr>
+                            <td><code>tail -f /var/log/auth.log</code></td>
+                            <td>Monitor authentication logs</td>
+                            <td>Detects brute-force SSH attempts and sudo escalation</td>
+                          </tr>
+                          <tr>
+                            <td><code>last -n 20</code></td>
+                            <td>Show recent system logins</td>
+                            <td>Audits administrator access history</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* MODULE 4: WINDOWS SECURITY */}
+              {academyTab === "windows" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  <div className="card">
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "12px" }}>
+                      Windows Architecture & Access Control
+                    </h3>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px", marginBottom: "16px" }}>
+                      <div style={{ background: "var(--bg-secondary)", padding: "14px", borderRadius: "8px" }}>
+                        <div style={{ fontWeight: 600, color: "var(--accent-cyan)", marginBottom: "4px" }}>User Mode (Ring 3)</div>
+                        <div style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>
+                          Isolated process address spaces. Applications cannot touch physical hardware directly; must call the Win32 API / NT Native API.
+                        </div>
+                      </div>
+                      <div style={{ background: "var(--bg-secondary)", padding: "14px", borderRadius: "8px" }}>
+                        <div style={{ fontWeight: 600, color: "var(--accent-rose)", marginBottom: "4px" }}>Kernel Mode (Ring 0)</div>
+                        <div style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>
+                          The NT Executive, device drivers, and HAL. Unrestricted CPU and memory access. Vulnerabilities here lead to kernel-level persistence.
+                        </div>
+                      </div>
+                      <div style={{ background: "var(--bg-secondary)", padding: "14px", borderRadius: "8px" }}>
+                        <div style={{ fontWeight: 600, color: "var(--accent-emerald)", marginBottom: "4px" }}>SIDs & Access Tokens</div>
+                        <div style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>
+                          Every user has a unique Security Identifier (SID). When logging in, Windows issues an Access Token containing group SIDs and privileges.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="card">
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "12px" }}>
+                      Critical Windows Security Event IDs & Sysmon
+                    </h3>
+                    <div style={{ overflowX: "auto" }}>
+                      <table className="data-table" style={{ fontSize: "0.82rem" }}>
+                        <thead>
+                          <tr>
+                            <th>Source</th>
+                            <th>Event ID</th>
+                            <th>Description</th>
+                            <th>Security Threat Detection</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td>Security Log</td>
+                            <td><code>4624</code></td>
+                            <td>Successful Logon</td>
+                            <td>Audit logon type (Type 2=Interactive, Type 3=Network/SMB, Type 10=RDP)</td>
+                          </tr>
+                          <tr>
+                            <td>Security Log</td>
+                            <td><code>4625</code></td>
+                            <td>Failed Logon Attempt</td>
+                            <td>Brute force / password spraying attacks</td>
+                          </tr>
+                          <tr>
+                            <td>Security Log</td>
+                            <td><code>4672</code></td>
+                            <td>Special Privileges Assigned</td>
+                            <td>Administrator elevation detection</td>
+                          </tr>
+                          <tr>
+                            <td>Sysmon</td>
+                            <td><code>Event 1</code></td>
+                            <td>Process Creation</td>
+                            <td>Captures command line flags, parent PID, and file hashes</td>
+                          </tr>
+                          <tr>
+                            <td>Sysmon</td>
+                            <td><code>Event 3</code></td>
+                            <td>Network Connection</td>
+                            <td>Detects outbound C2 connections initiated by processes</td>
+                          </tr>
+                          <tr>
+                            <td>Sysmon</td>
+                            <td><code>Event 11</code></td>
+                            <td>File Created</td>
+                            <td>Detects malware drops and ransomware file creation</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </main>
