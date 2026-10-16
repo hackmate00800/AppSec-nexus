@@ -352,6 +352,18 @@ fn find_base_dir() -> PathBuf {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let base_dir = find_base_dir();
+    let log_file = base_dir.join("appsec_startup.log");
+    let _ = std::fs::write(&log_file, format!("Starting AppSec Nexus at {:?}\nBase dir: {:?}\n", std::time::SystemTime::now(), base_dir));
+
+    let hook_log = log_file.clone();
+    std::panic::set_hook(Box::new(move |info| {
+        let msg = format!("PANIC: {:?}\n", info);
+        let _ = std::fs::OpenOptions::new().append(true).create(true).open(&hook_log).and_then(|mut f| {
+            use std::io::Write;
+            f.write_all(msg.as_bytes())
+        });
+    }));
+
     let tools_bin = base_dir.join("tools").join("bin");
     let db_path = base_dir.join("appsec.db");
 
@@ -365,14 +377,13 @@ pub fn run() {
     let tool_mgr = ToolManager::new(tools_bin);
     let ai_mentor = AiMentor::new();
 
-
     let state = AppState {
         db: Arc::new(db),
         tool_mgr,
         ai_mentor,
     };
 
-    tauri::Builder::default()
+    let run_res = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(state)
         .invoke_handler(tauri::generate_handler![
@@ -392,6 +403,14 @@ pub fn run() {
             get_endpoints,
             import_external_report
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .run(tauri::generate_context!());
+
+    if let Err(e) = run_res {
+        let err_msg = format!("TAURI RUN ERROR: {:?}\n", e);
+        let _ = std::fs::OpenOptions::new().append(true).create(true).open(&log_file).and_then(|mut f| {
+            use std::io::Write;
+            f.write_all(err_msg.as_bytes())
+        });
+        panic!("error while running tauri application: {:?}", e);
+    }
 }
