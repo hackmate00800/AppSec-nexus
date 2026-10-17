@@ -104,6 +104,10 @@ export interface VulnerabilityEntry {
     checkId: string;
     description: string;
   };
+  businessImpact?: string;
+  documentationTemplate?: string;
+  validationLabId?: string;
+  capabilityBadge?: "native_scanner" | "tool_adapter" | "educational_reference";
 }
 
 export interface EssentialCommand {
@@ -138,14 +142,82 @@ export interface MethodologyFramework {
   organization: string;
   version: string;
   purpose: string;
+  whenToUse: string;
+  prerequisites: string[];
   scopeAndLimitations: string;
+  inputs: string[];
+  expectedOutputs: string[];
+  limitations: string[];
+  practicalExample: string;
+  reportingRequirements: string[];
+  relatedStandards: string[];
   corePhases: {
     phaseNumber: number;
     title: string;
     description: string;
     deliverables: string[];
+    activities?: string[];
+    toolsUsed?: string[];
   }[];
   officialUrl: string;
+}
+
+export type ConceptDomain =
+  | "cybersecurity"
+  | "ethical_hacking"
+  | "web_pentest"
+  | "api_security"
+  | "defensive_controls";
+
+export interface ConceptExample {
+  scenario: string;
+  codeOrConfig?: string;
+  explanation: string;
+}
+
+export interface LearningResource {
+  title: string;
+  url: string;
+  type: "standard" | "rfc" | "documentation" | "book" | "guide";
+  isOfficial: boolean;
+}
+
+export interface ConceptEntry {
+  id: string;
+  name: string;
+  domain: ConceptDomain;
+  difficulty: SkillLevel;
+  definition: string;
+  purpose: string;
+  prerequisites: string[];
+  technicalExplanation: string;
+  examples: ConceptExample[];
+  practicalApplications: string[];
+  relatedConceptIds: string[];
+  commonMistakes: string[];
+  learningResources: LearningResource[];
+  linkedTools?: string[];
+  linkedCwe?: string[];
+  linkedMitre?: string[];
+  linkedVulnerabilityId?: string;
+  capabilityType: "native_scanner" | "tool_adapter" | "educational_only";
+}
+
+export interface WorkflowStage {
+  stageNumber: number;
+  name: string;
+  category: string;
+  objective: string;
+  inputs: string[];
+  activities: string[];
+  toolsUsed: string[];
+  expectedOutputs: string[];
+  safetyAndScopePrecautions: string[];
+  appsecNexusIntegration?: {
+    isSupported: boolean;
+    featureName: string;
+    actionDescription: string;
+  };
 }
 
 export interface PracticalLab {

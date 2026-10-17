@@ -26,7 +26,8 @@ import {
   LearningPath,
   VulnerabilityEntry,
   ToolEntry,
-  UserAcademyState
+  UserAcademyState,
+  ConceptEntry
 } from "./types";
 import { LEARNING_PATHS } from "./data/curriculumData";
 import { VULNERABILITY_ENCYCLOPEDIA } from "./data/vulnerabilityEncyclopediaData";
@@ -34,6 +35,10 @@ import { TOOLS_KNOWLEDGE_BASE } from "./data/toolsData";
 import { METHODOLOGIES_DATA } from "./data/methodologiesData";
 import { PRACTICAL_LABS } from "./data/labsData";
 import { CERTIFICATIONS_DIRECTORY, CAREER_ROADMAPS } from "./data/certificationsData";
+import { CONCEPT_LIBRARY } from "./data/conceptLibraryData";
+import { ConceptLibraryView } from "./components/ConceptLibraryView";
+import { WorkflowsView } from "./components/WorkflowsView";
+import { evaluateLessonPrerequisites, getRecommendedNextLessons } from "./prerequisites";
 import { SecurityFlowchart } from "../Flowchart";
 
 interface CyberAcademyProps {
@@ -46,7 +51,7 @@ const STORAGE_KEY = "appsec_nexus_cyber_academy_state_v1";
 export function CyberAcademy({ onNavigateScanner, onOpenAiMentor }: CyberAcademyProps) {
   // Navigation State
   const [activeTab, setActiveTab] = useState<
-    "dashboard" | "paths" | "lesson" | "encyclopedia" | "tools" | "methodologies" | "labs" | "certifications" | "notes"
+    "dashboard" | "paths" | "lesson" | "concepts" | "workflows" | "encyclopedia" | "tools" | "methodologies" | "labs" | "certifications" | "notes"
   >("dashboard");
 
   // Selection State
@@ -54,10 +59,13 @@ export function CyberAcademy({ onNavigateScanner, onOpenAiMentor }: CyberAcademy
   const [selectedLesson, setSelectedLesson] = useState<Lesson>(LEARNING_PATHS[0].modules[0].lessons[0]);
   const [selectedVulnerability, setSelectedVulnerability] = useState<VulnerabilityEntry | null>(VULNERABILITY_ENCYCLOPEDIA[0]);
   const [selectedTool, setSelectedTool] = useState<ToolEntry | null>(TOOLS_KNOWLEDGE_BASE[0]);
+  const [selectedConcept, setSelectedConcept] = useState<ConceptEntry | null>(CONCEPT_LIBRARY[0]);
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [vulnSeverityFilter, setVulnSeverityFilter] = useState<string>("ALL");
+  const [conceptDomainFilter, setConceptDomainFilter] = useState<string>("ALL");
+  const [conceptSearch, setConceptSearch] = useState<string>("");
 
   // User Progress & Notes State
   const [userState, setUserState] = useState<UserAcademyState>(() => {
@@ -262,6 +270,8 @@ export function CyberAcademy({ onNavigateScanner, onOpenAiMentor }: CyberAcademy
           { id: "dashboard", label: "Dashboard & Progress", icon: Award },
           { id: "paths", label: "Learning Paths", icon: BookOpen },
           { id: "lesson", label: "Interactive Lesson", icon: Terminal },
+          { id: "concepts", label: "Concept Library", icon: Sparkles },
+          { id: "workflows", label: "Security Workflows", icon: ChevronRight },
           { id: "encyclopedia", label: "Vulnerability Encyclopedia", icon: ShieldAlert },
           { id: "tools", label: "Tools Knowledge Base", icon: Radio },
           { id: "methodologies", label: "Methodologies & Frameworks", icon: GitBranch },
@@ -337,6 +347,79 @@ export function CyberAcademy({ onNavigateScanner, onOpenAiMentor }: CyberAcademy
               </span>
             </div>
           </div>
+
+          {/* Recommended Next Lessons (Prerequisites Met) */}
+          {(() => {
+            const recommended = getRecommendedNextLessons(userState.completedLessonIds, allLessons, 3);
+            if (recommended.length === 0) return null;
+            return (
+              <div className="card" style={{ margin: 0, padding: "18px 20px", background: "linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(20, 30, 51, 0.8) 100%)", border: "1px solid rgba(6, 182, 212, 0.3)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
+                  <div>
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 700, margin: 0, color: "var(--accent-cyan)", display: "flex", alignItems: "center", gap: "8px" }}>
+                      <Sparkles size={18} /> Recommended Next Lessons (Prerequisites Met)
+                    </h3>
+                    <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: "2px 0 0 0" }}>
+                      Based on your completed topics, our dependency engine recommends studying these foundational lessons next:
+                    </p>
+                  </div>
+                  <span className="badge badge-locked" style={{ fontSize: "0.7rem", color: "var(--accent-emerald)", borderColor: "rgba(16, 185, 129, 0.4)" }}>
+                    ✓ Ready to Learn
+                  </span>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px" }}>
+                  {recommended.map((rLes) => {
+                    const parentPath = LEARNING_PATHS.find((p) => p.id === rLes.pathId) || LEARNING_PATHS[0];
+                    return (
+                      <div
+                        key={rLes.id}
+                        style={{
+                          background: "var(--bg-secondary)",
+                          border: "1px solid var(--border-color)",
+                          borderRadius: "8px",
+                          padding: "12px",
+                          display: "flex",
+                          flexDirection: "column",
+                          justifyContent: "space-between",
+                          gap: "8px"
+                        }}
+                      >
+                        <div>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                            <span style={{ fontSize: "0.72rem", color: "var(--accent-cyan)", fontWeight: 600 }}>
+                              {parentPath.title}
+                            </span>
+                            <span className="badge badge-locked" style={{ fontSize: "0.68rem" }}>
+                              {rLes.level}
+                            </span>
+                          </div>
+                          <div style={{ fontWeight: 700, fontSize: "0.86rem", color: "var(--text-main)", marginBottom: "4px" }}>
+                            {rLes.title}
+                          </div>
+                          <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", margin: 0, lineHeight: "1.4" }}>
+                            {rLes.summary}
+                          </p>
+                        </div>
+
+                        <button
+                          className="btn btn-primary"
+                          style={{ width: "100%", justifyContent: "center", fontSize: "0.76rem", padding: "6px" }}
+                          onClick={() => {
+                            setSelectedPath(parentPath);
+                            setSelectedLesson(rLes);
+                            setActiveTab("lesson");
+                          }}
+                        >
+                          <Play size={12} /> Start Lesson
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Featured Learning Paths Grid */}
           <div className="card" style={{ margin: 0 }}>
@@ -564,6 +647,49 @@ export function CyberAcademy({ onNavigateScanner, onOpenAiMentor }: CyberAcademy
                   ))}
                 </ul>
               </div>
+
+              {/* Prerequisite Advisory Banner */}
+              {(() => {
+                const prereqEval = evaluateLessonPrerequisites(selectedLesson, userState.completedLessonIds, allLessons);
+                if (!prereqEval.isUnlocked) {
+                  return (
+                    <div style={{ background: "rgba(244, 63, 94, 0.1)", border: "1px solid rgba(244, 63, 94, 0.3)", borderRadius: "8px", padding: "12px 16px", marginBottom: "18px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 700, fontSize: "0.85rem", color: "var(--accent-rose)", marginBottom: "4px" }}>
+                        <ShieldAlert size={16} /> Prerequisite Advisory
+                      </div>
+                      <p style={{ fontSize: "0.8rem", color: "var(--text-main)", margin: "0 0 8px 0" }}>
+                        For optimal comprehension, we recommend completing the following foundational lesson(s) before starting this topic:
+                      </p>
+                      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                        {prereqEval.missingPrerequisites.map((pLes) => (
+                          <button
+                            key={pLes.id}
+                            className="btn btn-secondary"
+                            style={{ padding: "3px 8px", fontSize: "0.75rem", borderColor: "rgba(244, 63, 94, 0.4)" }}
+                            onClick={() => {
+                              const parentPath = LEARNING_PATHS.find((p) => p.id === pLes.pathId) || selectedPath;
+                              setSelectedPath(parentPath);
+                              setSelectedLesson(pLes);
+                            }}
+                          >
+                            ➔ Study: {pLes.title}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                } else if (selectedLesson.prerequisites.length > 0) {
+                  return (
+                    <div style={{ background: "rgba(16, 185, 129, 0.08)", border: "1px solid rgba(16, 185, 129, 0.25)", borderRadius: "8px", padding: "8px 12px", marginBottom: "18px", display: "flex", alignItems: "center", gap: "8px" }}>
+                      <CheckCircle2 size={15} color="var(--accent-emerald)" />
+                      <span style={{ fontSize: "0.78rem", color: "var(--accent-emerald)", fontWeight: 600 }}>
+                        All Learning Prerequisites Verified & Satisfied ({prereqEval.completedRequired}/{prereqEval.totalRequired})
+                      </span>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
 
               {/* Section 1: Beginner Explanation */}
               <div style={{ marginBottom: "20px" }}>
@@ -830,6 +956,24 @@ export function CyberAcademy({ onNavigateScanner, onOpenAiMentor }: CyberAcademy
         </div>
       )}
 
+      {/* TAB: CONCEPT LIBRARY */}
+      {activeTab === "concepts" && (
+        <ConceptLibraryView
+          concepts={CONCEPT_LIBRARY}
+          selectedConcept={selectedConcept}
+          onSelectConcept={setSelectedConcept}
+          domainFilter={conceptDomainFilter}
+          onChangeDomainFilter={setConceptDomainFilter}
+          searchQuery={conceptSearch}
+          onChangeSearchQuery={setConceptSearch}
+        />
+      )}
+
+      {/* TAB: SECURITY WORKFLOWS */}
+      {activeTab === "workflows" && (
+        <WorkflowsView />
+      )}
+
       {/* TAB 4: VULNERABILITY ENCYCLOPEDIA */}
       {activeTab === "encyclopedia" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -901,89 +1045,275 @@ export function CyberAcademy({ onNavigateScanner, onOpenAiMentor }: CyberAcademy
               })}
             </div>
 
-            {/* Vulnerability Detailed Inspector */}
+            {/* Vulnerability Detailed Inspector with 8-Step Workflow */}
             {selectedVulnerability && (
-              <div className="card" style={{ margin: 0 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
+              <div className="card" style={{ margin: 0, padding: "20px" }}>
+                {/* Header */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "14px", flexWrap: "wrap", gap: "8px" }}>
                   <div>
-                    <h2 style={{ fontSize: "1.3rem", fontWeight: 800, margin: 0, color: "var(--text-main)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                      <span className="badge badge-locked" style={{ fontSize: "0.72rem" }}>
+                        {selectedVulnerability.cwe || "CWE"}
+                      </span>
+                      <span className="badge badge-locked" style={{ fontSize: "0.72rem" }}>
+                        Category: {selectedVulnerability.category}
+                      </span>
+                    </div>
+                    <h2 style={{ fontSize: "1.35rem", fontWeight: 800, margin: 0, color: "var(--text-main)" }}>
                       {selectedVulnerability.name}
                     </h2>
-                    <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", marginTop: "4px" }}>
-                      {selectedVulnerability.cwe} &bull; Category: {selectedVulnerability.category}
-                    </div>
                   </div>
 
-                  <div style={{ display: "flex", gap: "6px" }}>
+                  <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                     <span className={`badge badge-${selectedVulnerability.severity.toLowerCase()}`} style={{ fontSize: "0.82rem" }}>
                       {selectedVulnerability.severity} &bull; CVSS {selectedVulnerability.cvssBaseScore}
                     </span>
+                    {selectedVulnerability.scannerCheck ? (
+                      <span
+                        style={{
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          padding: "4px 8px",
+                          borderRadius: "6px",
+                          background: "rgba(6, 182, 212, 0.15)",
+                          color: "var(--accent-cyan)",
+                          border: "1px solid rgba(6, 182, 212, 0.35)"
+                        }}
+                      >
+                        ⚡ Native Scanner Supported
+                      </span>
+                    ) : (
+                      <span
+                        style={{
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          padding: "4px 8px",
+                          borderRadius: "6px",
+                          background: "rgba(255, 255, 255, 0.08)",
+                          color: "var(--text-dim)",
+                          border: "1px solid var(--border-color)"
+                        }}
+                      >
+                        📚 Reference Guide
+                      </span>
+                    )}
                   </div>
                 </div>
 
-                {/* Definition Box */}
+                {/* 8-Step Workflow Indicator */}
+                <div style={{ display: "flex", gap: "4px", overflowX: "auto", paddingBottom: "10px", marginBottom: "14px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                  {["1. Learn", "2. Understand", "3. Detect", "4. Validate", "5. Assess", "6. Fix", "7. Retest", "8. Document"].map((stepLabel, idx) => (
+                    <span
+                      key={idx}
+                      style={{
+                        padding: "3px 8px",
+                        borderRadius: "4px",
+                        fontSize: "0.72rem",
+                        fontWeight: 700,
+                        background: "rgba(15, 23, 42, 0.8)",
+                        border: "1px solid var(--border-color)",
+                        color: "var(--accent-cyan)",
+                        whiteSpace: "nowrap"
+                      }}
+                    >
+                      {stepLabel}
+                    </span>
+                  ))}
+                </div>
+
+                {/* STEP 1: LEARN (Definition & Aliases) */}
                 <div style={{ background: "rgba(15, 23, 42, 0.8)", border: "1px solid var(--border-color)", borderRadius: "8px", padding: "14px", marginBottom: "16px" }}>
                   <div style={{ fontWeight: 700, fontSize: "0.84rem", color: "var(--accent-cyan)", marginBottom: "4px" }}>
-                    Authoritative Definition & Impact:
+                    Step 1: Learn — Authoritative Definition & Aliases:
                   </div>
-                  <p style={{ fontSize: "0.85rem", color: "var(--text-main)", lineHeight: "1.5", margin: 0 }}>
+                  <p style={{ fontSize: "0.86rem", color: "var(--text-main)", lineHeight: "1.5", margin: "0 0 6px 0" }}>
                     {selectedVulnerability.definition}
                   </p>
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>
+                    <strong>Known Aliases:</strong> {selectedVulnerability.aliases.join(", ")}
+                  </div>
                 </div>
 
-                {/* Technical Root Cause */}
+                {/* STEP 2: UNDERSTAND (Root Cause & Attack Flow) */}
                 <div style={{ marginBottom: "18px" }}>
-                  <h4 style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "6px" }}>
-                    Root Cause Analysis:
+                  <h4 style={{ fontSize: "0.92rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "6px" }}>
+                    Step 2: Understand — Root Cause & Attack Mechanism:
                   </h4>
-                  <p style={{ fontSize: "0.84rem", color: "var(--text-muted)", lineHeight: "1.5", margin: 0 }}>
+                  <p style={{ fontSize: "0.84rem", color: "var(--text-muted)", lineHeight: "1.5", margin: "0 0 10px 0" }}>
                     {selectedVulnerability.technicalExplanation}
                   </p>
-                </div>
-
-                {/* Side-by-Side Vulnerable vs Secure Code */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "18px" }}>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: "0.8rem", color: "var(--accent-rose)", marginBottom: "4px" }}>
-                      ❌ Vulnerable Pattern:
+                  <div style={{ background: "var(--bg-secondary)", borderRadius: "6px", padding: "10px", border: "1px solid var(--border-color)" }}>
+                    <div style={{ fontWeight: 600, fontSize: "0.8rem", color: "var(--text-main)", marginBottom: "4px" }}>
+                      Safe Attack Flow Sequence:
                     </div>
-                    <div style={{ background: "#050811", border: "1px solid rgba(244,63,94,0.3)", borderRadius: "6px", padding: "10px", fontSize: "0.75rem", overflowX: "auto" }}>
-                      <pre style={{ margin: 0, color: "#fca5a5" }}>{selectedVulnerability.vulnerableCode.code}</pre>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: "0.8rem", color: "var(--accent-emerald)", marginBottom: "4px" }}>
-                      ✅ Secure Remediation:
-                    </div>
-                    <div style={{ background: "#050811", border: "1px solid rgba(16,185,129,0.3)", borderRadius: "6px", padding: "10px", fontSize: "0.75rem", overflowX: "auto" }}>
-                      <pre style={{ margin: 0, color: "#86efac" }}>{selectedVulnerability.secureCodeFix.code}</pre>
-                    </div>
+                    <ol style={{ paddingLeft: "18px", margin: 0, fontSize: "0.8rem", color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: "3px" }}>
+                      {selectedVulnerability.attackFlow.map((step, idx) => (
+                        <li key={idx}>{step}</li>
+                      ))}
+                    </ol>
                   </div>
                 </div>
 
-                {/* Attack Flow & PoC */}
+                {/* STEP 3: DETECT (Detection Methodology & Native Scanner Check) */}
                 <div style={{ marginBottom: "18px" }}>
-                  <h4 style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--accent-amber)", marginBottom: "6px" }}>
-                    Safe Attack Flow & Validation Steps:
+                  <h4 style={{ fontSize: "0.92rem", fontWeight: 700, color: "var(--accent-amber)", marginBottom: "6px" }}>
+                    Step 3: Detect — Detection Methodology & Scanner Signatures:
                   </h4>
-                  <ol style={{ paddingLeft: "18px", margin: 0, fontSize: "0.82rem", color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: "4px" }}>
-                    {selectedVulnerability.attackFlow.map((step, idx) => (
-                      <li key={idx}>{step}</li>
+                  <p style={{ fontSize: "0.84rem", color: "var(--text-muted)", lineHeight: "1.5", margin: "0 0 10px 0" }}>
+                    {selectedVulnerability.detectionMethodology}
+                  </p>
+
+                  {selectedVulnerability.scannerCheck && (
+                    <div
+                      style={{
+                        background: "rgba(6, 182, 212, 0.08)",
+                        border: "1px solid rgba(6, 182, 212, 0.3)",
+                        borderRadius: "8px",
+                        padding: "12px",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        gap: "10px"
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: "0.82rem", color: "var(--accent-cyan)", marginBottom: "2px" }}>
+                          ⚡ Native Scanner: {selectedVulnerability.scannerCheck.toolName} ({selectedVulnerability.scannerCheck.checkId})
+                        </div>
+                        <div style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
+                          {selectedVulnerability.scannerCheck.description}
+                        </div>
+                      </div>
+                      {onNavigateScanner && (
+                        <button
+                          className="btn btn-primary"
+                          style={{ fontSize: "0.76rem", padding: "5px 10px" }}
+                          onClick={() => onNavigateScanner(selectedVulnerability.scannerCheck?.checkId || "scanner")}
+                        >
+                          <Play size={12} /> Test in Scanner Console
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* STEP 4: VALIDATE (Manual Validation, PoC & False Positives) */}
+                <div style={{ marginBottom: "18px" }}>
+                  <h4 style={{ fontSize: "0.92rem", fontWeight: 700, color: "var(--accent-rose)", marginBottom: "6px" }}>
+                    Step 4: Validate — Non-Destructive Proof-of-Concept & Verification:
+                  </h4>
+                  <ol style={{ paddingLeft: "18px", margin: "0 0 10px 0", fontSize: "0.82rem", color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: "4px" }}>
+                    {selectedVulnerability.manualValidationSteps.map((vStep, idx) => (
+                      <li key={idx}>{vStep}</li>
                     ))}
                   </ol>
+
+                  {/* PoC Payload Card */}
+                  <div style={{ background: "#050811", border: "1px solid rgba(244,63,94,0.3)", borderRadius: "8px", padding: "12px", marginBottom: "8px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                      <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--accent-rose)" }}>
+                        Benign Non-Destructive PoC:
+                      </span>
+                      <button
+                        className="btn btn-secondary"
+                        style={{ padding: "3px 6px", fontSize: "0.7rem" }}
+                        onClick={() => handleCopy(selectedVulnerability.pocDemo)}
+                      >
+                        {copiedCode === selectedVulnerability.pocDemo ? <Check size={12} color="var(--accent-emerald)" /> : <Copy size={12} />}
+                      </button>
+                    </div>
+                    <code style={{ fontSize: "0.76rem", color: "#fca5a5", wordBreak: "break-all" }}>
+                      {selectedVulnerability.pocDemo}
+                    </code>
+                  </div>
+
+                  <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>
+                    <strong>False Positive Considerations:</strong> {selectedVulnerability.falsePositiveConsiderations}
+                  </div>
                 </div>
 
-                {/* Defense-in-Depth Measures */}
-                <div>
-                  <h4 style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--accent-emerald)", marginBottom: "6px" }}>
-                    Defense-in-Depth Layering:
+                {/* STEP 5: ASSESS (CVSS Scoring & Threat Impact) */}
+                <div style={{ background: "var(--bg-secondary)", borderRadius: "8px", padding: "14px", border: "1px solid var(--border-color)", marginBottom: "18px" }}>
+                  <div style={{ fontWeight: 700, fontSize: "0.84rem", color: "var(--text-main)", marginBottom: "6px" }}>
+                    Step 5: Assess — CVSS v3.1 Severity Metric:
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "6px" }}>
+                    <span className={`badge badge-${selectedVulnerability.severity.toLowerCase()}`}>
+                      {selectedVulnerability.severity} ({selectedVulnerability.cvssBaseScore})
+                    </span>
+                    {selectedVulnerability.cvssVector && (
+                      <code style={{ fontSize: "0.74rem", color: "var(--accent-cyan)", background: "rgba(0,0,0,0.4)", padding: "2px 6px", borderRadius: "4px" }}>
+                        {selectedVulnerability.cvssVector}
+                      </code>
+                    )}
+                  </div>
+                  <div style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
+                    {selectedVulnerability.expectedObservations}
+                  </div>
+                </div>
+
+                {/* STEP 6: FIX (Vulnerable vs Secure Code & Defense-in-Depth) */}
+                <div style={{ marginBottom: "18px" }}>
+                  <h4 style={{ fontSize: "0.92rem", fontWeight: 700, color: "var(--accent-emerald)", marginBottom: "6px" }}>
+                    Step 6: Fix — Secure Remediation & Defense-in-Depth:
+                  </h4>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: "0.8rem", color: "var(--accent-rose)", marginBottom: "4px" }}>
+                        ❌ Vulnerable Pattern:
+                      </div>
+                      <div style={{ background: "#050811", border: "1px solid rgba(244,63,94,0.3)", borderRadius: "6px", padding: "10px", fontSize: "0.75rem", overflowX: "auto" }}>
+                        <pre style={{ margin: 0, color: "#fca5a5" }}>{selectedVulnerability.vulnerableCode.code}</pre>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: "0.8rem", color: "var(--accent-emerald)", marginBottom: "4px" }}>
+                        ✅ Secure Remediation:
+                      </div>
+                      <div style={{ background: "#050811", border: "1px solid rgba(16,185,129,0.3)", borderRadius: "6px", padding: "10px", fontSize: "0.75rem", overflowX: "auto" }}>
+                        <pre style={{ margin: 0, color: "#86efac" }}>{selectedVulnerability.secureCodeFix.code}</pre>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ background: "rgba(16, 185, 129, 0.06)", border: "1px solid rgba(16, 185, 129, 0.2)", borderRadius: "6px", padding: "10px" }}>
+                    <div style={{ fontWeight: 600, fontSize: "0.78rem", color: "var(--accent-emerald)", marginBottom: "4px" }}>
+                      Defense-in-Depth Layering:
+                    </div>
+                    <ul style={{ paddingLeft: "18px", margin: 0, fontSize: "0.78rem", color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: "3px" }}>
+                      {selectedVulnerability.defenseInDepth.map((def, idx) => (
+                        <li key={idx}>{def}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+
+                {/* STEP 7: RETEST (Retesting Verification Checklist) */}
+                <div style={{ marginBottom: "18px" }}>
+                  <h4 style={{ fontSize: "0.92rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "6px" }}>
+                    Step 7: Retest — Verification & Closure:
                   </h4>
                   <ul style={{ paddingLeft: "18px", margin: 0, fontSize: "0.82rem", color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: "4px" }}>
-                    {selectedVulnerability.defenseInDepth.map((def, idx) => (
-                      <li key={idx}>{def}</li>
+                    {selectedVulnerability.retestSteps.map((rStep, idx) => (
+                      <li key={idx}>{rStep}</li>
                     ))}
                   </ul>
+                </div>
+
+                {/* STEP 8: DOCUMENT (Report Documentation Template) */}
+                <div style={{ background: "var(--bg-secondary)", borderRadius: "8px", padding: "14px", border: "1px solid var(--border-color)" }}>
+                  <h4 style={{ fontSize: "0.92rem", fontWeight: 700, color: "var(--text-main)", marginBottom: "6px" }}>
+                    Step 8: Document — Standardized Finding Template:
+                  </h4>
+                  <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", lineHeight: "1.5" }}>
+                    <div><strong>Title:</strong> {selectedVulnerability.name} ({selectedVulnerability.cwe})</div>
+                    <div><strong>Severity:</strong> {selectedVulnerability.severity} (CVSS: {selectedVulnerability.cvssBaseScore})</div>
+                    <div><strong>Executive Summary:</strong> The application fails to properly sanitize or validate user input, allowing attackers to execute unauthorized commands or access sensitive records.</div>
+                    <div><strong>Remediation:</strong> Implement parameterized statements, enforce strict input validation, and enable defense-in-depth security controls as detailed above.</div>
+                  </div>
                 </div>
               </div>
             )}
