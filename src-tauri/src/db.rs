@@ -10,6 +10,18 @@ impl Database {
     pub fn init(db_path: &str) -> Result<Self> {
         let conn = Connection::open(db_path)?;
 
+        // High-performance SQLite tuning for low-spec PCs:
+        // - WAL journal mode enables non-blocking concurrent reads and writes
+        // - synchronous = NORMAL minimizes disk I/O without data loss risk in WAL
+        // - temp_store = MEMORY avoids disk thrashing on slow HDDs
+        // - cache_size = -8000 limits cache to 8MB RAM for bounded memory footprint
+        let _ = conn.execute_batch("
+            PRAGMA journal_mode = WAL;
+            PRAGMA synchronous = NORMAL;
+            PRAGMA temp_store = MEMORY;
+            PRAGMA cache_size = -8000;
+        ");
+
         conn.execute(
             "CREATE TABLE IF NOT EXISTS targets (
                 id TEXT PRIMARY KEY,
@@ -45,6 +57,14 @@ impl Database {
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_findings_fingerprint ON findings(fingerprint)",
             [],
         );
+        let _ = conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_findings_target_created ON findings(target_id, created_at DESC)",
+            [],
+        );
+        let _ = conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_findings_severity ON findings(severity)",
+            [],
+        );
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS scan_history (
@@ -58,6 +78,10 @@ impl Database {
             )",
             [],
         )?;
+        let _ = conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_scan_history_created ON scan_history(created_at DESC)",
+            [],
+        );
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS discovered_endpoints (
@@ -73,6 +97,10 @@ impl Database {
             )",
             [],
         )?;
+        let _ = conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_endpoints_target_discovered ON discovered_endpoints(target_id, discovered_at DESC)",
+            [],
+        );
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS tool_path_overrides (
@@ -111,6 +139,10 @@ impl Database {
             )",
             [],
         )?;
+        let _ = conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_jobs_started ON orchestration_jobs(started_at DESC)",
+            [],
+        );
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS extension_registrations (

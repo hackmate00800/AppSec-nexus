@@ -36,11 +36,13 @@ windows-sys = { version = "0.61", features = [
 ] }
 
 
-# Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
+# High-Performance & Minimum-Size Compilation Profile for Low-Spec PCs
+# https://tauri.app/concept/size/#cargo-configuration
 [profile.release]
 codegen-units = 1
-lto = "thin"
-opt-level = 3
-panic = "unwind"
-strip = false
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
+
 

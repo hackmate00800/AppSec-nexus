@@ -29,6 +29,8 @@ src-tauri/target/
 
 # Local databases & secrets
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 .env
 .env.local

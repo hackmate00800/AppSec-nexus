@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
@@ -33,13 +33,37 @@ import {
   Cpu
 } from "lucide-react";
 import "./App.css";
-import { AnalyticsDashboard } from "./Analytics";
-import { MentorChat } from "./MentorChat";
-import { HostMobileAudit } from "./HostMobileAudit";
-import { CyberAcademy } from "./academy/CyberAcademy";
-import { OrchestrationHub } from "./orchestration/OrchestrationHub";
 import { Target, ToolInfo, PluginInfo, FeedUpdateResult, Finding, ScanResult, FindingStatus, DiscoveredEndpoint, ModelPullProgress } from "./types";
 
+// High-Performance Code-Splitting for Low-Spec PCs:
+// Defer loading heavy components until the user switches to their respective tabs
+const AnalyticsDashboard = lazy(() =>
+  import("./Analytics").then((m) => ({ default: m.AnalyticsDashboard }))
+);
+const MentorChat = lazy(() =>
+  import("./MentorChat").then((m) => ({ default: m.MentorChat }))
+);
+const HostMobileAudit = lazy(() =>
+  import("./HostMobileAudit").then((m) => ({ default: m.HostMobileAudit }))
+);
+const CyberAcademy = lazy(() =>
+  import("./academy/CyberAcademy").then((m) => ({ default: m.CyberAcademy }))
+);
+const OrchestrationHub = lazy(() =>
+  import("./orchestration/OrchestrationHub").then((m) => ({ default: m.OrchestrationHub }))
+);
+
+const TabLoadingSkeleton: React.FC = () => (
+  <div style={{ padding: "24px 0", display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={{ height: 38, width: "35%", background: "rgba(255, 255, 255, 0.05)", borderRadius: 8, animation: "pulse 1.5s infinite" }} />
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
+      <div style={{ height: 100, background: "rgba(255, 255, 255, 0.04)", borderRadius: 8 }} />
+      <div style={{ height: 100, background: "rgba(255, 255, 255, 0.04)", borderRadius: 8 }} />
+      <div style={{ height: 100, background: "rgba(255, 255, 255, 0.04)", borderRadius: 8 }} />
+    </div>
+    <div style={{ height: 280, background: "rgba(255, 255, 255, 0.03)", borderRadius: 8 }} />
+  </div>
+);
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<
@@ -585,42 +609,65 @@ export default function App() {
     setSelectedFinding(finding);
   }
 
-  // Filtered Findings
-  const filteredFindings = findings.filter((f) => {
-    if (findingSeverityFilter !== "ALL" && f.severity !== findingSeverityFilter) {
-      return false;
-    }
-    if (findingStatusFilter !== "ALL" && f.status !== findingStatusFilter) {
-      return false;
-    }
-    if (findingSearchQuery.trim()) {
-      const q = findingSearchQuery.toLowerCase();
-      const matchTitle = f.title.toLowerCase().includes(q);
-      const matchAsset = f.affected_asset.toLowerCase().includes(q);
-      const matchTool = f.source_tool.toLowerCase().includes(q);
-      const matchCwe = (f.cwe || "").toLowerCase().includes(q);
-      return matchTitle || matchAsset || matchTool || matchCwe;
-    }
-    return true;
-  });
+  // High-Performance Single-Pass DSA Filtering & Severity Calculation (O(N) single pass instead of 6 separate scans)
+  const { filteredFindings, critCount, highCount, medCount, lowCount, infoCount } = useMemo(() => {
+    let crit = 0, high = 0, med = 0, low = 0, info = 0;
+    const filtered: Finding[] = [];
+    const q = findingSearchQuery.trim().toLowerCase();
 
-  // Filtered Endpoints
-  const filteredEndpoints = endpoints.filter((ep) => {
-    if (!crawlFilter.trim()) return true;
+    for (let i = 0; i < findings.length; i++) {
+      const f = findings[i];
+
+      // Tally severity counts in same single pass
+      switch (f.severity) {
+        case "Critical": crit++; break;
+        case "High": high++; break;
+        case "Medium": med++; break;
+        case "Low": low++; break;
+        case "Info": info++; break;
+      }
+
+      // Filter checks
+      if (findingSeverityFilter !== "ALL" && f.severity !== findingSeverityFilter) continue;
+      if (findingStatusFilter !== "ALL" && f.status !== findingStatusFilter) continue;
+      if (q) {
+        const matchTitle = f.title.toLowerCase().includes(q);
+        const matchAsset = f.affected_asset.toLowerCase().includes(q);
+        const matchTool = f.source_tool.toLowerCase().includes(q);
+        const matchCwe = (f.cwe || "").toLowerCase().includes(q);
+        if (!matchTitle && !matchAsset && !matchTool && !matchCwe) continue;
+      }
+      filtered.push(f);
+    }
+
+    return {
+      filteredFindings: filtered,
+      critCount: crit,
+      highCount: high,
+      medCount: med,
+      lowCount: low,
+      infoCount: info,
+    };
+  }, [findings, findingSeverityFilter, findingStatusFilter, findingSearchQuery]);
+
+  // Memoized Filtered Endpoints
+  const filteredEndpoints = useMemo(() => {
+    if (!crawlFilter.trim()) return endpoints;
     const q = crawlFilter.toLowerCase();
-    return (
+    return endpoints.filter((ep) =>
       ep.url.toLowerCase().includes(q) ||
       ep.method.toLowerCase().includes(q) ||
       ep.source.toLowerCase().includes(q)
     );
-  });
+  }, [endpoints, crawlFilter]);
 
-  // Severity Counts
-  const critCount = findings.filter((f) => f.severity === "Critical").length;
-  const highCount = findings.filter((f) => f.severity === "High").length;
-  const medCount = findings.filter((f) => f.severity === "Medium").length;
-  const lowCount = findings.filter((f) => f.severity === "Low").length;
-  const infoCount = findings.filter((f) => f.severity === "Info").length;
+  // Memoized Ready Tools Count
+  const readyToolsCount = useMemo(() => {
+    return (
+      tools.filter((t) => t.is_available).length +
+      plugins.filter((p) => p.is_available).length
+    );
+  }, [tools, plugins]);
 
   return (
     <div className="app-container">
@@ -716,7 +763,7 @@ export default function App() {
             onClick={() => setActiveTab("tools")}
           >
             <Layers size={18} />
-            <span>Tools & Plugins ({tools.filter((t) => t.is_available).length + plugins.filter((p) => p.is_available).length} Ready)</span>
+            <span>Tools & Plugins ({readyToolsCount} Ready)</span>
           </div>
 
           <div
@@ -788,24 +835,26 @@ export default function App() {
         <main className="workspace">
           {/* TAB 0: SECURITY ANALYTICS */}
           {activeTab === "analytics" && (
-            <AnalyticsDashboard
-              targets={targets}
-              selectedTarget={selectedTarget}
-              onSelectTarget={(t) => setSelectedTarget(t)}
-              findings={findings}
-              endpoints={endpoints}
-              scanHistory={scanHistory}
-              onNavigateTab={(tab, filterSeverity) => {
-                if (filterSeverity) {
-                  setFindingSeverityFilter(filterSeverity);
-                }
-                setActiveTab(tab);
-              }}
-              onQuickScan={(toolId) => {
-                handleRunScan(toolId);
-              }}
-              isScanning={isScanning}
-            />
+            <Suspense fallback={<TabLoadingSkeleton />}>
+              <AnalyticsDashboard
+                targets={targets}
+                selectedTarget={selectedTarget}
+                onSelectTarget={(t) => setSelectedTarget(t)}
+                findings={findings}
+                endpoints={endpoints}
+                scanHistory={scanHistory}
+                onNavigateTab={(tab, filterSeverity) => {
+                  if (filterSeverity) {
+                    setFindingSeverityFilter(filterSeverity);
+                  }
+                  setActiveTab(tab);
+                }}
+                onQuickScan={(toolId) => {
+                  handleRunScan(toolId);
+                }}
+                isScanning={isScanning}
+              />
+            </Suspense>
           )}
 
           {/* TAB 1: TARGETS & SCOPE */}
@@ -911,15 +960,17 @@ export default function App() {
 
           {/* TAB: UNIVERSAL TOOL & EXTENSION ORCHESTRATION */}
           {activeTab === "orchestration" && (
-            <OrchestrationHub
-              targets={targets}
-              selectedTargetId={selectedTarget?.id || (targets[0]?.id ?? "")}
-              onSelectTarget={(id) => {
-                const found = targets.find((t) => t.id === id);
-                if (found) setSelectedTarget(found);
-              }}
-              onNavigateToFindings={() => setActiveTab("findings")}
-            />
+            <Suspense fallback={<TabLoadingSkeleton />}>
+              <OrchestrationHub
+                targets={targets}
+                selectedTargetId={selectedTarget?.id || (targets[0]?.id ?? "")}
+                onSelectTarget={(id) => {
+                  const found = targets.find((t) => t.id === id);
+                  if (found) setSelectedTarget(found);
+                }}
+                onNavigateToFindings={() => setActiveTab("findings")}
+              />
+            </Suspense>
           )}
 
           {/* TAB 2: TOOL HUB */}
@@ -2316,29 +2367,33 @@ export default function App() {
 
               {/* Interactive AI Mentor Chat & Flowchart Engine */}
               <div style={{ marginTop: "16px" }}>
-                <MentorChat
-                  selectedFinding={selectedFinding}
-                  selectedModel={selectedModel}
-                  aiMode={aiMode}
-                  aiAvailable={aiAvailable}
-                  onSelectFinding={setSelectedFinding}
-                />
+                <Suspense fallback={<TabLoadingSkeleton />}>
+                  <MentorChat
+                    selectedFinding={selectedFinding}
+                    selectedModel={selectedModel}
+                    aiMode={aiMode}
+                    aiAvailable={aiAvailable}
+                    onSelectFinding={setSelectedFinding}
+                  />
+                </Suspense>
               </div>
             </div>
           )}
 
           {/* TAB: HOST & MOBILE SECURITY AUDITOR */}
           {activeTab === "hostmobile" && (
-            <HostMobileAudit
-              targetId={selectedTarget?.id || "local-host"}
-              onFindingsAdded={(newF) => {
-                setFindings((prev) => [...newF, ...prev]);
-              }}
-              onNavigateFinding={(f) => {
-                setSelectedFinding(f);
-                setActiveTab("mentor");
-              }}
-            />
+            <Suspense fallback={<TabLoadingSkeleton />}>
+              <HostMobileAudit
+                targetId={selectedTarget?.id || "local-host"}
+                onFindingsAdded={(newF) => {
+                  setFindings((prev) => [...newF, ...prev]);
+                }}
+                onNavigateFinding={(f) => {
+                  setSelectedFinding(f);
+                  setActiveTab("mentor");
+                }}
+              />
+            </Suspense>
           )}
 
           {/* TAB 8: AUDIT & SCAN HISTORY */}
@@ -2397,15 +2452,17 @@ export default function App() {
 
           {/* TAB 8: CYBER ACADEMY & FOUNDATIONS */}
           {activeTab === "academy" && (
-            <CyberAcademy
-              onNavigateScanner={(toolId) => {
-                setActiveTool(toolId);
-                setActiveTab("scanner");
-              }}
-              onOpenAiMentor={() => {
-                setActiveTab("mentor");
-              }}
-            />
+            <Suspense fallback={<TabLoadingSkeleton />}>
+              <CyberAcademy
+                onNavigateScanner={(toolId) => {
+                  setActiveTool(toolId);
+                  setActiveTab("scanner");
+                }}
+                onOpenAiMentor={() => {
+                  setActiveTab("mentor");
+                }}
+              />
+            </Suspense>
           )}
         </main>
 
@@ -2444,13 +2501,15 @@ export default function App() {
 
             {/* Interactive Mentor Chat with Asking Box & Flowchart inside Drawer */}
             <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-              <MentorChat
-                selectedFinding={selectedFinding}
-                selectedModel={selectedModel}
-                aiMode={aiMode}
-                aiAvailable={aiAvailable}
-                onSelectFinding={setSelectedFinding}
-              />
+              <Suspense fallback={<TabLoadingSkeleton />}>
+                <MentorChat
+                  selectedFinding={selectedFinding}
+                  selectedModel={selectedModel}
+                  aiMode={aiMode}
+                  aiAvailable={aiAvailable}
+                  onSelectFinding={setSelectedFinding}
+                />
+              </Suspense>
             </div>
           </aside>
         )}
