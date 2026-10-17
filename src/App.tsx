@@ -29,16 +29,18 @@ import {
   BookOpen,
   GraduationCap,
   Copy,
-  Check
+  Check,
+  Activity
 } from "lucide-react";
 import "./App.css";
+import { AnalyticsDashboard } from "./Analytics";
 import { Target, ToolInfo, PluginInfo, FeedUpdateResult, Finding, ScanResult, FindingStatus, DiscoveredEndpoint, ModelPullProgress } from "./types";
 
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<
-    "targets" | "tools" | "crawler" | "scanner" | "findings" | "importer" | "mentor" | "history" | "academy"
-  >("targets");
+    "analytics" | "targets" | "tools" | "crawler" | "scanner" | "findings" | "importer" | "mentor" | "history" | "academy"
+  >("analytics");
   const [academyTab, setAcademyTab] = useState<"cyber" | "networking" | "linux" | "windows" | "differences" | "scenarios" | "commands">("cyber");
   const [copiedCmd, setCopiedCmd] = useState<string>("");
 
@@ -722,6 +724,14 @@ export default function App() {
         {/* Navigation Sidebar */}
         <aside className="sidebar">
           <div
+            className={`nav-item ${activeTab === "analytics" ? "active" : ""}`}
+            onClick={() => setActiveTab("analytics")}
+          >
+            <Activity size={18} color={activeTab === "analytics" ? "var(--accent-cyan)" : undefined} />
+            <span>Security Analytics</span>
+          </div>
+
+          <div
             className={`nav-item ${activeTab === "targets" ? "active" : ""}`}
             onClick={() => setActiveTab("targets")}
           >
@@ -796,6 +806,28 @@ export default function App() {
 
         {/* Center Workspace */}
         <main className="workspace">
+          {/* TAB 0: SECURITY ANALYTICS */}
+          {activeTab === "analytics" && (
+            <AnalyticsDashboard
+              targets={targets}
+              selectedTarget={selectedTarget}
+              onSelectTarget={(t) => setSelectedTarget(t)}
+              findings={findings}
+              endpoints={endpoints}
+              scanHistory={scanHistory}
+              onNavigateTab={(tab, filterSeverity) => {
+                if (filterSeverity) {
+                  setFindingSeverityFilter(filterSeverity);
+                }
+                setActiveTab(tab);
+              }}
+              onQuickScan={(toolId) => {
+                handleRunScan(toolId);
+              }}
+              isScanning={isScanning}
+            />
+          )}
+
           {/* TAB 1: TARGETS & SCOPE */}
           {activeTab === "targets" && (
             <div>

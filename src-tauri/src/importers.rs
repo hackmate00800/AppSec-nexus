@@ -113,6 +113,7 @@ impl ReportImporter {
                 .unwrap_or_default();
 
             let severity = match sev_str.as_str() {
+                "critical" => FindingSeverity::Critical,
                 "high" => FindingSeverity::High,
                 "medium" => FindingSeverity::Medium,
                 "low" => FindingSeverity::Low,
@@ -172,21 +173,56 @@ impl ReportImporter {
     }
 
     fn parse_generic_json(target_id: &str, content: &str) -> Result<Vec<Finding>, String> {
-        let val: Value = serde_json::from_str(content)
-            .map_err(|e| format!("Invalid JSON: {}", e))?;
-
-        let array = if let Some(arr) = val.as_array() {
-            arr
-        } else if let Some(arr) = val.get("findings").and_then(|f| f.as_array()) {
-            arr
-        } else {
-            return Err("Expected JSON array of findings or object with 'findings' key".to_string());
-        };
-
         let mut findings = Vec::new();
-        for item in array {
-            let title = item["title"].as_str().unwrap_or("Imported Finding").to_string();
-            let sev_str = item["severity"].as_str().unwrap_or("Info");
+
+        // 1. First try parsing as a single standard JSON array or { "findings": [...] }
+        if let Ok(val) = serde_json::from_str::<Value>(content) {
+            let array_opt = if let Some(arr) = val.as_array() {
+                Some(arr.clone())
+            } else if let Some(arr) = val.get("findings").and_then(|f| f.as_array()) {
+                Some(arr.clone())
+            } else {
+                None
+            };
+
+            if let Some(array) = array_opt {
+                for item in array {
+                    Self::extract_single_json_finding(target_id, &item, &mut findings);
+                }
+                if !findings.is_empty() {
+                    return Ok(findings);
+                }
+            }
+        }
+
+        // 2. Fallback: Parse line-by-line JSON (JSONL format, e.g. Nuclei, Trivy, Semgrep outputs)
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            if let Ok(item) = serde_json::from_str::<Value>(trimmed) {
+                Self::extract_single_json_finding(target_id, &item, &mut findings);
+            }
+        }
+
+        if findings.is_empty() {
+            return Err("Expected JSON array of findings, object with 'findings' key, or line-delimited JSON (JSONL)".to_string());
+        }
+
+        Ok(findings)
+    }
+
+    fn extract_single_json_finding(target_id: &str, item: &Value, findings: &mut Vec<Finding>) {
+        // Detect Nuclei JSON structure: { "template-id": "...", "info": { "name": "...", "severity": "..." } }
+        if let Some(info) = item.get("info") {
+            let title = info["name"]
+                .as_str()
+                .or_else(|| item["template-id"].as_str())
+                .unwrap_or("Nuclei Security Finding")
+                .to_string();
+
+            let sev_str = info["severity"].as_str().unwrap_or("info");
             let severity = match sev_str.to_lowercase().as_str() {
                 "critical" => FindingSeverity::Critical,
                 "high" => FindingSeverity::High,
@@ -194,28 +230,87 @@ impl ReportImporter {
                 "low" => FindingSeverity::Low,
                 _ => FindingSeverity::Info,
             };
-            let asset = item["affected_asset"].as_str().unwrap_or("").to_string();
-            let evidence = item["evidence"].as_str().unwrap_or("").to_string();
-            let tool = item["source_tool"].as_str().unwrap_or("External").to_string();
-            let ver = item["tool_version"].as_str().unwrap_or("1.0").to_string();
-            let cwe = item["cwe"].as_str().map(|s| s.to_string());
-            let rem = item["remediation"].as_str().unwrap_or("Review and remediate.").to_string();
+
+            let asset = item["matched-at"]
+                .as_str()
+                .or_else(|| item["host"].as_str())
+                .unwrap_or("")
+                .to_string();
+
+            let extracted_results = item["extracted-results"]
+                .as_array()
+                .map(|a| a.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(", "))
+                .unwrap_or_default();
+
+            let description = info["description"].as_str().unwrap_or("");
+            let evidence = if extracted_results.is_empty() {
+                description.to_string()
+            } else {
+                format!("{}\n\nExtracted: {}", description, extracted_results)
+            };
+
+            let cwe = info.get("classification")
+                .and_then(|c| c.get("cwe-id"))
+                .and_then(|cwe_val| {
+                    if let Some(s) = cwe_val.as_str() {
+                        Some(s.to_string())
+                    } else if let Some(arr) = cwe_val.as_array() {
+                        arr.first().and_then(|v| v.as_str()).map(|s| s.to_string())
+                    } else {
+                        None
+                    }
+                });
+
+            let remediation = info["remediation"]
+                .as_str()
+                .or_else(|| info.get("reference").and_then(|r| r.as_array()).and_then(|a| a.first()).and_then(|v| v.as_str()))
+                .unwrap_or("Apply security patch and follow vendor recommendations.")
+                .to_string();
 
             findings.push(Finding::new(
                 target_id.to_string(),
                 title,
                 severity,
-                85,
+                90,
                 asset,
                 evidence,
-                tool,
-                ver,
+                "Nuclei (Imported)".to_string(),
+                "3.x".to_string(),
                 cwe,
-                rem,
+                remediation,
             ));
+            return;
         }
 
-        Ok(findings)
+        // Standard Generic AppSec Nexus JSON Finding
+        let title = item["title"].as_str().unwrap_or("Imported Finding").to_string();
+        let sev_str = item["severity"].as_str().unwrap_or("Info");
+        let severity = match sev_str.to_lowercase().as_str() {
+            "critical" => FindingSeverity::Critical,
+            "high" => FindingSeverity::High,
+            "medium" => FindingSeverity::Medium,
+            "low" => FindingSeverity::Low,
+            _ => FindingSeverity::Info,
+        };
+        let asset = item["affected_asset"].as_str().unwrap_or("").to_string();
+        let evidence = item["evidence"].as_str().unwrap_or("").to_string();
+        let tool = item["source_tool"].as_str().unwrap_or("External").to_string();
+        let ver = item["tool_version"].as_str().unwrap_or("1.0").to_string();
+        let cwe = item["cwe"].as_str().map(|s| s.to_string());
+        let rem = item["remediation"].as_str().unwrap_or("Review and remediate.").to_string();
+
+        findings.push(Finding::new(
+            target_id.to_string(),
+            title,
+            severity,
+            85,
+            asset,
+            evidence,
+            tool,
+            ver,
+            cwe,
+            rem,
+        ));
     }
 }
 

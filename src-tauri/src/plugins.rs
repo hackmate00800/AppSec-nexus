@@ -76,6 +76,46 @@ fn find_executable(plugin_dir: &Path, exe: &str) -> Option<PathBuf> {
     None
 }
 
+fn find_python_executable() -> String {
+    let candidates = [
+        r"C:\Python314\python.exe",
+        r"C:\Python313\python.exe",
+        r"C:\Python312\python.exe",
+        r"C:\Python311\python.exe",
+        r"C:\Python310\python.exe",
+    ];
+    for c in &candidates {
+        if Path::new(c).exists() {
+            return c.to_string();
+        }
+    }
+    if let Ok(local) = std::env::var("LOCALAPPDATA") {
+        let p = PathBuf::from(local).join("Programs").join("Python");
+        if let Ok(entries) = std::fs::read_dir(&p) {
+            for entry in entries.flatten() {
+                let exe = entry.path().join("python.exe");
+                if exe.exists() {
+                    return exe.to_string_lossy().to_string();
+                }
+            }
+        }
+    }
+    "python".to_string()
+}
+
+fn find_node_executable() -> String {
+    let candidates = [
+        r"C:\Program Files\nodejs\node.exe",
+        r"C:\Program Files (x86)\nodejs\node.exe",
+    ];
+    for c in &candidates {
+        if Path::new(c).exists() {
+            return c.to_string();
+        }
+    }
+    "node".to_string()
+}
+
 impl PluginManager {
     pub fn new(plugins_dir: PathBuf) -> Self {
         Self { plugins_dir }
@@ -177,17 +217,14 @@ impl PluginManager {
 
         let mut cmd = match plugin.runtime.to_lowercase().as_str() {
             "python" | "python3" => {
-                let python_bin = if Path::new(r"C:\Python314\python.exe").exists() {
-                    r"C:\Python314\python.exe"
-                } else {
-                    "python"
-                };
+                let python_bin = find_python_executable();
                 let mut c = Command::new(python_bin);
                 c.arg(&resolved_exe).arg(target_url);
                 c
             }
             "node" => {
-                let mut c = Command::new("node");
+                let node_bin = find_node_executable();
+                let mut c = Command::new(node_bin);
                 c.arg(&resolved_exe).arg(target_url);
                 c
             }

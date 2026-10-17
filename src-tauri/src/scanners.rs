@@ -87,10 +87,93 @@ impl BaselineScanner {
             ));
         }
 
-        // 5. Inspect Cookies for Security Flags
+        // 5. Check Referrer-Policy
+        if !headers.contains_key("referrer-policy") {
+            findings.push(Finding::new(
+                target_id.to_string(),
+                "Missing Referrer-Policy Header".to_string(),
+                FindingSeverity::Low,
+                90,
+                url.to_string(),
+                "No Referrer-Policy HTTP header configured; sensitive URL query parameters may leak to external referrers.".to_string(),
+                "BaselineScanner".to_string(),
+                "1.0.0".to_string(),
+                Some("CWE-116".to_string()),
+                "Configure 'Referrer-Policy: strict-origin-when-cross-origin' or 'no-referrer'.".to_string(),
+            ));
+        }
+
+        // 6. Check Permissions-Policy
+        if !headers.contains_key("permissions-policy") && !headers.contains_key("feature-policy") {
+            findings.push(Finding::new(
+                target_id.to_string(),
+                "Missing Permissions-Policy Header".to_string(),
+                FindingSeverity::Low,
+                85,
+                url.to_string(),
+                "Browser device features (camera, microphone, geolocation) are not explicitly restricted.".to_string(),
+                "BaselineScanner".to_string(),
+                "1.0.0".to_string(),
+                Some("CWE-693".to_string()),
+                "Add 'Permissions-Policy: camera=(), microphone=(), geolocation=()' to restrict browser APIs.".to_string(),
+            ));
+        }
+
+        // 7. Check Server Banner & Tech Stack Disclosure
+        if let Some(srv) = headers.get("server").and_then(|v| v.to_str().ok()) {
+            if srv.contains('/') || srv.chars().any(|c| c.is_ascii_digit()) {
+                findings.push(Finding::new(
+                    target_id.to_string(),
+                    format!("Information Disclosure: Detailed Server Banner ({})", srv),
+                    FindingSeverity::Low,
+                    100,
+                    url.to_string(),
+                    format!("Server header exposes exact software and version: '{}'", srv),
+                    "BaselineScanner".to_string(),
+                    "1.0.0".to_string(),
+                    Some("CWE-200".to_string()),
+                    "Disable detailed server tokens in web server config (e.g. 'ServerTokens Prod' in Apache or 'server_tokens off;' in Nginx).".to_string(),
+                ));
+            }
+        }
+
+        if let Some(powered_by) = headers.get("x-powered-by").and_then(|v| v.to_str().ok()) {
+            findings.push(Finding::new(
+                target_id.to_string(),
+                format!("Information Disclosure: X-Powered-By Banner ({})", powered_by),
+                FindingSeverity::Low,
+                100,
+                url.to_string(),
+                format!("Backend technology exposed in X-Powered-By header: '{}'", powered_by),
+                "BaselineScanner".to_string(),
+                "1.0.0".to_string(),
+                Some("CWE-200".to_string()),
+                "Remove the X-Powered-By header in application framework settings.".to_string(),
+            ));
+        }
+
+        // 8. Check Insecure CORS Configuration
+        if let Some(cors) = headers.get("access-control-allow-origin").and_then(|v| v.to_str().ok()) {
+            if cors == "*" {
+                findings.push(Finding::new(
+                    target_id.to_string(),
+                    "Overly Permissive CORS (Access-Control-Allow-Origin: *)".to_string(),
+                    FindingSeverity::Medium,
+                    95,
+                    url.to_string(),
+                    "The resource allows cross-origin requests from any arbitrary domain ('*').".to_string(),
+                    "BaselineScanner".to_string(),
+                    "1.0.0".to_string(),
+                    Some("CWE-942".to_string()),
+                    "Restrict Access-Control-Allow-Origin to trusted explicit origins rather than wildcard '*'.".to_string(),
+                ));
+            }
+        }
+
+        // 9. Inspect Cookies for Security Flags (HttpOnly, Secure, SameSite)
         Self::check_cookies(target_id, url, headers, &mut findings);
 
-        // 6. Check robots.txt presence
+        // 10. Check robots.txt presence
         if let Ok(base_url) = url::Url::parse(url) {
             if let Ok(robots_url) = base_url.join("/robots.txt") {
                 if let Ok(r_resp) = client.get(robots_url.as_str()).send().await {
@@ -157,6 +240,21 @@ impl BaselineScanner {
                         "1.0.0".to_string(),
                         Some("CWE-614".to_string()),
                         "Set the 'Secure' flag to ensure the cookie is only transmitted over encrypted TLS connections.".to_string(),
+                    ));
+                }
+
+                if !lower.contains("samesite") {
+                    findings.push(Finding::new(
+                        target_id.to_string(),
+                        "Cookie Missing SameSite Attribute (CSRF Risk)".to_string(),
+                        FindingSeverity::Low,
+                        90,
+                        url.to_string(),
+                        format!("Cookie set without SameSite attribute: {}", cookie_str),
+                        "BaselineScanner".to_string(),
+                        "1.0.0".to_string(),
+                        Some("CWE-1275".to_string()),
+                        "Set 'SameSite=Lax' or 'SameSite=Strict' on cookies to protect against Cross-Site Request Forgery (CSRF).".to_string(),
                     ));
                 }
             }

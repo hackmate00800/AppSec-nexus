@@ -190,7 +190,9 @@ impl Crawler {
     ) {
         let probes = vec![
             ("/.git/HEAD", "Exposed Git Repository", FindingSeverity::High, "ref: refs/"),
-            ("/.env", "Exposed Environment Configuration (.env)", FindingSeverity::Critical, "="),
+            ("/.git/config", "Exposed Git Configuration", FindingSeverity::High, "repositoryformatversion"),
+            ("/.env", "Exposed Environment Configuration (.env)", FindingSeverity::Critical, "KEY="),
+            ("/actuator/health", "Spring Boot Actuator Health Exposed", FindingSeverity::Low, "\"status\""),
             ("/.well-known/security.txt", "Security Disclosure Policy Present", FindingSeverity::Info, "Contact:"),
             ("/sitemap.xml", "Sitemap Discovered", FindingSeverity::Info, "<urlset"),
         ];
@@ -206,7 +208,21 @@ impl Crawler {
                     let status = resp.status().as_u16();
                     if resp.status().is_success() {
                         let text = resp.text().await.unwrap_or_default();
-                        if text.contains(indicator) {
+                        let text_lower = text.to_lowercase();
+
+                        // Soft-404 rejection: if probing .git or .env and received an HTML document, skip as false positive!
+                        if (path.starts_with("/.git") || path == "/.env") && (text_lower.contains("<!doctype html") || text_lower.contains("<html")) {
+                            continue;
+                        }
+
+                        // Specific checks for .env
+                        let matches_indicator = if path == "/.env" {
+                            text.contains("DB_") || text.contains("APP_") || text.contains("SECRET=") || text.contains("PASSWORD=") || text.contains("API_KEY=") || text.contains("PORT=")
+                        } else {
+                            text.contains(indicator)
+                        };
+
+                        if matches_indicator {
                             endpoints.push(DiscoveredEndpoint {
                                 id: Uuid::new_v4().to_string(),
                                 target_id: target_id.to_string(),
@@ -229,7 +245,7 @@ impl Crawler {
                                     "AppSec Crawler".to_string(),
                                     "1.0.0".to_string(),
                                     Some("CWE-538".to_string()),
-                                    "Immediately restrict public HTTP access to administrative and VCS files via web server configuration.".to_string(),
+                                    "Immediately restrict public HTTP access to administrative, environment, and VCS files via web server configuration.".to_string(),
                                 ));
                             }
                         }
