@@ -29,19 +29,21 @@ import {
   BookOpen,
   GraduationCap,
   Activity,
-  Monitor
+  Monitor,
+  Cpu
 } from "lucide-react";
 import "./App.css";
 import { AnalyticsDashboard } from "./Analytics";
 import { MentorChat } from "./MentorChat";
 import { HostMobileAudit } from "./HostMobileAudit";
 import { CyberAcademy } from "./academy/CyberAcademy";
+import { OrchestrationHub } from "./orchestration/OrchestrationHub";
 import { Target, ToolInfo, PluginInfo, FeedUpdateResult, Finding, ScanResult, FindingStatus, DiscoveredEndpoint, ModelPullProgress } from "./types";
 
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<
-    "analytics" | "targets" | "tools" | "crawler" | "scanner" | "findings" | "importer" | "mentor" | "history" | "academy" | "hostmobile"
+    "analytics" | "targets" | "orchestration" | "tools" | "crawler" | "scanner" | "findings" | "importer" | "mentor" | "history" | "academy" | "hostmobile"
   >("analytics");
 
   const [targets, setTargets] = useState<Target[]>([]);
@@ -702,6 +704,14 @@ export default function App() {
           </div>
 
           <div
+            className={`nav-item ${activeTab === "orchestration" ? "active" : ""}`}
+            onClick={() => setActiveTab("orchestration")}
+          >
+            <Cpu size={18} color={activeTab === "orchestration" ? "var(--accent-cyan)" : undefined} />
+            <span>Universal Orchestration</span>
+          </div>
+
+          <div
             className={`nav-item ${activeTab === "tools" ? "active" : ""}`}
             onClick={() => setActiveTab("tools")}
           >
@@ -897,6 +907,19 @@ export default function App() {
                 )}
               </div>
             </div>
+          )}
+
+          {/* TAB: UNIVERSAL TOOL & EXTENSION ORCHESTRATION */}
+          {activeTab === "orchestration" && (
+            <OrchestrationHub
+              targets={targets}
+              selectedTargetId={selectedTarget?.id || (targets[0]?.id ?? "")}
+              onSelectTarget={(id) => {
+                const found = targets.find((t) => t.id === id);
+                if (found) setSelectedTarget(found);
+              }}
+              onNavigateToFindings={() => setActiveTab("findings")}
+            />
           )}
 
           {/* TAB 2: TOOL HUB */}

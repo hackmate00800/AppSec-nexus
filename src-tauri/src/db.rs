@@ -74,6 +74,55 @@ impl Database {
             [],
         )?;
 
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS tool_path_overrides (
+                tool_id TEXT PRIMARY KEY,
+                custom_path TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+            [],
+        )?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS workflow_definitions (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                category TEXT NOT NULL,
+                definition_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+            [],
+        )?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS orchestration_jobs (
+                id TEXT PRIMARY KEY,
+                workflow_id TEXT NOT NULL,
+                workflow_name TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                target_url TEXT NOT NULL,
+                status TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                finished_at TEXT,
+                duration_ms INTEGER NOT NULL,
+                total_findings INTEGER NOT NULL,
+                logs_json TEXT NOT NULL
+            )",
+            [],
+        )?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS extension_registrations (
+                id TEXT PRIMARY KEY,
+                manifest_json TEXT NOT NULL,
+                state TEXT NOT NULL,
+                installed_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+            [],
+        )?;
+
         Ok(Self {
             conn: Mutex::new(conn),
         })
@@ -323,5 +372,40 @@ impl Database {
         }
         Ok(endpoints)
     }
+
+    pub fn save_tool_path_override(&self, tool_id: &str, custom_path: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let now = chrono::Utc::now().to_rfc3339();
+        conn.execute(
+            "INSERT OR REPLACE INTO tool_path_overrides (tool_id, custom_path, updated_at) VALUES (?1, ?2, ?3)",
+            params![tool_id, custom_path, now],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_tool_path_overrides(&self) -> Result<std::collections::HashMap<String, String>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare("SELECT tool_id, custom_path FROM tool_path_overrides")?;
+        let rows = stmt.query_map([], |row| {
+            let id: String = row.get(0)?;
+            let path: String = row.get(1)?;
+            Ok((id, path))
+        })?;
+
+        let mut map = std::collections::HashMap::new();
+        for r in rows {
+            if let Ok((id, path)) = r {
+                map.insert(id, path);
+            }
+        }
+        Ok(map)
+    }
+
+    pub fn delete_tool_path_override(&self, tool_id: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute("DELETE FROM tool_path_overrides WHERE tool_id = ?1", params![tool_id])?;
+        Ok(())
+    }
 }
+
 

@@ -1,10 +1,13 @@
+pub mod adapters;
 pub mod ai;
 pub mod android_audit;
 pub mod crawler;
 pub mod db;
+pub mod extensions;
 pub mod feeds;
 pub mod importers;
 pub mod models;
+pub mod orchestration;
 pub mod plugins;
 pub mod reports;
 pub mod scanners;
@@ -19,6 +22,7 @@ use models::{DiscoveredEndpoint, FeedUpdateResult, Finding, PluginInfo, ScopeCon
 use plugins::PluginManager;
 use scanners::BaselineScanner;
 use scope::ScopeValidator;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::State;
@@ -31,6 +35,9 @@ pub struct AppState {
     plugin_mgr: PluginManager,
     feed_mgr: ThreatFeedManager,
     ai_mentor: AiMentor,
+    adapter_registry: Arc<adapters::AdapterRegistry>,
+    extension_engine: Arc<extensions::ExtensionEngine>,
+    job_manager: Arc<orchestration::JobManager>,
 }
 
 #[tauri::command]
@@ -413,6 +420,171 @@ fn import_external_report(
     Ok(count)
 }
 
+// -------------------------------------------------------------
+// UNIVERSAL TOOL ADAPTER COMMANDS
+// -------------------------------------------------------------
+
+#[tauri::command]
+fn get_tool_adapters(state: State<'_, AppState>) -> Vec<adapters::ToolAdapterMetadata> {
+    state.adapter_registry.list_adapters()
+}
+
+#[tauri::command]
+fn set_tool_path_override(
+    state: State<'_, AppState>,
+    tool_id: String,
+    custom_path: String,
+) -> Result<(), String> {
+    let _ = state.db.save_tool_path_override(&tool_id, &custom_path);
+    state.adapter_registry.set_custom_path(tool_id, custom_path);
+    Ok(())
+}
+
+#[tauri::command]
+async fn run_tool_health_check(
+    state: State<'_, AppState>,
+    tool_id: String,
+) -> Result<adapters::ToolHealthCheckResult, String> {
+    state.adapter_registry.health_check(&tool_id).await
+}
+
+#[tauri::command]
+async fn execute_tool_adapter(
+    state: State<'_, AppState>,
+    tool_id: String,
+    target_id: String,
+    target_url: String,
+    parameters: Option<HashMap<String, String>>,
+) -> Result<adapters::AdapterOutput, String> {
+    let targets = state.db.get_targets().map_err(|e| e.to_string())?;
+    let target = targets
+        .into_iter()
+        .find(|t| t.id == target_id)
+        .ok_or_else(|| "Target not found".to_string())?;
+
+    ScopeValidator::validate_target(&target_url, &target.scope)?;
+
+    let input = adapters::AdapterInput {
+        target_id: target_id.clone(),
+        target_url: target_url.clone(),
+        parameters: parameters.unwrap_or_default(),
+        timeout_seconds: Some(300),
+    };
+
+    let output = state.adapter_registry.execute(&tool_id, input).await?;
+
+    for finding in &output.findings {
+        let _ = state.db.insert_finding(finding);
+    }
+    for ep in &output.endpoints {
+        let _ = state.db.insert_endpoint(ep);
+    }
+
+    Ok(output)
+}
+
+// -------------------------------------------------------------
+// EXTENSION LIFECYCLE COMMANDS (V1)
+// -------------------------------------------------------------
+
+#[tauri::command]
+fn get_extensions_v1(state: State<'_, AppState>) -> Vec<extensions::ExtensionRecord> {
+    state.extension_engine.get_extensions()
+}
+
+#[tauri::command]
+fn set_extension_state(
+    state: State<'_, AppState>,
+    id: String,
+    state_name: String,
+) -> Result<extensions::ExtensionRecord, String> {
+    let new_state = match state_name.to_lowercase().as_str() {
+        "enabled" => extensions::ExtensionLifecycleState::Enabled,
+        "disabled" => extensions::ExtensionLifecycleState::Disabled,
+        "available" => extensions::ExtensionLifecycleState::Available,
+        "removed" => extensions::ExtensionLifecycleState::Removed,
+        _ => return Err(format!("Invalid extension state: {}", state_name)),
+    };
+    state.extension_engine.set_state(&id, new_state)
+}
+
+#[tauri::command]
+fn register_extension_v1(
+    state: State<'_, AppState>,
+    manifest_json: String,
+) -> Result<extensions::ExtensionRecord, String> {
+    state.extension_engine.register_manifest(&manifest_json)
+}
+
+// -------------------------------------------------------------
+// WORKFLOW ORCHESTRATION COMMANDS
+// -------------------------------------------------------------
+
+#[tauri::command]
+fn get_workflows(state: State<'_, AppState>) -> Vec<orchestration::WorkflowDefinition> {
+    state.job_manager.get_workflows()
+}
+
+#[tauri::command]
+fn save_workflow(
+    state: State<'_, AppState>,
+    workflow: orchestration::WorkflowDefinition,
+) -> Result<orchestration::WorkflowDefinition, String> {
+    state.job_manager.save_workflow(workflow)
+}
+
+#[tauri::command]
+fn delete_workflow(state: State<'_, AppState>, workflow_id: String) -> Result<bool, String> {
+    state.job_manager.delete_workflow(&workflow_id)
+}
+
+#[tauri::command]
+async fn start_workflow_job(
+    state: State<'_, AppState>,
+    workflow_id: String,
+    target_id: String,
+) -> Result<orchestration::WorkflowJob, String> {
+    let targets = state.db.get_targets().map_err(|e| e.to_string())?;
+    let target = targets
+        .into_iter()
+        .find(|t| t.id == target_id)
+        .ok_or_else(|| "Target not found".to_string())?;
+
+    ScopeValidator::validate_target(&target.primary_url, &target.scope)?;
+
+    state
+        .job_manager
+        .clone()
+        .start_job(&workflow_id, &target.id, &target.primary_url)
+        .await
+}
+
+#[tauri::command]
+fn get_workflow_jobs(state: State<'_, AppState>) -> Vec<orchestration::WorkflowJob> {
+    state.job_manager.get_jobs()
+}
+
+#[tauri::command]
+fn get_workflow_job(
+    state: State<'_, AppState>,
+    job_id: String,
+) -> Option<orchestration::WorkflowJob> {
+    state.job_manager.get_job(&job_id)
+}
+
+#[tauri::command]
+fn approve_workflow_step(
+    state: State<'_, AppState>,
+    job_id: String,
+    step_id: String,
+) -> Result<bool, String> {
+    state.job_manager.approve_step(&job_id, &step_id)
+}
+
+#[tauri::command]
+fn cancel_workflow_job(state: State<'_, AppState>, job_id: String) -> Result<bool, String> {
+    state.job_manager.cancel_job(&job_id)
+}
 
 fn find_base_dir() -> PathBuf {
     // 1. Check current directory and parents
@@ -566,6 +738,7 @@ pub fn run() {
 
     let tools_bin = base_dir.join("tools").join("bin");
     let plugins_dir = base_dir.join("tools").join("plugins");
+    let extensions_dir = base_dir.join("extensions");
     let db_path = base_dir.join("appsec.db");
 
     let db = match Database::init(&db_path.to_string_lossy()) {
@@ -575,17 +748,33 @@ pub fn run() {
             Database::init(":memory:").expect("Failed to initialize SQLite fallback")
         }
     };
+    let arc_db = Arc::new(db);
     let tool_mgr = ToolManager::new(tools_bin.clone());
     let plugin_mgr = PluginManager::new(plugins_dir);
-    let feed_mgr = ThreatFeedManager::new(tools_bin);
+    let feed_mgr = ThreatFeedManager::new(tools_bin.clone());
     let ai_mentor = AiMentor::new();
 
+    let adapter_registry = Arc::new(adapters::AdapterRegistry::new(tools_bin.clone()));
+    if let Ok(overrides) = arc_db.get_tool_path_overrides() {
+        adapter_registry.load_custom_paths(overrides);
+    }
+
+    let extension_engine = Arc::new(extensions::ExtensionEngine::new(extensions_dir));
+    let job_manager = Arc::new(orchestration::JobManager::new(
+        adapter_registry.clone(),
+        extension_engine.clone(),
+        arc_db.clone(),
+    ));
+
     let state = AppState {
-        db: Arc::new(db),
+        db: arc_db,
         tool_mgr,
         plugin_mgr,
         feed_mgr,
         ai_mentor,
+        adapter_registry,
+        extension_engine,
+        job_manager,
     };
 
     let setup_log = log_file.clone();
@@ -648,7 +837,22 @@ pub fn run() {
             import_external_report,
             chat_with_mentor,
             run_windows_audit,
-            run_android_audit
+            run_android_audit,
+            get_tool_adapters,
+            set_tool_path_override,
+            run_tool_health_check,
+            execute_tool_adapter,
+            get_extensions_v1,
+            set_extension_state,
+            register_extension_v1,
+            get_workflows,
+            save_workflow,
+            delete_workflow,
+            start_workflow_job,
+            get_workflow_jobs,
+            get_workflow_job,
+            approve_workflow_step,
+            cancel_workflow_job
         ]);
 
     let app = match builder.build(tauri::generate_context!()) {
