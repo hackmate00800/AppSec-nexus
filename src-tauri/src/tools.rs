@@ -14,6 +14,37 @@ impl ToolManager {
         Self { bin_dir }
     }
 
+    pub fn find_tool_executable(&self, base_name: &str) -> Option<PathBuf> {
+        let candidates = [
+            self.bin_dir.join(base_name),
+            self.bin_dir.join(format!("{}.exe", base_name)),
+            PathBuf::from(format!("/usr/local/bin/{}", base_name)),
+            PathBuf::from(format!("/usr/bin/{}", base_name)),
+            PathBuf::from(format!("/bin/{}", base_name)),
+        ];
+        for candidate in &candidates {
+            if candidate.exists() {
+                return Some(candidate.clone());
+            }
+        }
+        if let Ok(path_var) = std::env::var("PATH") {
+            for dir in std::env::split_paths(&path_var) {
+                let direct = dir.join(base_name);
+                if direct.exists() {
+                    return Some(direct);
+                }
+                #[cfg(target_os = "windows")]
+                {
+                    let with_exe = dir.join(format!("{}.exe", base_name));
+                    if with_exe.exists() {
+                        return Some(with_exe);
+                    }
+                }
+            }
+        }
+        None
+    }
+
     pub fn get_available_tools(&self) -> Vec<ToolInfo> {
         let mut list = Vec::new();
 
@@ -30,27 +61,27 @@ impl ToolManager {
         });
 
         // 2. Nuclei
-        let nuclei_path = self.bin_dir.join("nuclei.exe");
+        let nuclei_path = self.find_tool_executable("nuclei");
         list.push(ToolInfo {
             id: "nuclei".to_string(),
             name: "ProjectDiscovery Nuclei".to_string(),
             version: "3.11.1".to_string(),
             category: "Vulnerability Scanner".to_string(),
-            is_available: nuclei_path.exists(),
-            path: nuclei_path.to_string_lossy().to_string(),
+            is_available: nuclei_path.is_some(),
+            path: nuclei_path.as_ref().map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|| "nuclei".to_string()),
             description: "Fast template-based vulnerability scanner for CVEs, exposures, and misconfigurations."
                 .to_string(),
         });
 
         // 3. httpx
-        let httpx_path = self.bin_dir.join("httpx.exe");
+        let httpx_path = self.find_tool_executable("httpx");
         list.push(ToolInfo {
             id: "httpx".to_string(),
             name: "ProjectDiscovery httpx".to_string(),
             version: "1.12.0".to_string(),
             category: "Service & Tech Prober".to_string(),
-            is_available: httpx_path.exists(),
-            path: httpx_path.to_string_lossy().to_string(),
+            is_available: httpx_path.is_some(),
+            path: httpx_path.as_ref().map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|| "httpx".to_string()),
             description: "Fast multi-purpose HTTP prober for service reachability, TLS, and tech detection."
                 .to_string(),
         });
@@ -105,16 +136,34 @@ impl ToolManager {
                 }
             }
         }
-        // 2. Check PATH environment
+        // 2. Check standard Linux/Unix binary paths
+        let unix_candidates = [
+            PathBuf::from("/usr/local/bin/ollama"),
+            PathBuf::from("/usr/bin/ollama"),
+            PathBuf::from("/bin/ollama"),
+        ];
+        for candidate in &unix_candidates {
+            if candidate.exists() {
+                return Some(candidate.to_string_lossy().to_string());
+            }
+        }
+        // 3. Check PATH environment
         if let Ok(path) = std::env::var("PATH") {
             for dir in std::env::split_paths(&path) {
-                let candidate = dir.join("ollama.exe");
+                let candidate = dir.join("ollama");
                 if candidate.exists() {
                     return Some(candidate.to_string_lossy().to_string());
                 }
+                #[cfg(target_os = "windows")]
+                {
+                    let cand_exe = dir.join("ollama.exe");
+                    if cand_exe.exists() {
+                        return Some(cand_exe.to_string_lossy().to_string());
+                    }
+                }
             }
         }
-        // 3. Check active Ollama server TCP port 11434
+        // 4. Check active Ollama server TCP port 11434
         if std::net::TcpStream::connect_timeout(
             &std::net::SocketAddr::from(([127, 0, 0, 1], 11434)),
             std::time::Duration::from_millis(300),
@@ -125,23 +174,19 @@ impl ToolManager {
     }
 
     fn find_nmap_path(&self) -> Option<String> {
+        if let Some(p) = self.find_tool_executable("nmap") {
+            return Some(p.to_string_lossy().to_string());
+        }
         let candidates = [
             self.bin_dir.join("nmap").join("nmap-7.92").join("nmap.exe"),
-            self.bin_dir.join("nmap.exe"),
             PathBuf::from(r"C:\Program Files (x86)\Nmap\nmap.exe"),
             PathBuf::from(r"C:\Program Files\Nmap\nmap.exe"),
+            PathBuf::from("/usr/bin/nmap"),
+            PathBuf::from("/usr/local/bin/nmap"),
         ];
         for candidate in &candidates {
             if candidate.exists() {
                 return Some(candidate.to_string_lossy().to_string());
-            }
-        }
-        if let Ok(path_var) = std::env::var("PATH") {
-            for dir in std::env::split_paths(&path_var) {
-                let p = dir.join("nmap.exe");
-                if p.exists() {
-                    return Some(p.to_string_lossy().to_string());
-                }
             }
         }
         None
@@ -160,10 +205,9 @@ impl ToolManager {
 
     pub async fn run_httpx(&self, target_url: &str) -> Result<ScanResult, String> {
         let start = Instant::now();
-        let httpx_path = self.bin_dir.join("httpx.exe");
-        if !httpx_path.exists() {
-            return Err("httpx binary not found in tools/bin".to_string());
-        }
+        let httpx_path = self
+            .find_tool_executable("httpx")
+            .ok_or_else(|| "httpx binary not found in tools/bin or system PATH".to_string())?;
 
         let output = Command::new(&httpx_path)
             .args(&[
@@ -210,10 +254,9 @@ impl ToolManager {
         target_url: &str,
     ) -> Result<(ScanResult, Vec<Finding>), String> {
         let start = Instant::now();
-        let nuclei_path = self.bin_dir.join("nuclei.exe");
-        if !nuclei_path.exists() {
-            return Err("nuclei binary not found in tools/bin".to_string());
-        }
+        let nuclei_path = self
+            .find_tool_executable("nuclei")
+            .ok_or_else(|| "nuclei binary not found in tools/bin or system PATH".to_string())?;
 
         // Run with safe tags by default (misconfig, exposure, info)
         let output = Command::new(&nuclei_path)

@@ -16,10 +16,16 @@ impl ThreatFeedManager {
         let mut nuclei_updated = false;
         let mut nuclei_output = String::new();
 
-        // 1. Update Nuclei Templates via nuclei.exe -update-templates
-        let nuclei_exe = self.tools_bin.join("nuclei.exe");
-        if nuclei_exe.exists() {
-            let mut cmd = Command::new(&nuclei_exe);
+        // 1. Update Nuclei Templates via nuclei -update-templates
+        let nuclei_candidates = [
+            self.tools_bin.join("nuclei"),
+            self.tools_bin.join("nuclei.exe"),
+            PathBuf::from("/usr/local/bin/nuclei"),
+            PathBuf::from("/usr/bin/nuclei"),
+        ];
+        let nuclei_exe = nuclei_candidates.into_iter().find(|p| p.exists());
+        if let Some(nuclei_bin) = nuclei_exe {
+            let mut cmd = Command::new(&nuclei_bin);
             cmd.arg("-update-templates");
             #[cfg(target_os = "windows")]
             {

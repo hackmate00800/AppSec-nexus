@@ -77,40 +77,92 @@ fn find_executable(plugin_dir: &Path, exe: &str) -> Option<PathBuf> {
 }
 
 fn find_python_executable() -> String {
-    let candidates = [
-        r"C:\Python314\python.exe",
-        r"C:\Python313\python.exe",
-        r"C:\Python312\python.exe",
-        r"C:\Python311\python.exe",
-        r"C:\Python310\python.exe",
-    ];
-    for c in &candidates {
-        if Path::new(c).exists() {
-            return c.to_string();
+    #[cfg(target_os = "windows")]
+    {
+        let candidates = [
+            r"C:\Python314\python.exe",
+            r"C:\Python313\python.exe",
+            r"C:\Python312\python.exe",
+            r"C:\Python311\python.exe",
+            r"C:\Python310\python.exe",
+        ];
+        for c in &candidates {
+            if Path::new(c).exists() {
+                return c.to_string();
+            }
         }
-    }
-    if let Ok(local) = std::env::var("LOCALAPPDATA") {
-        let p = PathBuf::from(local).join("Programs").join("Python");
-        if let Ok(entries) = std::fs::read_dir(&p) {
-            for entry in entries.flatten() {
-                let exe = entry.path().join("python.exe");
-                if exe.exists() {
-                    return exe.to_string_lossy().to_string();
+        if let Ok(local) = std::env::var("LOCALAPPDATA") {
+            let p = PathBuf::from(local).join("Programs").join("Python");
+            if let Ok(entries) = std::fs::read_dir(&p) {
+                for entry in entries.flatten() {
+                    let exe = entry.path().join("python.exe");
+                    if exe.exists() {
+                        return exe.to_string_lossy().to_string();
+                    }
                 }
             }
         }
     }
-    "python".to_string()
+    #[cfg(not(target_os = "windows"))]
+    {
+        let unix_candidates = [
+            "/usr/bin/python3",
+            "/usr/local/bin/python3",
+            "/usr/bin/python",
+        ];
+        for c in &unix_candidates {
+            if Path::new(c).exists() {
+                return c.to_string();
+            }
+        }
+    }
+    if let Ok(path_var) = std::env::var("PATH") {
+        for dir in std::env::split_paths(&path_var) {
+            let p3 = dir.join("python3");
+            if p3.exists() {
+                return p3.to_string_lossy().to_string();
+            }
+            let p = dir.join("python");
+            if p.exists() {
+                return p.to_string_lossy().to_string();
+            }
+        }
+    }
+    "python3".to_string()
 }
 
 fn find_node_executable() -> String {
-    let candidates = [
-        r"C:\Program Files\nodejs\node.exe",
-        r"C:\Program Files (x86)\nodejs\node.exe",
-    ];
-    for c in &candidates {
-        if Path::new(c).exists() {
-            return c.to_string();
+    #[cfg(target_os = "windows")]
+    {
+        let candidates = [
+            r"C:\Program Files\nodejs\node.exe",
+            r"C:\Program Files (x86)\nodejs\node.exe",
+        ];
+        for c in &candidates {
+            if Path::new(c).exists() {
+                return c.to_string();
+            }
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let unix_candidates = [
+            "/usr/bin/node",
+            "/usr/local/bin/node",
+            "/usr/bin/nodejs",
+        ];
+        for c in &unix_candidates {
+            if Path::new(c).exists() {
+                return c.to_string();
+            }
+        }
+    }
+    if let Ok(path_var) = std::env::var("PATH") {
+        for dir in std::env::split_paths(&path_var) {
+            let direct = dir.join("node");
+            if direct.exists() {
+                return direct.to_string_lossy().to_string();
+            }
         }
     }
     "node".to_string()
