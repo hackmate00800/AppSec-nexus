@@ -29,7 +29,7 @@ body {
   background-color: var(--bg-primary);
   color: var(--text-main);
   overflow: hidden;
-  user-select: none;
+  user-select: text;
 }
 
 code, pre {
