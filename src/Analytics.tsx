@@ -191,7 +191,7 @@ export function AnalyticsDashboard({
       findings: relevantFindings.filter(
         (f) =>
           f.title.toLowerCase().includes("port") ||
-          f.source_tool.toLowerCase().includes("nmap")
+          (f.source_tool || "").toLowerCase().includes("nmap")
       ),
     },
   ];

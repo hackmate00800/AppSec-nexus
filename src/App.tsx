@@ -691,7 +691,7 @@ export default function App() {
             <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem" }}>
               <span style={{ color: "var(--text-dim)" }}>Target:</span>
               <span style={{ fontWeight: 600 }}>{selectedTarget.primary_url}</span>
-              {selectedTarget.scope.allow_local_lab ? (
+              {selectedTarget.scope?.allow_local_lab ? (
                 <span className="badge badge-lab">
                   <Unlock size={12} /> Lab Mode (Private IPs Allowed)
                 </span>
