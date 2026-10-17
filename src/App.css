@@ -522,4 +522,67 @@ code, pre {
   animation: pulse-subtle 2s infinite ease-in-out;
 }
 
+/* Responsive UI Optimizations */
+@media (max-width: 1200px) {
+  .ai-drawer {
+    width: 360px;
+    padding: 16px;
+  }
+}
+
+@media (max-width: 960px) {
+  .sidebar {
+    width: 200px;
+    padding: 12px 8px;
+  }
+  .nav-item {
+    padding: 8px 10px;
+    font-size: 0.82rem;
+    gap: 8px;
+  }
+  .workspace {
+    padding: 16px;
+  }
+  .top-nav {
+    padding: 0 14px;
+  }
+  .ai-drawer {
+    position: fixed;
+    right: 0;
+    top: 56px;
+    bottom: 0;
+    width: min(440px, 92vw);
+    z-index: 40;
+    box-shadow: -6px 0 24px rgba(0, 0, 0, 0.6);
+  }
+}
+
+@media (max-width: 720px) {
+  .main-layout {
+    flex-direction: column;
+  }
+  .sidebar {
+    width: 100%;
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+    padding: 8px 12px;
+  }
+  .nav-item span {
+    display: inline;
+    white-space: nowrap;
+  }
+  .stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .top-nav {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 8px 12px;
+    gap: 8px;
+  }
+}
+
+
 

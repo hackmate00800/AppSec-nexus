@@ -1,4 +1,5 @@
 pub mod ai;
+pub mod android_audit;
 pub mod crawler;
 pub mod db;
 pub mod feeds;
@@ -9,6 +10,7 @@ pub mod reports;
 pub mod scanners;
 pub mod scope;
 pub mod tools;
+pub mod windows_audit;
 
 use ai::AiMentor;
 use db::Database;
@@ -264,6 +266,41 @@ async fn explain_finding(
             finding.cwe.as_deref(),
         )
         .await
+}
+
+#[tauri::command]
+async fn chat_with_mentor(
+    state: State<'_, AppState>,
+    model: String,
+    system: Option<String>,
+    messages: Vec<ai::ChatMessage>,
+) -> Result<String, String> {
+    state.ai_mentor.chat(&model, system.as_deref(), messages).await
+}
+
+#[tauri::command]
+fn run_windows_audit(
+    state: State<'_, AppState>,
+    target_id: String,
+) -> Result<windows_audit::WindowsAuditReport, String> {
+    let report = windows_audit::WindowsAuditor::audit_system(&target_id);
+    for finding in &report.findings {
+        let _ = state.db.insert_finding(finding);
+    }
+    Ok(report)
+}
+
+#[tauri::command]
+fn run_android_audit(
+    state: State<'_, AppState>,
+    target_id: String,
+    manifest_content: String,
+) -> Result<android_audit::AndroidAuditReport, String> {
+    let report = android_audit::AndroidAuditor::audit_manifest(&target_id, &manifest_content);
+    for finding in &report.findings {
+        let _ = state.db.insert_finding(finding);
+    }
+    Ok(report)
 }
 
 #[tauri::command]
@@ -608,7 +645,10 @@ pub fn run() {
             pull_ai_model,
             run_crawler,
             get_endpoints,
-            import_external_report
+            import_external_report,
+            chat_with_mentor,
+            run_windows_audit,
+            run_android_audit
         ]);
 
     let app = match builder.build(tauri::generate_context!()) {

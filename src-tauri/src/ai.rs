@@ -18,6 +18,24 @@ struct OllamaGenerateResponse {
     response: String,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ChatMessage {
+    pub role: String,
+    pub content: String,
+}
+
+#[derive(Serialize)]
+struct OllamaChatRequest {
+    model: String,
+    messages: Vec<ChatMessage>,
+    stream: bool,
+}
+
+#[derive(Deserialize)]
+struct OllamaChatResponse {
+    message: ChatMessage,
+}
+
 #[derive(Deserialize)]
 struct OllamaTagsResponse {
     models: Option<Vec<OllamaModel>>,
@@ -267,5 +285,62 @@ impl AiMentor {
         });
 
         Ok(format!("Model '{}' downloaded and ready for use!", model))
+    }
+
+    pub async fn chat(
+        &self,
+        model: &str,
+        system_instruction: Option<&str>,
+        history: Vec<ChatMessage>,
+    ) -> Result<String, String> {
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(120))
+            .build()
+            .map_err(|e| format!("Client creation error: {}", e))?;
+
+        let mut messages = Vec::new();
+        let default_system = "You are the expert AppSec Nexus AI Security Mentor & Cybersecurity Professor. \
+            Your mission is defensive cybersecurity education, vulnerability explanation, practical remediation guides, \
+            and clear architecture walk-throughs. Explain technical concepts clearly. When requested, provide clear \
+            flowcharts, analogies, and defense-in-depth code snippets. Never generate weaponized exploits or destructive payloads.".to_string();
+
+        let system_text = system_instruction.unwrap_or(&default_system);
+        messages.push(ChatMessage {
+            role: "system".to_string(),
+            content: system_text.to_string(),
+        });
+
+        for msg in history {
+            messages.push(msg);
+        }
+
+        let req_body = OllamaChatRequest {
+            model: model.to_string(),
+            messages,
+            stream: false,
+        };
+
+        let res = client
+            .post(format!("{}/api/chat", self.base_url))
+            .json(&req_body)
+            .send()
+            .await
+            .map_err(|e| {
+                format!(
+                    "Cannot reach local Ollama at 127.0.0.1:11434 (is 'ollama serve' running?): {}",
+                    e
+                )
+            })?;
+
+        if !res.status().is_success() {
+            return Err(format!("Ollama returned HTTP error: {}", res.status()));
+        }
+
+        let resp_json = res
+            .json::<OllamaChatResponse>()
+            .await
+            .map_err(|e| format!("Failed to parse Ollama chat response: {}", e))?;
+
+        Ok(resp_json.message.content)
     }
 }

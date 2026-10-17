@@ -105,3 +105,25 @@ export interface FeedUpdateResult {
   message: string;
 }
 
+export interface ChatMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
+}
+
+export interface WindowsAuditReport {
+  findings: Finding[];
+  checks_run: number;
+  hostname: string;
+  os_version: string;
+}
+
+export interface AndroidAuditReport {
+  package_name: string;
+  min_sdk?: string;
+  target_sdk?: string;
+  findings: Finding[];
+  permissions_detected: string[];
+  exported_components: string[];
+}
+
+
