@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render, screen, act } from "@testing-library/react";
+import { render, screen, act, fireEvent } from "@testing-library/react";
 import App from "../App";
 import { SecurityFlowchart } from "../Flowchart";
 
@@ -21,6 +21,12 @@ describe("UI Responsiveness & Layout Automation Testing", () => {
     expect(container!.querySelector(".top-nav")).toBeInTheDocument();
     expect(container!.querySelector(".sidebar")).toBeInTheDocument();
     expect(container!.querySelector(".workspace")).toBeInTheDocument();
+
+    // Responsive branding and command palette elements
+    expect(container!.querySelector(".brand-subtitle")).toBeInTheDocument();
+    expect(container!.querySelector(".brand-version")).toBeInTheDocument();
+    expect(container!.querySelector(".command-palette-btn")).toBeInTheDocument();
+    expect(container!.querySelector(".search-placeholder")).toBeInTheDocument();
   });
 
   it("adapts layout smoothly when resized to tablet viewport (800x1024)", async () => {
@@ -41,6 +47,9 @@ describe("UI Responsiveness & Layout Automation Testing", () => {
 
     const topNav = container!.querySelector(".top-nav");
     expect(topNav).toBeInTheDocument();
+
+    const cmdBtn = container!.querySelector(".command-palette-btn");
+    expect(cmdBtn).toBeInTheDocument();
   });
 
   it("maintains accessibility and scrollability in small mobile viewport (375x667)", async () => {
@@ -61,7 +70,44 @@ describe("UI Responsiveness & Layout Automation Testing", () => {
 
     // Verify critical buttons remain accessible
     expect(screen.getByText("Emergency Stop")).toBeInTheDocument();
-    expect(screen.getByText("Target & Scope")).toBeInTheDocument();
+    expect(screen.getAllByText("Target & Scope")[0]).toBeInTheDocument();
+  });
+
+  it("renders compact mobile layout (480x800) with functional controls", async () => {
+    act(() => {
+      window.innerWidth = 480;
+      window.innerHeight = 800;
+      window.dispatchEvent(new Event("resize"));
+    });
+
+    let container: HTMLElement;
+    await act(async () => {
+      const res = render(<App />);
+      container = res.container;
+    });
+
+    expect(container!.querySelector(".top-nav")).toBeInTheDocument();
+    expect(container!.querySelector(".command-palette-btn")).toBeInTheDocument();
+  });
+
+  it("ensures findings and audit history tables have responsive scroll wrappers", async () => {
+    let container: HTMLElement;
+    await act(async () => {
+      const res = render(<App />);
+      container = res.container;
+    });
+
+    // Navigate to Findings tab via sidebar nav item
+    const findingsNavItem = screen.getByText("Findings");
+    await act(async () => {
+      fireEvent.click(findingsNavItem);
+    });
+
+    // Verify table-responsive wrapper exists around the findings data table
+    const responsiveTables = container!.querySelectorAll(".table-responsive");
+    expect(responsiveTables.length).toBeGreaterThanOrEqual(1);
+    const dataTable = container!.querySelector(".data-table");
+    expect(dataTable).toBeInTheDocument();
   });
 
   it("renders SecurityFlowchart with attack vs defense side-by-side cards", () => {

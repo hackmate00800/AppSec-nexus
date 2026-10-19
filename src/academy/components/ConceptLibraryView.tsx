@@ -96,7 +96,7 @@ export function ConceptLibraryView({
       </div>
 
       {/* Main 2-Column Inspector */}
-      <div style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: "16px", alignItems: "flex-start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", gap: "16px", alignItems: "flex-start" }}>
         {/* Left Concept Selector List */}
         <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "720px", overflowY: "auto" }}>
           {filtered.length === 0 ? (
@@ -234,14 +234,14 @@ export function ConceptLibraryView({
             </div>
 
             {/* Definition & Core Purpose */}
-            <div style={{ background: "rgba(15, 23, 42, 0.8)", border: "1px solid var(--border-color)", borderRadius: "8px", padding: "14px", marginBottom: "16px" }}>
+            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "8px", padding: "14px", marginBottom: "16px", boxShadow: "var(--shadow-sm)" }}>
               <div style={{ fontWeight: 700, fontSize: "0.84rem", color: "var(--accent-cyan)", marginBottom: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
                 <Sparkles size={14} /> Authoritative Definition & Purpose:
               </div>
               <p style={{ fontSize: "0.85rem", color: "var(--text-main)", lineHeight: "1.5", margin: "0 0 8px 0" }}>
                 {selectedConcept.definition}
               </p>
-              <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: "6px" }}>
+              <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", borderTop: "1px solid var(--border-color)", paddingTop: "6px" }}>
                 <strong>Strategic Purpose:</strong> {selectedConcept.purpose}
               </div>
             </div>
@@ -290,7 +290,7 @@ export function ConceptLibraryView({
                   <div
                     key={idx}
                     style={{
-                      background: "#050811",
+                      background: "var(--bg-secondary)",
                       border: "1px solid var(--border-color)",
                       borderRadius: "8px",
                       padding: "12px"
@@ -311,11 +311,11 @@ export function ConceptLibraryView({
                       )}
                     </div>
                     {ex.codeOrConfig && (
-                      <pre style={{ margin: "0 0 8px 0", fontSize: "0.76rem", color: "#38bdf8", overflowX: "auto", fontFamily: "monospace" }}>
+                      <pre style={{ margin: "0 0 8px 0", fontSize: "0.76rem", color: "var(--accent-cyan)", background: "var(--bg-primary)", padding: "8px 10px", borderRadius: "6px", border: "1px solid var(--border-color)", overflowX: "auto", fontFamily: "monospace" }}>
                         {ex.codeOrConfig}
                       </pre>
                     )}
-                    <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", lineHeight: "1.4" }}>
+                    <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", lineHeight: "1.4" }}>
                       {ex.explanation}
                     </div>
                   </div>

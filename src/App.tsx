@@ -11,8 +11,6 @@ import {
   RotateCcw,
   Sparkles,
   Target as TargetIcon,
-  Lock,
-  Unlock,
   Download,
   History,
   FileCode,
@@ -30,10 +28,92 @@ import {
   GraduationCap,
   Activity,
   Monitor,
-  Cpu
+  Cpu,
+  Palette,
+  PanelLeft,
+  Sun,
+  Moon,
+  ShieldCheck,
+  ShieldAlert,
+  Loader2,
+  Bot,
+  X,
+  LayoutGrid,
+  Maximize2,
+  Minimize2,
+  Zap,
+  ChevronDown,
+  ChevronUp,
+  Settings2,
+  Info,
+  Edit2,
+  Trash2,
+  Plus,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  CheckSquare,
+  Square,
+  ClipboardList,
+  Keyboard,
+  FileCheck,
+  Eye,
+  List,
+  Globe,
 } from "lucide-react";
 import "./App.css";
-import { Target, ToolInfo, PluginInfo, FeedUpdateResult, Finding, ScanResult, FindingStatus, DiscoveredEndpoint, ModelPullProgress } from "./types";
+import {
+  Target,
+  ToolInfo,
+  PluginInfo,
+  FeedUpdateResult,
+  Finding,
+  ScanResult,
+  FindingStatus,
+  DiscoveredEndpoint,
+  ModelPullProgress,
+  ValidationRecord,
+  WorkspacePreset,
+  OllamaSystemInfo,
+  SecurityAiRole,
+  MethodologyDefinition,
+} from "./types";
+import {
+  RECOMMENDED_QUICK_MODEL,
+  RECOMMENDED_DEEP_MODEL,
+  isModelInstalled,
+  resolveModelSlots,
+  persistAiWorkspaceConfig,
+} from "./utils/aiModelResolver";
+import { useTheme } from "./theme/ThemeProvider";
+import { useToast } from "./components/ui/Toast";
+import { SeverityBadge, StatusBadge, ScopeBadge, ValidationBadge } from "./components/ui/Badge";
+import { CommandPalette } from "./components/CommandPalette";
+import { AppearanceSettings } from "./components/AppearanceSettings";
+import { useAiTaskContext } from "./context/AiTaskContext";
+import { useWorkspace } from "./context/WorkspaceContext";
+import { WorkspaceTabs } from "./components/ui/WorkspaceTabs";
+import { WorkspaceToolbar } from "./components/ui/WorkspaceToolbar";
+import { WorkspaceControlsDrawer } from "./components/ui/WorkspaceControlsDrawer";
+import { SlidingDrawer } from "./components/ui/SlidingDrawer";
+import { TourProvider } from "./context/TourContext";
+import { InteractiveTourOverlay } from "./components/tour/InteractiveTourOverlay";
+import { HelpCenterModal } from "./components/help/HelpCenterModal";
+import { GuidedWorkflowsDrawer } from "./components/help/GuidedWorkflowsDrawer";
+import { HeaderHelpMenu } from "./components/help/HeaderHelpMenu";
+import { ContextualHelpButton } from "./components/help/ContextualHelpButton";
+import { LRUCache, InvertedIndex, BinaryMaxHeap, FindingDeduplicator } from "./utils/securityDsa";
+import { ConfirmationModal } from "./components/crud/ConfirmationModal";
+import { TargetEditModal } from "./components/crud/TargetEditModal";
+import { FindingEditModal } from "./components/crud/FindingEditModal";
+import { FindingCreateModal } from "./components/crud/FindingCreateModal";
+import { AuditLogModal } from "./components/crud/AuditLogModal";
+import { IssueCenter } from "./components/issues/IssueCenter";
+import { KeyboardShortcutsModal } from "./components/help/KeyboardShortcutsModal";
+import { NavigationBreadcrumbs } from "./components/ui/NavigationBreadcrumbs";
+import { SecurityCategory } from "./categories/types";
+import { CategorySelector } from "./categories/CategorySelector";
+import { FindingInlineDetailsAccordion } from "./components/findings/FindingInlineDetailsAccordion";
 
 // High-Performance Code-Splitting for Low-Spec PCs:
 // Defer loading heavy components until the user switches to their respective tabs
@@ -52,6 +132,24 @@ const CyberAcademy = lazy(() =>
 const OrchestrationHub = lazy(() =>
   import("./orchestration/OrchestrationHub").then((m) => ({ default: m.OrchestrationHub }))
 );
+const CategoryWorkflowView = lazy(() =>
+  import("./categories/CategoryWorkflowView").then((m) => ({ default: m.CategoryWorkflowView }))
+);
+const ChecklistPlaybookCenter = lazy(() =>
+  import("./checklists/ChecklistPlaybookCenter").then((m) => ({ default: m.ChecklistPlaybookCenter }))
+);
+const BurpIntegrationView = lazy(() =>
+  import("./burp/BurpIntegrationView").then((m) => ({ default: m.BurpIntegrationView }))
+);
+const MultiTerminalWorkspace = lazy(() =>
+  import("./terminal/MultiTerminalWorkspace").then((m) => ({ default: m.MultiTerminalWorkspace }))
+);
+const VulnerabilityDetailPage = lazy(() =>
+  import("./components/findings/VulnerabilityDetailPage").then((m) => ({ default: m.VulnerabilityDetailPage }))
+);
+const MethodologyExplorer = lazy(() =>
+  import("./components/methodologies/MethodologyExplorer").then((m) => ({ default: m.MethodologyExplorer }))
+);
 
 const TabLoadingSkeleton: React.FC = () => (
   <div style={{ padding: "24px 0", display: "flex", flexDirection: "column", gap: 16 }}>
@@ -65,10 +163,246 @@ const TabLoadingSkeleton: React.FC = () => (
   </div>
 );
 
+export function sortAiModels(models: string[]): string[] {
+  return [...models].sort((a, b) => {
+    // Prioritize custom cybersecurity educator model first
+    const aTeacher8 = a.toLowerCase().includes("appsec-teacher-8b");
+    const bTeacher8 = b.toLowerCase().includes("appsec-teacher-8b");
+    if (aTeacher8 && !bTeacher8) return -1;
+    if (!aTeacher8 && bTeacher8) return 1;
+
+    const aTeacher = a.toLowerCase().includes("appsec-teacher");
+    const bTeacher = b.toLowerCase().includes("appsec-teacher");
+    if (aTeacher && !bTeacher) return -1;
+    if (!aTeacher && bTeacher) return 1;
+
+    // Next prioritize 8B models for higher reasoning capacity
+    const a8b = a.toLowerCase().includes("8b");
+    const b8b = b.toLowerCase().includes("8b");
+    if (a8b && !b8b) return -1;
+    if (!a8b && b8b) return 1;
+
+    return a.localeCompare(b);
+  });
+}
+
+export type TabType =
+  | "analytics"
+  | "targets"
+  | "orchestration"
+  | "tools"
+  | "crawler"
+  | "scanner"
+  | "terminal"
+  | "findings"
+  | "issues"
+  | "importer"
+  | "mentor"
+  | "history"
+  | "academy"
+  | "hostmobile"
+  | "appearance"
+  | "categoryWorkflow"
+  | "playbooks"
+  | "burp"
+  | "methodologies";
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState<
-    "analytics" | "targets" | "orchestration" | "tools" | "crawler" | "scanner" | "findings" | "importer" | "mentor" | "history" | "academy" | "hostmobile"
-  >("analytics");
+  const { preferences, setTheme, setSidebarMode } = useTheme();
+  const { addToast } = useToast();
+  const [activeCategory, setActiveCategory] = useState<SecurityCategory>("web");
+  const [activeTab, setActiveTab] = useState<TabType>(
+    (preferences.defaultTab as TabType) || "analytics"
+  );
+  const [activeMethodologyId, setActiveMethodologyId] = useState<string | undefined>(undefined);
+  const [externalMentorPrompt, setExternalMentorPrompt] = useState<string>("");
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
+
+  // Global AI persistent tasks context
+  const {
+    activeTasks,
+    hasRunningTask,
+    recentlyCompletedTask,
+    dismissNotification,
+    cancelTask,
+  } = useAiTaskContext();
+
+  // Workspace context for customizable panels, draggable tabs, and drawers
+  const {
+    preset: wsPreset,
+    setPreset: setWsPreset,
+    drawers,
+    openDrawer,
+    closeDrawer,
+    toggleDrawer,
+    isSidebarCollapsed,
+    toggleSidebar,
+    reopenTab,
+    closeTab,
+    closedTabs,
+    resetWorkspaceLayout,
+  } = useWorkspace();
+
+  // Resizable sidebar state with local persistence
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem("appsec_sidebar_width");
+      if (saved) {
+        const val = parseInt(saved, 10);
+        if (!isNaN(val) && val >= 64 && val <= 380) return val;
+      }
+    } catch {
+      // fallback
+    }
+    return preferences.sidebarMode === "compact" ? 64 : 250;
+  });
+
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+
+  // Unified sidebar collapse toggle handler
+  const handleToggleSidebar = () => {
+    const nextCollapsed = sidebarWidth > 80;
+    toggleSidebar();
+    setSidebarWidth(nextCollapsed ? 64 : 250);
+    setSidebarMode(nextCollapsed ? "compact" : "expanded");
+  };
+
+  // Sync workspace sidebar collapse state
+  useEffect(() => {
+    if (isSidebarCollapsed && sidebarWidth > 80) {
+      setSidebarWidth(64);
+    } else if (!isSidebarCollapsed && sidebarWidth <= 80) {
+      setSidebarWidth(250);
+    }
+  }, [isSidebarCollapsed]);
+
+  useEffect(() => {
+    if (preferences.sidebarMode === "compact" && sidebarWidth > 80) {
+      setSidebarWidth(64);
+    } else if (preferences.sidebarMode !== "compact" && sidebarWidth <= 80) {
+      setSidebarWidth(250);
+    }
+  }, [preferences.sidebarMode]);
+
+  // Workspace Layout Presets
+  const [workspacePreset, setWorkspacePreset] = useState<WorkspacePreset>(() => {
+    try {
+      return (localStorage.getItem("appsec_workspace_preset") as WorkspacePreset) || "default";
+    } catch {
+      return "default";
+    }
+  });
+
+  useEffect(() => {
+    if (wsPreset && wsPreset !== workspacePreset) {
+      setWorkspacePreset(wsPreset);
+    }
+  }, [wsPreset]);
+
+  const handleSelectPreset = (preset: WorkspacePreset) => {
+    setWorkspacePreset(preset);
+    setWsPreset(preset);
+    try {
+      localStorage.setItem("appsec_workspace_preset", preset);
+    } catch {
+      // ignore
+    }
+    if (preset === "compact") {
+      setSidebarWidth(64);
+    } else if (preset === "analyst") {
+      setSidebarWidth(240);
+      setActiveTab("findings");
+    } else if (preset === "pentest") {
+      setSidebarWidth(220);
+      setActiveTab("scanner");
+    } else if (preset === "api") {
+      setSidebarWidth(220);
+      setActiveTab("crawler");
+    } else if (preset === "learning") {
+      setSidebarWidth(220);
+      setActiveTab("academy");
+    } else {
+      setSidebarWidth(250);
+    }
+    addToast({
+      type: "info",
+      title: "Workspace Layout Applied",
+      description: `Activated ${preset.toUpperCase()} layout preset.`,
+    });
+  };
+
+  const handleSidebarPointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    setIsResizingSidebar(true);
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handleSidebarPointerMove = (e: React.PointerEvent) => {
+    if (!isResizingSidebar) return;
+    const newWidth = Math.max(64, Math.min(380, e.clientX));
+    setSidebarWidth(newWidth);
+    try {
+      localStorage.setItem("appsec_sidebar_width", newWidth.toString());
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleSidebarPointerUp = (e: React.PointerEvent) => {
+    if (isResizingSidebar) {
+      setIsResizingSidebar(false);
+      try {
+        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  // Resizable AI drawer state with local persistence
+  const [drawerWidth, setDrawerWidth] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem("appsec_drawer_width");
+      if (saved) {
+        const val = parseInt(saved, 10);
+        if (!isNaN(val) && val >= 320 && val <= 900) return val;
+      }
+    } catch {
+      // fallback
+    }
+    return 480;
+  });
+  const [isResizingDrawer, setIsResizingDrawer] = useState(false);
+  const [isDrawerMaximized, setIsDrawerMaximized] = useState(false);
+
+  const handleDrawerPointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    setIsResizingDrawer(true);
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handleDrawerPointerMove = (e: React.PointerEvent) => {
+    if (!isResizingDrawer) return;
+    const newWidth = Math.max(320, Math.min(900, window.innerWidth - e.clientX));
+    setDrawerWidth(newWidth);
+    try {
+      localStorage.setItem("appsec_drawer_width", newWidth.toString());
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleDrawerPointerUp = (e: React.PointerEvent) => {
+    if (isResizingDrawer) {
+      setIsResizingDrawer(false);
+      try {
+        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
+    }
+  };
 
   const [targets, setTargets] = useState<Target[]>([]);
   const [selectedTarget, setSelectedTarget] = useState<Target | null>(null);
@@ -93,6 +427,8 @@ export default function App() {
   const [cisaKevCount, setCisaKevCount] = useState<number>(1250);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [selectedFinding, setSelectedFinding] = useState<Finding | null>(null);
+  const [activeFindingDetail, setActiveFindingDetail] = useState<Finding | null>(null);
+  const [academySelectedVulnId, setAcademySelectedVulnId] = useState<string | undefined>(undefined);
   const [scanHistory, setScanHistory] = useState<ScanResult[]>([]);
   const [endpoints, setEndpoints] = useState<DiscoveredEndpoint[]>([]);
 
@@ -123,16 +459,79 @@ export default function App() {
   const [findingSeverityFilter, setFindingSeverityFilter] = useState<string>("ALL");
   const [findingStatusFilter, setFindingStatusFilter] = useState<string>("ALL");
   const [findingSearchQuery, setFindingSearchQuery] = useState<string>("");
+  const [validatingFindingId, setValidatingFindingId] = useState<string | null>(null);
+  const [isBatchValidating, setIsBatchValidating] = useState<boolean>(false);
 
-  // AI Mentor state
+  // AI Mentor & Two-Model Security AI Workspace state
   const [aiAvailable, setAiAvailable] = useState(false);
   const [aiModels, setAiModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>("");
+  const [quickModel, setQuickModel] = useState<string>(RECOMMENDED_QUICK_MODEL);
+  const [deepModel, setDeepModel] = useState<string>(RECOMMENDED_DEEP_MODEL);
+  const [activeAiRole, setActiveAiRole] = useState<SecurityAiRole>("quick");
+  const [ollamaSystemInfo, setOllamaSystemInfo] = useState<OllamaSystemInfo | null>(null);
+  const [isModelSetupOpen, setIsModelSetupOpen] = useState<boolean>(false);
+  const [isSystemInfoOpen, setIsSystemInfoOpen] = useState<boolean>(false);
+  const [customModelInput, setCustomModelInput] = useState<string>("");
+  const [isAiEnabled, setIsAiEnabled] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem("appsec_ai_mentor_enabled");
+      return stored !== null ? stored === "true" : true;
+    } catch {
+      return true;
+    }
+  });
   const [aiMode, setAiMode] = useState<"beginner" | "advanced">("beginner");
   const [reportStatus, setReportStatus] = useState<string>("");
   const [pullingModel, setPullingModel] = useState<string>("");
   const [pullStatus, setPullStatus] = useState<string>("");
   const [pullProgress, setPullProgress] = useState<ModelPullProgress | null>(null);
+
+  // Target CRUD
+  const [editingTarget, setEditingTarget] = useState<Target | null>(null);
+  const [deletingTarget, setDeletingTarget] = useState<Target | null>(null);
+  const [isDeletingTarget, setIsDeletingTarget] = useState(false);
+
+  // Finding CRUD & Bulk Operations
+  const [editingFinding, setEditingFinding] = useState<Finding | null>(null);
+  const [deletingFinding, setDeletingFinding] = useState<Finding | null>(null);
+  const [isDeletingFinding, setIsDeletingFinding] = useState(false);
+  const [isCreateFindingOpen, setIsCreateFindingOpen] = useState(false);
+  const [selectedFindingIds, setSelectedFindingIds] = useState<Set<string>>(new Set());
+  const [bulkStatusTarget, setBulkStatusTarget] = useState<FindingStatus>("Confirmed");
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+
+  // Finding Sorting & Pagination
+  const [findingSortField, setFindingSortField] = useState<
+    "severity" | "title" | "validation_status" | "status" | "source_tool" | "affected_asset" | "cwe"
+  >("severity");
+  const [findingSortDirection, setFindingSortDirection] = useState<"asc" | "desc">("desc");
+  const [findingPage, setFindingPage] = useState<number>(1);
+  const [findingPageSize, setFindingPageSize] = useState<number>(25);
+
+  // Finding Inline Details Expansion & View Mode
+  const [expandedFindingIds, setExpandedFindingIds] = useState<Set<string>>(new Set());
+  const [findingViewMode, setFindingViewMode] = useState<"table" | "cards">("table");
+
+  const toggleExpandFinding = (id: string) => {
+    setExpandedFindingIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  // Endpoint CRUD
+  const [isClearingEndpointsModalOpen, setIsClearingEndpointsModalOpen] = useState(false);
+
+  // Scan History CRUD & Audit Log
+  const [isClearingScanHistoryModalOpen, setIsClearingScanHistoryModalOpen] = useState(false);
+  const [isAuditLogModalOpen, setIsAuditLogModalOpen] = useState(false);
 
   const isTauriApp = isTauri();
 
@@ -148,11 +547,7 @@ export default function App() {
         if (event.payload.done) {
           setPullStatus(`Model '${event.payload.model}' ready for offline use!`);
           setPullingModel("");
-          invoke<[boolean, string[]]>("get_ai_status").then(([avail, models]) => {
-            setAiAvailable(avail);
-            setAiModels(models);
-            setSelectedModel(event.payload.model);
-          });
+          handleRefreshAiStatus();
         } else if (event.payload.error) {
           setPullStatus(`Download failed: ${event.payload.error}`);
           setPullingModel("");
@@ -227,22 +622,42 @@ export default function App() {
       }
 
       const findingsList = await invoke<Finding[]>("get_findings");
-      setFindings(findingsList);
+      const dedup = new FindingDeduplicator();
+      const dedupedFindings = findingsList.filter(
+        (f) => !dedup.isDuplicate(f.affected_asset, f.cwe, f.source_tool, f.title)
+      );
+      setFindings(dedupedFindings);
 
       const historyList = await invoke<ScanResult[]>("get_scan_history");
       setScanHistory(historyList);
 
-      const [available, models] = await invoke<[boolean, string[]]>("get_ai_status");
-      setAiAvailable(available);
-      const sortedModels = [...models].sort((a, b) => {
-        if (a.includes("1b")) return -1;
-        if (b.includes("1b")) return 1;
-        return a.localeCompare(b);
-      });
-      setAiModels(sortedModels);
-      if (sortedModels.length > 0) {
-        setSelectedModel(sortedModels[0]);
+      let isOnline = false;
+      let installedList: string[] = [];
+      try {
+        const sysInfo = await invoke<OllamaSystemInfo>("get_ollama_system_info");
+        setOllamaSystemInfo(sysInfo);
+        isOnline = sysInfo.is_online;
+        installedList = sysInfo.installed_models || [];
+      } catch (e) {
+        console.warn("get_ollama_system_info fallback to get_ai_status:", e);
+        try {
+          const [available, models] = await invoke<[boolean, string[]]>("get_ai_status");
+          isOnline = available;
+          installedList = models || [];
+        } catch (err2) {
+          console.warn("Could not query get_ai_status:", err2);
+        }
       }
+      setAiAvailable(isOnline);
+      const sortedModels = sortAiModels(installedList);
+      setAiModels(sortedModels);
+
+      const resolved = resolveModelSlots(sortedModels);
+      setQuickModel(resolved.quickModel);
+      setDeepModel(resolved.deepModel);
+      setActiveAiRole(resolved.activeRole);
+      const activeModel = resolved.activeRole === "quick" ? resolved.quickModel : resolved.deepModel;
+      setSelectedModel(activeModel);
 
       const pluginsList = await invoke<PluginInfo[]>("get_plugins");
       setPlugins(pluginsList);
@@ -462,6 +877,22 @@ export default function App() {
       setScanHistory(updatedHistory);
     } catch (err: any) {
       setScanLogs((prev) => [...prev, `[ERROR] Scan aborted: ${err.toString()}`]);
+      if (isTauriApp) {
+        invoke("record_issue", {
+          payload: {
+            title: `Scan Failure: ${toolId} execution failed`,
+            category: "ToolExecutionFailure",
+            subtype: "ScanExecutionError",
+            severity: "High",
+            affected_component: toolId,
+            affected_target_id: selectedTarget?.id,
+            affected_target_name: selectedTarget?.name,
+            source: "ToolExecution",
+            description: `Automated scan job using ${toolId} aborted against target ${selectedTarget?.primary_url}`,
+            error_details: err?.toString() || "Unknown tool execution failure",
+          },
+        }).catch((e) => console.error("Auto issue recording error:", e));
+      }
     } finally {
       setIsScanning(false);
     }
@@ -491,6 +922,22 @@ export default function App() {
       setFindings(updatedFindings);
     } catch (err: any) {
       alert(`Crawler error: ${err.toString()}`);
+      if (isTauriApp) {
+        invoke("record_issue", {
+          payload: {
+            title: `Crawler Failure: ${selectedTarget?.name}`,
+            category: "BackendApiError",
+            subtype: "CrawlerError",
+            severity: "Medium",
+            affected_component: selectedTarget?.primary_url || "crawler",
+            affected_target_id: selectedTarget?.id,
+            affected_target_name: selectedTarget?.name,
+            source: "Recon",
+            description: `Automated endpoint discovery crawling halted with error`,
+            error_details: err?.toString() || "Unknown crawler error",
+          },
+        }).catch((e) => console.error("Auto issue recording error:", e));
+      }
     } finally {
       setIsCrawling(false);
     }
@@ -529,7 +976,11 @@ export default function App() {
 
   async function handleExportReport() {
     if (!selectedTarget) {
-      alert("Please select a target first.");
+      addToast({
+        type: "warning",
+        title: "Target Required",
+        description: "Please select an active target before exporting an HTML report.",
+      });
       return;
     }
     try {
@@ -537,15 +988,28 @@ export default function App() {
         targetId: selectedTarget.id,
       });
       setReportStatus(`HTML report exported: ${filename}`);
+      addToast({
+        type: "success",
+        title: "HTML Report Exported",
+        description: `Saved report to ${filename}`,
+      });
       setTimeout(() => setReportStatus(""), 8000);
     } catch (err: any) {
-      alert("Failed to export report: " + err.toString());
+      addToast({
+        type: "error",
+        title: "Export Failed",
+        description: err.toString(),
+      });
     }
   }
 
   async function handleExportJson() {
     if (!selectedTarget) {
-      alert("Please select a target first.");
+      addToast({
+        type: "warning",
+        title: "Target Required",
+        description: "Please select an active target before exporting a JSON report.",
+      });
       return;
     }
     try {
@@ -553,9 +1017,18 @@ export default function App() {
         targetId: selectedTarget.id,
       });
       setReportStatus(`JSON report exported: ${filename}`);
+      addToast({
+        type: "success",
+        title: "JSON Report Exported",
+        description: `Saved report to ${filename}`,
+      });
       setTimeout(() => setReportStatus(""), 8000);
     } catch (err: any) {
-      alert("Failed to export JSON report: " + err.toString());
+      addToast({
+        type: "error",
+        title: "Export Failed",
+        description: err.toString(),
+      });
     }
   }
 
@@ -565,21 +1038,378 @@ export default function App() {
       setFindings((prev) =>
         prev.map((f) => (f.id === findingId ? { ...f, status } : f))
       );
+      addToast({
+        type: "info",
+        title: "Finding Status Updated",
+        description: `Changed status to "${status}"`,
+        duration: 2500,
+      });
     } catch (err: any) {
       console.error("Failed to update finding status:", err);
+      addToast({
+        type: "error",
+        title: "Update Failed",
+        description: err.toString(),
+      });
     }
   }
 
+  // --- TARGET CRUD HANDLERS ---
+  const handleUpdateTarget = (updated: Target) => {
+    setTargets((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+    if (selectedTarget?.id === updated.id) {
+      setSelectedTarget(updated);
+    }
+    setEditingTarget(null);
+    addToast({
+      type: "success",
+      title: "Target Updated",
+      description: `Target "${updated.name}" updated successfully.`,
+    });
+  };
+
+  const handleConfirmDeleteTarget = async () => {
+    if (!deletingTarget) return;
+    setIsDeletingTarget(true);
+    try {
+      if (isTauriApp) {
+        await invoke("delete_target", { id: deletingTarget.id });
+      }
+      const targetId = deletingTarget.id;
+      const targetName = deletingTarget.name;
+      setTargets((prev) => prev.filter((t) => t.id !== targetId));
+      if (selectedTarget?.id === targetId) {
+        const remaining = targets.filter((t) => t.id !== targetId);
+        setSelectedTarget(remaining.length > 0 ? remaining[0] : null);
+      }
+      setFindings((prev) => prev.filter((f) => f.target_id !== targetId));
+      setEndpoints((prev) => prev.filter((ep) => ep.target_id !== targetId));
+      setDeletingTarget(null);
+      addToast({
+        type: "success",
+        title: "Target Deleted",
+        description: `Target "${targetName}" and associated records deleted.`,
+      });
+    } catch (err: any) {
+      addToast({
+        type: "error",
+        title: "Delete Failed",
+        description: err?.message || String(err),
+      });
+    } finally {
+      setIsDeletingTarget(false);
+    }
+  };
+
+  // --- FINDINGS CRUD & BULK HANDLERS ---
+  const handleCreateFinding = (created: Finding) => {
+    setFindings((prev) => [created, ...prev]);
+    setIsCreateFindingOpen(false);
+    addToast({
+      type: "success",
+      title: "Finding Recorded",
+      description: `Custom observation "${created.title}" successfully added.`,
+    });
+  };
+
+  const handleUpdateFinding = (updated: Finding) => {
+    setFindings((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));
+    if (selectedFinding?.id === updated.id) {
+      setSelectedFinding(updated);
+    }
+    setEditingFinding(null);
+    addToast({
+      type: "success",
+      title: "Finding Updated",
+      description: `Updated finding "${updated.title}".`,
+    });
+  };
+
+  const handleConfirmDeleteFinding = async () => {
+    if (!deletingFinding) return;
+    setIsDeletingFinding(true);
+    try {
+      if (isTauriApp) {
+        await invoke("delete_finding", { id: deletingFinding.id });
+      }
+      const id = deletingFinding.id;
+      const title = deletingFinding.title;
+      setFindings((prev) => prev.filter((f) => f.id !== id));
+      if (selectedFinding?.id === id) {
+        setSelectedFinding(null);
+      }
+      setSelectedFindingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      setDeletingFinding(null);
+      addToast({
+        type: "success",
+        title: "Finding Deleted",
+        description: `Removed finding "${title}".`,
+      });
+    } catch (err: any) {
+      addToast({
+        type: "error",
+        title: "Delete Failed",
+        description: err?.message || String(err),
+      });
+    } finally {
+      setIsDeletingFinding(false);
+    }
+  };
+
+  const handleToggleSelectAll = () => {
+    const pageIds = paginatedFindings.map((f) => f.id);
+    const allSelected = pageIds.length > 0 && pageIds.every((id) => selectedFindingIds.has(id));
+    setSelectedFindingIds((prev) => {
+      const next = new Set(prev);
+      if (allSelected) {
+        pageIds.forEach((id) => next.delete(id));
+      } else {
+        pageIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const handleToggleSelectFinding = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedFindingIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleApplyBulkStatus = async () => {
+    if (selectedFindingIds.size === 0) return;
+    const ids = Array.from(selectedFindingIds);
+    try {
+      if (isTauriApp) {
+        await invoke("bulk_update_finding_status", { ids, newStatus: bulkStatusTarget });
+      }
+      setFindings((prev) =>
+        prev.map((f) => (selectedFindingIds.has(f.id) ? { ...f, status: bulkStatusTarget } : f))
+      );
+      addToast({
+        type: "success",
+        title: "Bulk Status Updated",
+        description: `Updated status to "${bulkStatusTarget}" for ${ids.length} findings.`,
+      });
+    } catch (err: any) {
+      addToast({
+        type: "error",
+        title: "Bulk Update Failed",
+        description: err?.message || String(err),
+      });
+    }
+  };
+
+  const handleConfirmBulkDelete = async () => {
+    if (selectedFindingIds.size === 0) return;
+    const ids = Array.from(selectedFindingIds);
+    setIsBulkDeleting(true);
+    try {
+      if (isTauriApp) {
+        await invoke("bulk_delete_findings", { ids });
+      }
+      setFindings((prev) => prev.filter((f) => !selectedFindingIds.has(f.id)));
+      if (selectedFinding && selectedFindingIds.has(selectedFinding.id)) {
+        setSelectedFinding(null);
+      }
+      setSelectedFindingIds(new Set());
+      setIsBulkDeleteModalOpen(false);
+      addToast({
+        type: "success",
+        title: "Bulk Deletion Complete",
+        description: `Successfully deleted ${ids.length} findings.`,
+      });
+    } catch (err: any) {
+      addToast({
+        type: "error",
+        title: "Bulk Delete Failed",
+        description: err?.message || String(err),
+      });
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+  const handleExportSelectedFindingsJson = () => {
+    const selected = findings.filter((f) => selectedFindingIds.has(f.id));
+    if (selected.length === 0) return;
+    const blob = new Blob([JSON.stringify(selected, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `appsec-selected-findings-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    addToast({
+      type: "info",
+      title: "Export Initiated",
+      description: `Exported ${selected.length} findings to JSON.`,
+    });
+  };
+
+  // --- ENDPOINT CRUD HANDLERS ---
+  const handleDeleteEndpoint = async (ep: DiscoveredEndpoint) => {
+    try {
+      if (isTauriApp) {
+        await invoke("delete_endpoint", { id: ep.id });
+      }
+      setEndpoints((prev) => prev.filter((e) => e.id !== ep.id));
+      addToast({
+        type: "success",
+        title: "Endpoint Removed",
+        description: `Removed endpoint ${ep.url}`,
+      });
+    } catch (err: any) {
+      addToast({
+        type: "error",
+        title: "Delete Failed",
+        description: err?.message || String(err),
+      });
+    }
+  };
+
+  const handleClearEndpoints = async () => {
+    if (!selectedTarget) return;
+    try {
+      if (isTauriApp) {
+        await invoke("clear_endpoints", { targetId: selectedTarget.id });
+      }
+      setEndpoints([]);
+      setIsClearingEndpointsModalOpen(false);
+      addToast({
+        type: "success",
+        title: "Endpoints Cleared",
+        description: `All discovered endpoints for target cleared.`,
+      });
+    } catch (err: any) {
+      addToast({
+        type: "error",
+        title: "Clear Failed",
+        description: err?.message || String(err),
+      });
+    }
+  };
+
+  // --- SCAN HISTORY CRUD HANDLERS ---
+  const handleDeleteScanHistory = async (scan: ScanResult) => {
+    try {
+      if (isTauriApp) {
+        await invoke("delete_scan_history", { id: scan.scan_id });
+      }
+      setScanHistory((prev) => prev.filter((s) => s.scan_id !== scan.scan_id));
+      addToast({
+        type: "success",
+        title: "Scan Record Removed",
+        description: `Removed scan entry for ${scan.tool}`,
+      });
+    } catch (err: any) {
+      addToast({
+        type: "error",
+        title: "Delete Failed",
+        description: err?.message || String(err),
+      });
+    }
+  };
+
+  const handleClearScanHistory = async () => {
+    try {
+      if (isTauriApp) {
+        await invoke("clear_scan_history");
+      }
+      setScanHistory([]);
+      setIsClearingScanHistoryModalOpen(false);
+      addToast({
+        type: "success",
+        title: "History Cleared",
+        description: `Scan audit history cleared.`,
+      });
+    } catch (err: any) {
+      addToast({
+        type: "error",
+        title: "Clear Failed",
+        description: err?.message || String(err),
+      });
+    }
+  };
+
   async function handleRefreshAiStatus() {
     try {
-      const [available, models] = await invoke<[boolean, string[]]>("get_ai_status");
-      setAiAvailable(available);
-      setAiModels(models);
-      if (models.length > 0 && !selectedModel) {
-        setSelectedModel(models[0]);
+      let isOnline = false;
+      let installedList: string[] = [];
+      try {
+        const sysInfo = await invoke<OllamaSystemInfo>("get_ollama_system_info");
+        setOllamaSystemInfo(sysInfo);
+        isOnline = sysInfo.is_online;
+        installedList = sysInfo.installed_models || [];
+      } catch (e) {
+        console.warn("get_ollama_system_info fallback to get_ai_status:", e);
+        try {
+          const [available, models] = await invoke<[boolean, string[]]>("get_ai_status");
+          isOnline = available;
+          installedList = models || [];
+        } catch (err2) {
+          console.warn("Could not query get_ai_status:", err2);
+        }
       }
+
+      setAiAvailable(isOnline);
+      const sortedModels = sortAiModels(installedList);
+      setAiModels(sortedModels);
+
+      const resolved = resolveModelSlots(sortedModels);
+      setQuickModel(resolved.quickModel);
+      setDeepModel(resolved.deepModel);
+      setActiveAiRole(resolved.activeRole);
+      const activeModel = resolved.activeRole === "quick" ? resolved.quickModel : resolved.deepModel;
+      setSelectedModel(activeModel);
     } catch (err: any) {
       console.error("Failed to refresh AI status:", err);
+    }
+  }
+
+  function handleSelectAiRole(role: SecurityAiRole) {
+    setActiveAiRole(role);
+    const targetModel = role === "quick" ? quickModel : deepModel;
+    setSelectedModel(targetModel);
+    persistAiWorkspaceConfig({
+      quick_model: quickModel,
+      deep_model: deepModel,
+      active_model_role: role,
+    });
+  }
+
+  function handleAssignModelSlot(slot: "quick" | "deep", modelName: string) {
+    if (slot === "quick") {
+      setQuickModel(modelName);
+      if (activeAiRole === "quick") {
+        setSelectedModel(modelName);
+      }
+      persistAiWorkspaceConfig({
+        quick_model: modelName,
+        deep_model: deepModel,
+        active_model_role: activeAiRole,
+      });
+    } else {
+      setDeepModel(modelName);
+      if (activeAiRole === "deep") {
+        setSelectedModel(modelName);
+      }
+      persistAiWorkspaceConfig({
+        quick_model: quickModel,
+        deep_model: modelName,
+        active_model_role: activeAiRole,
+      });
     }
   }
 
@@ -607,13 +1437,116 @@ export default function App() {
 
   function handleExplainWithAi(finding: Finding) {
     setSelectedFinding(finding);
+    setActiveTab("mentor");
   }
 
-  // High-Performance Single-Pass DSA Filtering & Severity Calculation (O(N) single pass instead of 6 separate scans)
+  async function handleValidateFinding(findingId: string) {
+    setValidatingFindingId(findingId);
+    try {
+      const rec = await invoke<ValidationRecord>("validate_finding", { findingId });
+      setFindings((prev) =>
+        prev.map((f) =>
+          f.id === findingId
+            ? {
+                ...f,
+                status: rec.status as FindingStatus,
+                validation_status: rec.status,
+                confidence: rec.confidence_score,
+              }
+            : f
+        )
+      );
+      addToast({
+        type: rec.status === "CONFIRMED" ? "warning" : "info",
+        title: "Validation Complete",
+        description: `Finding evaluated: ${rec.status} (${rec.confidence_score}% confidence)`,
+      });
+    } catch (err: any) {
+      addToast({
+        type: "error",
+        title: "Validation Error",
+        description: `Probe error: ${err.toString()}`,
+      });
+    } finally {
+      setValidatingFindingId(null);
+    }
+  }
+
+  async function handleValidateAllFindings() {
+    setIsBatchValidating(true);
+    try {
+      const records = await invoke<ValidationRecord[]>("validate_all_findings", {
+        targetId: selectedTarget?.id || "",
+      });
+      const updated = await invoke<Finding[]>("get_findings");
+      setFindings(updated);
+      addToast({
+        type: "success",
+        title: "Batch Validation Complete",
+        description: `Evaluated ${records.length} findings against authorized target.`,
+      });
+    } catch (err: any) {
+      addToast({
+        type: "error",
+        title: "Batch Validation Error",
+        description: err.toString(),
+      });
+    } finally {
+      setIsBatchValidating(false);
+    }
+  }
+
+  // High-Performance Inverted Index & O(1) LRU Cache for Findings Search
+  const findingSearchCache = useMemo(() => new LRUCache<string, Set<string>>(60), []);
+  const findingsIndex = useMemo(() => {
+    const idx = new InvertedIndex<Finding>();
+    if (!findings || !Array.isArray(findings)) return idx;
+    for (let i = 0; i < findings.length; i++) {
+      if (findings[i] && findings[i].id) {
+        idx.addDocument(findings[i], ["title", "affected_asset", "source_tool", "cwe", "evidence", "remediation"]);
+      }
+    }
+    return idx;
+  }, [findings]);
+
+  // Top-K High-Risk Vulnerability Triage (Binary Max-Heap)
+  const topCriticalExposures = useMemo(() => {
+    if (!findings || !Array.isArray(findings) || findings.length === 0) return [];
+    const heap = new BinaryMaxHeap<Finding>();
+    for (let i = 0; i < findings.length; i++) {
+      const f = findings[i];
+      if (!f || !f.id) continue;
+      let weight = 0;
+      switch (f.severity) {
+        case "Critical": weight = 100; break;
+        case "High": weight = 80; break;
+        case "Medium": weight = 50; break;
+        case "Low": weight = 20; break;
+        default: weight = 5; break;
+      }
+      heap.push({ score: weight * 1000 + (f.confidence || 50), data: f });
+    }
+    return heap.getTopK(5);
+  }, [findings]);
+
+  // High-Performance Single-Pass DSA Filtering with Inverted Index & O(1) LRU Cache
   const { filteredFindings, critCount, highCount, medCount, lowCount, infoCount } = useMemo(() => {
     let crit = 0, high = 0, med = 0, low = 0, info = 0;
     const filtered: Finding[] = [];
     const q = findingSearchQuery.trim().toLowerCase();
+
+    // Fast O(1) set retrieval from InvertedIndex / LRU Cache
+    let matchingIds: Set<string> | null = null;
+    if (q) {
+      const cached = findingSearchCache.get(q);
+      if (cached) {
+        matchingIds = cached;
+      } else {
+        const matches = findingsIndex.search(q);
+        matchingIds = new Set(matches.map((m) => m.id));
+        findingSearchCache.put(q, matchingIds);
+      }
+    }
 
     for (let i = 0; i < findings.length; i++) {
       const f = findings[i];
@@ -630,13 +1563,8 @@ export default function App() {
       // Filter checks
       if (findingSeverityFilter !== "ALL" && f.severity !== findingSeverityFilter) continue;
       if (findingStatusFilter !== "ALL" && f.status !== findingStatusFilter) continue;
-      if (q) {
-        const matchTitle = f.title.toLowerCase().includes(q);
-        const matchAsset = f.affected_asset.toLowerCase().includes(q);
-        const matchTool = f.source_tool.toLowerCase().includes(q);
-        const matchCwe = (f.cwe || "").toLowerCase().includes(q);
-        if (!matchTitle && !matchAsset && !matchTool && !matchCwe) continue;
-      }
+      if (matchingIds && !matchingIds.has(f.id)) continue;
+
       filtered.push(f);
     }
 
@@ -648,7 +1576,7 @@ export default function App() {
       lowCount: low,
       infoCount: info,
     };
-  }, [findings, findingSeverityFilter, findingStatusFilter, findingSearchQuery]);
+  }, [findings, findingSeverityFilter, findingStatusFilter, findingSearchQuery, findingsIndex, findingSearchCache]);
 
   // Memoized Filtered Endpoints
   const filteredEndpoints = useMemo(() => {
@@ -669,170 +1597,921 @@ export default function App() {
     );
   }, [tools, plugins]);
 
+  // Column Sorting & Client-Side Pagination for Findings
+  const SEVERITY_WEIGHTS: Record<string, number> = {
+    Critical: 5,
+    High: 4,
+    Medium: 3,
+    Low: 2,
+    Info: 1,
+  };
+
+  const sortedFindings = useMemo(() => {
+    const list = [...filteredFindings];
+    list.sort((a, b) => {
+      let cmp = 0;
+      if (findingSortField === "severity") {
+        const wa = SEVERITY_WEIGHTS[a.severity] || 0;
+        const wb = SEVERITY_WEIGHTS[b.severity] || 0;
+        cmp = wa - wb;
+      } else if (findingSortField === "validation_status") {
+        const sa = a.validation_status || a.status || "";
+        const sb = b.validation_status || b.status || "";
+        cmp = sa.localeCompare(sb);
+      } else if (findingSortField === "title") {
+        cmp = a.title.localeCompare(b.title);
+      } else if (findingSortField === "status") {
+        cmp = a.status.localeCompare(b.status);
+      } else if (findingSortField === "source_tool") {
+        cmp = (a.source_tool || "").localeCompare(b.source_tool || "");
+      } else if (findingSortField === "affected_asset") {
+        cmp = (a.affected_asset || "").localeCompare(b.affected_asset || "");
+      } else if (findingSortField === "cwe") {
+        cmp = (a.cwe || "").localeCompare(b.cwe || "");
+      }
+      return findingSortDirection === "asc" ? cmp : -cmp;
+    });
+    return list;
+  }, [filteredFindings, findingSortField, findingSortDirection]);
+
+  const totalFindingPages = Math.max(1, Math.ceil(sortedFindings.length / findingPageSize));
+
+  const paginatedFindings = useMemo(() => {
+    const start = (findingPage - 1) * findingPageSize;
+    return sortedFindings.slice(start, start + findingPageSize);
+  }, [sortedFindings, findingPage, findingPageSize]);
+
+  useEffect(() => {
+    setFindingPage(1);
+  }, [findingSearchQuery, findingSeverityFilter, findingStatusFilter, findingSortField, findingSortDirection, findingPageSize]);
+
+  // Centralized Emergency Stop Handler
+  const handleEmergencyStop = () => {
+    setIsScanning(false);
+    setIsCrawling(false);
+    setScanLogs((prev) => [...prev, "[!] Emergency Kill Triggered: All active scan jobs terminated."]);
+    addToast({
+      type: "warning",
+      title: "Emergency Stop",
+      description: "All active scan and crawl operations halted immediately (Ctrl+Shift+E).",
+    });
+  };
+
+  // Centralized Global Keyboard Shortcuts Architecture
+  useEffect(() => {
+    function handleGlobalKeyDown(e: KeyboardEvent) {
+      const isInputFocused =
+        document.activeElement &&
+        (document.activeElement.tagName === "INPUT" ||
+          document.activeElement.tagName === "TEXTAREA" ||
+          document.activeElement.tagName === "SELECT" ||
+          (document.activeElement as HTMLElement).isContentEditable);
+
+      // Escape key closes modals, drawers, and overlays
+      if (e.key === "Escape") {
+        if (selectedFinding) {
+          e.preventDefault();
+          setSelectedFinding(null);
+          return;
+        }
+        if (isShortcutsModalOpen) {
+          e.preventDefault();
+          setIsShortcutsModalOpen(false);
+          return;
+        }
+        if (isCommandPaletteOpen) {
+          e.preventDefault();
+          setIsCommandPaletteOpen(false);
+          return;
+        }
+        if (isAuditLogModalOpen) {
+          e.preventDefault();
+          setIsAuditLogModalOpen(false);
+          return;
+        }
+        if (editingTarget) {
+          e.preventDefault();
+          setEditingTarget(null);
+          return;
+        }
+        if (editingFinding) {
+          e.preventDefault();
+          setEditingFinding(null);
+          return;
+        }
+        if (isCreateFindingOpen) {
+          e.preventDefault();
+          setIsCreateFindingOpen(false);
+          return;
+        }
+        if (drawers.aiMentorDrawer) {
+          e.preventDefault();
+          closeDrawer("aiMentorDrawer");
+          return;
+        }
+        if (drawers.workspaceControls) {
+          e.preventDefault();
+          closeDrawer("workspaceControls");
+          return;
+        }
+        if (drawers.findingsInspector) {
+          e.preventDefault();
+          closeDrawer("findingsInspector");
+          return;
+        }
+      }
+
+      // Help cheat sheet with '?' or 'Ctrl+/' (only when not typing in input)
+      if (!isInputFocused && (e.key === "?" || (e.ctrlKey && e.key === "/"))) {
+        e.preventDefault();
+        setIsShortcutsModalOpen((prev) => !prev);
+        return;
+      }
+
+      // F1 or Ctrl+H: Open Help Center
+      if (e.key === "F1" || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "h")) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("appsec:open-help"));
+        return;
+      }
+
+      // Ctrl+K / Cmd+K: Command Palette
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setIsCommandPaletteOpen((prev) => !prev);
+        return;
+      }
+
+      // Ctrl+B / Cmd+B: Toggle Sidebar (Collapse / Expand)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        handleToggleSidebar();
+        return;
+      }
+
+      // Ctrl+M: Toggle Quick AI Mentor drawer
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "m") {
+        e.preventDefault();
+        toggleDrawer("aiMentorDrawer");
+        return;
+      }
+
+      // Ctrl+Shift+D: Toggle Workspace Controls drawer
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        toggleDrawer("workspaceControls");
+        return;
+      }
+
+      // Ctrl+Shift+E: Emergency Stop
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "e") {
+        e.preventDefault();
+        handleEmergencyStop();
+        return;
+      }
+
+      // Ctrl+Shift+S: Trigger Quick Scan on selected target
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        if (selectedTarget) {
+          handleRunScan("nmap");
+          addToast({
+            type: "info",
+            title: "Quick Scan Triggered",
+            description: `Started network probe for ${selectedTarget.name} (Ctrl+Shift+S)`,
+          });
+        } else {
+          addToast({
+            type: "warning",
+            title: "No Target Selected",
+            description: "Please select an authorized target before scanning.",
+          });
+        }
+        return;
+      }
+
+      // Ctrl+Shift+N: New Target (navigate to targets tab and focus input)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "n") {
+        e.preventDefault();
+        setActiveTab("targets");
+        setTimeout(() => {
+          const input = document.querySelector<HTMLInputElement>("input[placeholder*='Acme Corp']");
+          input?.focus();
+        }, 50);
+        return;
+      }
+
+      // Ctrl+Shift+P: Start Welcome Tour
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "p") {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("appsec:start-tour", { detail: { trackId: "welcome" } }));
+        return;
+      }
+
+      // Ctrl+Shift+T: Reopen last closed tab
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "t") {
+        e.preventDefault();
+        if (closedTabs.length > 0) {
+          const lastClosed = closedTabs[closedTabs.length - 1];
+          reopenTab(lastClosed, (tab) => setActiveTab(tab as TabType));
+          addToast({
+            type: "info",
+            title: "Tab Restored",
+            description: `Restored ${lastClosed} tab.`,
+          });
+        }
+        return;
+      }
+
+      // Ctrl+Shift+W: Close current tab (if closable)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "w") {
+        e.preventDefault();
+        if (activeTab !== "analytics") {
+          closeTab(activeTab, activeTab, (tab) => setActiveTab(tab as TabType));
+        }
+        return;
+      }
+
+      // Ctrl+Shift+R: Reset workspace layout
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "r") {
+        e.preventDefault();
+        resetWorkspaceLayout();
+        addToast({
+          type: "info",
+          title: "Workspace Reset",
+          description: "All panels, tabs, and layout preferences reset to default.",
+        });
+        return;
+      }
+
+      // Ctrl+,: Settings / Appearance
+      if ((e.ctrlKey || e.metaKey) && e.key === ",") {
+        e.preventDefault();
+        setActiveTab("appearance");
+        return;
+      }
+
+      // Ctrl+Alt+B: Burp Suite Integration
+      if ((e.ctrlKey || e.metaKey) && e.altKey && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        setActiveTab("burp");
+        return;
+      }
+
+      // Ctrl + 1-9, 0: Tab Navigation
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+        const keyMap: Record<string, TabType> = {
+          "1": "analytics",
+          "2": "targets",
+          "3": "scanner",
+          "4": "orchestration",
+          "5": "crawler",
+          "6": "tools",
+          "7": "hostmobile",
+          "8": "findings",
+          "9": "mentor",
+          "0": "academy",
+        };
+        if (keyMap[e.key]) {
+          e.preventDefault();
+          setActiveTab(keyMap[e.key]);
+          return;
+        }
+      }
+    }
+
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, [
+    isShortcutsModalOpen,
+    isCommandPaletteOpen,
+    drawers,
+    isSidebarCollapsed,
+    sidebarWidth,
+    selectedTarget,
+    closedTabs,
+    activeTab,
+  ]);
+
   return (
-    <div className="app-container">
-      {/* Browser Warning Banner */}
-      {!isTauriApp && (
-        <div style={{ backgroundColor: "rgba(245, 158, 11, 0.2)", color: "#facc15", padding: "6px 20px", fontSize: "0.8rem", textAlign: "center", borderBottom: "1px solid rgba(245, 158, 11, 0.4)" }}>
-          ⚠️ You are viewing AppSec Nexus in a web browser preview. For native OS process execution, Nmap, and SQLite storage, switch to the <strong>appsec-nexus.exe</strong> desktop window.
-        </div>
-      )}
+    <TourProvider onNavigateTab={(tab) => setActiveTab(tab)}>
+      <div className="app-container">
+        {/* Browser Warning Banner */}
+        {!isTauriApp && (
+          <div style={{ backgroundColor: "rgba(245, 158, 11, 0.2)", color: "#facc15", padding: "6px 20px", fontSize: "0.8rem", textAlign: "center", borderBottom: "1px solid rgba(245, 158, 11, 0.4)" }}>
+            ⚠️ You are viewing AppSec Nexus in a web browser preview. For native OS process execution, Nmap, and SQLite storage, switch to the <strong>appsec-nexus.exe</strong> desktop window.
+          </div>
+        )}
 
-      {/* Top Header */}
-      <header className="top-nav">
-        <div className="brand">
-          <Shield className="brand-icon" size={24} />
-          <span>AppSec Nexus</span>
-          <span style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>Desktop Platform</span>
-        </div>
+        {/* Top Header */}
+        <header className="top-nav">
+          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+            <div
+              className="brand"
+              data-tour="navbar-brand"
+              onClick={() => setActiveTab("analytics")}
+              title="AppSec Nexus Security Platform"
+            >
+              <Shield className="brand-icon" size={22} />
+              <span>AppSec Nexus</span>
+              <span className="brand-subtitle" style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>Desktop Platform</span>
+              <span
+                className="brand-version"
+                style={{
+                  fontSize: "0.68rem",
+                  padding: "2px 7px",
+                  borderRadius: "4px",
+                  backgroundColor: "var(--accent-primary-subtle)",
+                  color: "var(--accent-primary)",
+                  fontWeight: 700,
+                  letterSpacing: "0.04em",
+                }}
+              >
+                v2.1 PRO
+              </span>
+            </div>
+          </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-          {selectedTarget && (
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem" }}>
-              <span style={{ color: "var(--text-dim)" }}>Target:</span>
-              <span style={{ fontWeight: 600 }}>{selectedTarget.primary_url}</span>
-              {selectedTarget.scope?.allow_local_lab ? (
-                <span className="badge badge-lab">
-                  <Unlock size={12} /> Lab Mode (Private IPs Allowed)
+          {/* Global Command Palette Trigger Bar */}
+          <button
+            onClick={() => setIsCommandPaletteOpen(true)}
+            className="command-palette-btn"
+            data-tour="command-palette-btn"
+            title="Open Command Palette (Ctrl+K)"
+          >
+            <Search size={14} color="var(--text-dim)" />
+            <span className="search-placeholder" style={{ flex: 1, textAlign: "left" }}>Search actions, findings...</span>
+            <kbd
+              style={{
+                fontSize: "0.68rem",
+                padding: "2px 6px",
+                borderRadius: "4px",
+                backgroundColor: "var(--bg-card)",
+                border: "1px solid var(--border-color)",
+                color: "var(--text-dim)",
+              }}
+            >
+              Ctrl K
+            </kbd>
+          </button>
+
+          {/* Right Status & Actions */}
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            {selectedTarget && (
+              <div className="top-nav-target" data-tour="target-scope-nav" style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.82rem" }}>
+                <span style={{ color: "var(--text-dim)" }}>Target:</span>
+                <span style={{ fontWeight: 600, color: "var(--text-main)", maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {selectedTarget.primary_url}
                 </span>
-              ) : (
-                <span className="badge badge-locked">
-                  <Lock size={12} /> Scope Protected (SSRF Guard Active)
-                </span>
+                <ScopeBadge allowLocalLab={selectedTarget.scope?.allow_local_lab} />
+              </div>
+            )}
+
+          {/* Global Background AI Activity Indicator */}
+          {hasRunningTask && (
+            <div
+              onClick={() => setActiveTab("mentor")}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "3px 10px",
+                borderRadius: "999px",
+                backgroundColor: "rgba(14, 165, 233, 0.15)",
+                border: "1px solid rgba(14, 165, 233, 0.4)",
+                cursor: "pointer",
+                boxShadow: "0 0 12px rgba(14, 165, 233, 0.2)",
+              }}
+              title="AI Mentor is generating a response in the background. Click to jump to conversation."
+            >
+              <Bot size={15} className="pulse" color="var(--accent-cyan)" />
+              <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--accent-cyan)" }}>
+                AI Mentor Analyzing...
+              </span>
+              {activeTasks[0] && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    cancelTask(activeTasks[0].id);
+                  }}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: "1px",
+                    display: "flex",
+                    alignItems: "center",
+                    color: "var(--text-dim)",
+                  }}
+                  title="Cancel background generation"
+                >
+                  <X size={13} />
+                </button>
               )}
             </div>
           )}
 
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          {recentlyCompletedTask && !hasRunningTask && (
+            <div
+              onClick={() => {
+                setActiveTab("mentor");
+                dismissNotification();
+              }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "3px 10px",
+                borderRadius: "999px",
+                backgroundColor: "rgba(16, 185, 129, 0.15)",
+                border: "1px solid rgba(16, 185, 129, 0.4)",
+                cursor: "pointer",
+                boxShadow: "0 0 10px rgba(16, 185, 129, 0.2)",
+              }}
+              title="Answer ready! Click to jump to AI Mentor."
+            >
+              <Sparkles size={13} color="var(--accent-emerald)" />
+              <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--accent-emerald)" }}>
+                Answer Ready!
+              </span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  dismissNotification();
+                }}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: "1px",
+                  display: "flex",
+                  alignItems: "center",
+                  color: "var(--text-dim)",
+                }}
+              >
+                <X size={12} />
+              </button>
+            </div>
+          )}
+
+          {/* AI Status Badge */}
+          <div
+            data-tour="ai-status-badge"
+            onClick={() => setActiveTab("mentor")}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "4px 10px",
+              borderRadius: "999px",
+              backgroundColor: !isAiEnabled
+                ? "rgba(100, 116, 139, 0.15)"
+                : aiAvailable
+                ? "rgba(16, 185, 129, 0.12)"
+                : "rgba(245, 158, 11, 0.12)",
+              border: `1px solid ${
+                !isAiEnabled
+                  ? "var(--border-color)"
+                  : aiAvailable
+                  ? "rgba(16, 185, 129, 0.3)"
+                  : "rgba(245, 158, 11, 0.3)"
+              }`,
+              cursor: "pointer",
+            }}
+            title={
+              !isAiEnabled
+                ? "AI Engine is turned OFF (Click to open AI Mentor)"
+                : aiAvailable
+                ? `Ollama Active: ${aiModels.length} models ready`
+                : "Ollama engine offline"
+            }
+          >
             <span
               style={{
-                width: 8,
-                height: 8,
+                width: 7,
+                height: 7,
                 borderRadius: "50%",
-                backgroundColor: aiAvailable ? "var(--accent-emerald)" : "var(--accent-amber)",
+                backgroundColor: !isAiEnabled
+                  ? "var(--text-dim)"
+                  : aiAvailable
+                  ? "var(--accent-emerald)"
+                  : "var(--accent-amber)",
               }}
             />
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-              {aiAvailable ? `Local AI: Online (${aiModels.length} models)` : "Local AI: Offline"}
+            <span
+              style={{
+                fontSize: "0.72rem",
+                fontWeight: 600,
+                color: !isAiEnabled
+                  ? "var(--text-dim)"
+                  : aiAvailable
+                  ? "var(--accent-emerald)"
+                  : "var(--accent-amber)",
+              }}
+            >
+              {!isAiEnabled ? "AI Paused" : aiAvailable ? `${aiModels.length} AI Models` : "AI Offline"}
             </span>
           </div>
 
+          {/* Active Security Category Specialization Selector */}
+          <div data-tour="category-selector" style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            <CategorySelector
+              activeCategory={activeCategory}
+              onSelectCategory={(cat) => {
+                setActiveCategory(cat);
+                addToast({
+                  type: "info",
+                  title: "Security Specialization Switched",
+                  description: `Switched active intelligence to ${cat.toUpperCase()} security.`,
+                });
+              }}
+              compact
+            />
+          </div>
+
+          {/* Workspace Layout Preset Selector */}
+          <div data-tour="workspace-presets-select" style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            <LayoutGrid size={14} color="var(--text-dim)" />
+            <select
+              value={workspacePreset}
+              onChange={(e) => handleSelectPreset(e.target.value as WorkspacePreset)}
+              style={{
+                padding: "2px 8px",
+                fontSize: "0.74rem",
+                height: "26px",
+                borderRadius: "4px",
+                backgroundColor: "var(--bg-secondary)",
+                color: "var(--text-main)",
+                border: "1px solid var(--border-color)",
+                cursor: "pointer",
+              }}
+              title="Select Workspace Preset (Default, Compact, Analyst, Pentest, API, Learning)"
+            >
+              <option value="default">⚡ Default</option>
+              <option value="compact">📐 Compact</option>
+              <option value="analyst">🔬 Analyst</option>
+              <option value="pentest">🛡️ Pentest</option>
+              <option value="api">🌐 API Test</option>
+              <option value="learning">🎓 Learning</option>
+            </select>
+          </div>
+
+          {/* Quick Theme Toggle Button */}
+          <button
+            className="btn btn-secondary"
+            style={{ padding: "6px 10px", fontSize: "0.8rem" }}
+            onClick={() => {
+              if (preferences.theme === "arctic") {
+                setTheme("midnight");
+                addToast({ type: "info", title: "Theme Switched", description: "Activated Midnight dark mode." });
+              } else {
+                setTheme("arctic");
+                addToast({ type: "info", title: "Theme Switched", description: "Activated Arctic Light mode." });
+              }
+            }}
+            title={`Toggle Theme (Current: ${preferences.theme})`}
+          >
+            {preferences.theme === "arctic" ? <Moon size={15} /> : <Sun size={15} />}
+          </button>
+
+          {/* Appearance Settings Tab Trigger */}
+          <button
+            className={`btn ${activeTab === "appearance" ? "btn-primary" : "btn-secondary"}`}
+            style={{ padding: "6px 10px" }}
+            onClick={() => setActiveTab("appearance")}
+            title="Appearance & Personalization"
+          >
+            <Palette size={15} />
+          </button>
+
+          {/* Audit Log Modal Trigger */}
+          <button
+            className="btn btn-secondary"
+            style={{ padding: "6px 10px", display: "flex", alignItems: "center", gap: "5px", fontSize: "0.8rem" }}
+            onClick={() => setIsAuditLogModalOpen(true)}
+            title="System Audit & Data Activity Log"
+          >
+            <History size={15} />
+            <span className="hide-mobile">Audit Log</span>
+          </button>
+
+          {/* Keyboard Shortcuts Trigger Button */}
+          <button
+            className="btn btn-secondary"
+            style={{ padding: "6px 10px", display: "flex", alignItems: "center", gap: "5px", fontSize: "0.8rem" }}
+            onClick={() => setIsShortcutsModalOpen(true)}
+            title="Keyboard Shortcuts Cheat Sheet (Press ? or Ctrl+/)"
+          >
+            <Keyboard size={15} />
+            <span className="hide-mobile">Shortcuts</span>
+          </button>
+
+          {/* Global Help & Tour Dropdown */}
+          <HeaderHelpMenu
+            onNavigateTab={(tab) => setActiveTab(tab)}
+            onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
+            onOpenShortcutsModal={() => setIsShortcutsModalOpen(true)}
+          />
+
+          {/* Emergency Stop Button */}
           <button
             className="btn btn-danger"
-            onClick={() => {
-              setIsScanning(false);
-              setIsCrawling(false);
-              setScanLogs((prev) => [...prev, "[!] Emergency Kill Triggered: All active scan jobs terminated."]);
-            }}
+            style={{ padding: "6px 12px" }}
+            onClick={handleEmergencyStop}
+            title="Halt all background network probes and scans (Ctrl+Shift+E)"
           >
             Emergency Stop
           </button>
         </div>
       </header>
 
-      {/* Main Body */}
-      <div className="main-layout">
-        {/* Navigation Sidebar */}
-        <aside className="sidebar">
+      {/* Workspace Controls & Tabs Strip */}
+      <div data-tour="workspace-toolbar">
+        <WorkspaceToolbar
+          onOpenAiDrawer={() => openDrawer("aiMentorDrawer")}
+          onOpenControlsDrawer={() => openDrawer("workspaceControls")}
+        />
+      </div>
+      <div data-tour="workspace-tabs-strip">
+        <WorkspaceTabs
+          activeTab={activeTab}
+          onSelectTab={(tabId) => setActiveTab(tabId as TabType)}
+        />
+      </div>
+
+      {/* Main Body with Resizable Drag Handlers */}
+      <div
+        className="main-layout"
+        onPointerMove={(e) => {
+          handleSidebarPointerMove(e);
+          handleDrawerPointerMove(e);
+        }}
+        onPointerUp={(e) => {
+          handleSidebarPointerUp(e);
+          handleDrawerPointerUp(e);
+        }}
+      >
+        {/* Modern Categorized Navigation Sidebar with Resizable Handle */}
+        <aside
+          className={`sidebar ${preferences.sidebarMode === "compact" || sidebarWidth <= 80 ? "compact-mode" : ""}`}
+          style={{ width: `${sidebarWidth}px`, minWidth: `${sidebarWidth}px`, position: "relative" }}
+        >
+          {/* Resizable Sidebar Drag Handle */}
+          <div
+            className={`sidebar-resizer ${isResizingSidebar ? "resizing" : ""}`}
+            onPointerDown={handleSidebarPointerDown}
+            onDoubleClick={handleToggleSidebar}
+            title="Drag to resize sidebar width, double-click to collapse/expand (Ctrl+B)"
+            style={{
+              position: "absolute",
+              top: 0,
+              right: 0,
+              width: "6px",
+              height: "100%",
+              cursor: "col-resize",
+              zIndex: 30,
+              backgroundColor: isResizingSidebar ? "var(--accent-cyan)" : "transparent",
+              transition: "background-color 0.15s ease",
+            }}
+          />
+          {/* Group 1: Operations */}
+          <div className="sidebar-section-title">Operations</div>
           <div
             className={`nav-item ${activeTab === "analytics" ? "active" : ""}`}
             onClick={() => setActiveTab("analytics")}
+            title="Security Analytics & Posture"
           >
             <Activity size={18} color={activeTab === "analytics" ? "var(--accent-cyan)" : undefined} />
-            <span>Security Analytics</span>
+            <span className="sidebar-label">Security Analytics</span>
           </div>
 
           <div
             className={`nav-item ${activeTab === "targets" ? "active" : ""}`}
             onClick={() => setActiveTab("targets")}
+            title="Target & Scope"
           >
             <TargetIcon size={18} />
-            <span>Target & Scope</span>
-          </div>
-
-          <div
-            className={`nav-item ${activeTab === "orchestration" ? "active" : ""}`}
-            onClick={() => setActiveTab("orchestration")}
-          >
-            <Cpu size={18} color={activeTab === "orchestration" ? "var(--accent-cyan)" : undefined} />
-            <span>Universal Orchestration</span>
-          </div>
-
-          <div
-            className={`nav-item ${activeTab === "tools" ? "active" : ""}`}
-            onClick={() => setActiveTab("tools")}
-          >
-            <Layers size={18} />
-            <span>Tools & Plugins ({readyToolsCount} Ready)</span>
-          </div>
-
-          <div
-            className={`nav-item ${activeTab === "crawler" ? "active" : ""}`}
-            onClick={() => setActiveTab("crawler")}
-          >
-            <Compass size={18} />
-            <span>Crawler & Endpoints ({endpoints.length})</span>
+            <span className="sidebar-label">Target & Scope</span>
           </div>
 
           <div
             className={`nav-item ${activeTab === "scanner" ? "active" : ""}`}
             onClick={() => setActiveTab("scanner")}
+            title="Scan Console"
           >
             <Terminal size={18} />
-            <span>Scan Console</span>
+            <span className="sidebar-label">Scan Console</span>
           </div>
 
           <div
-            className={`nav-item ${activeTab === "findings" ? "active" : ""}`}
-            onClick={() => setActiveTab("findings")}
+            className={`nav-item ${activeTab === "terminal" ? "active" : ""}`}
+            onClick={() => setActiveTab("terminal")}
+            title="Multi-Terminal Orchestration & Tool Execution"
           >
-            <AlertTriangle size={18} />
-            <span>Findings ({findings.length})</span>
+            <Terminal size={18} color={activeTab === "terminal" ? "var(--accent-cyan)" : undefined} />
+            <span className="sidebar-label">Multi-Terminal</span>
           </div>
 
           <div
-            className={`nav-item ${activeTab === "importer" ? "active" : ""}`}
-            onClick={() => setActiveTab("importer")}
+            className={`nav-item ${activeTab === "orchestration" ? "active" : ""}`}
+            onClick={() => setActiveTab("orchestration")}
+            title="Universal Orchestration"
           >
-            <UploadCloud size={18} />
-            <span>Import Reports</span>
+            <Cpu size={18} color={activeTab === "orchestration" ? "var(--accent-cyan)" : undefined} />
+            <span className="sidebar-label">Universal Orchestration</span>
+          </div>
+
+          {/* Group 2: Discovery & Audit */}
+          <div className="sidebar-section-title">Discovery & Audit</div>
+          <div
+            className={`nav-item ${activeTab === "crawler" ? "active" : ""}`}
+            onClick={() => setActiveTab("crawler")}
+            title="Crawler & Discovered Endpoints"
+          >
+            <Compass size={18} />
+            <span className="sidebar-label" style={{ flex: 1 }}>Crawler</span>
+            {endpoints.length > 0 && (
+              <span className="sidebar-badge" style={{ fontSize: "0.68rem", color: "var(--text-dim)", padding: "1px 6px", borderRadius: "10px", background: "var(--bg-card)" }}>
+                {endpoints.length}
+              </span>
+            )}
+          </div>
+
+          <div
+            className={`nav-item ${activeTab === "tools" ? "active" : ""}`}
+            onClick={() => setActiveTab("tools")}
+            title="Tools & Universal Plugins"
+          >
+            <Layers size={18} />
+            <span className="sidebar-label" style={{ flex: 1 }}>Tools & Plugins</span>
+            <span className="sidebar-badge" style={{ fontSize: "0.68rem", color: "var(--accent-emerald)", padding: "1px 6px", borderRadius: "10px", background: "rgba(16, 185, 129, 0.12)" }}>
+              {readyToolsCount}
+            </span>
+          </div>
+
+          <div
+            className={`nav-item ${activeTab === "burp" ? "active" : ""}`}
+            onClick={() => setActiveTab("burp")}
+            title="Burp Suite Local Integration"
+          >
+            <Radio size={18} color={activeTab === "burp" ? "var(--accent-orange, #f97316)" : undefined} />
+            <span className="sidebar-label" style={{ flex: 1 }}>Burp Suite</span>
+            <span className="sidebar-badge" style={{ fontSize: "0.68rem", color: "var(--accent-orange, #f97316)", padding: "1px 6px", borderRadius: "10px", background: "rgba(249, 115, 22, 0.12)", fontWeight: 700 }}>
+              Proxy
+            </span>
           </div>
 
           <div
             className={`nav-item ${activeTab === "hostmobile" ? "active" : ""}`}
             onClick={() => setActiveTab("hostmobile")}
+            title="Host & Mobile Audit"
           >
             <Monitor size={18} color={activeTab === "hostmobile" ? "var(--accent-blue)" : undefined} />
-            <span>Host & Mobile Audit</span>
+            <span className="sidebar-label">Host & Mobile</span>
+          </div>
+
+          {/* Group 3: Findings & Intelligence */}
+          <div className="sidebar-section-title">Findings & Intel</div>
+          <div
+            className={`nav-item ${activeTab === "findings" ? "active" : ""}`}
+            onClick={() => setActiveTab("findings")}
+            title="Vulnerability Findings"
+          >
+            <AlertTriangle size={18} />
+            <span className="sidebar-label" style={{ flex: 1 }}>Findings</span>
+            {findings.length > 0 && (
+              <span className="sidebar-badge" style={{ fontSize: "0.68rem", color: "var(--accent-rose)", padding: "1px 6px", borderRadius: "10px", background: "rgba(244, 63, 94, 0.12)", fontWeight: 700 }}>
+                {findings.length}
+              </span>
+            )}
+          </div>
+
+          <div
+            className={`nav-item ${activeTab === "issues" ? "active" : ""}`}
+            onClick={() => setActiveTab("issues")}
+            title="Issue Documentation & Reports"
+          >
+            <ClipboardList size={18} />
+            <span className="sidebar-label" style={{ flex: 1 }}>Issues & Reports</span>
+          </div>
+
+          <div
+            className={`nav-item ${activeTab === "importer" ? "active" : ""}`}
+            onClick={() => setActiveTab("importer")}
+            title="Import External Reports"
+          >
+            <UploadCloud size={18} />
+            <span className="sidebar-label">Import Reports</span>
+          </div>
+
+          <div
+            className={`nav-item ${activeTab === "categoryWorkflow" ? "active" : ""}`}
+            onClick={() => setActiveTab("categoryWorkflow")}
+            title="Category Intelligence & Workflows"
+          >
+            <Layers size={18} color={activeTab === "categoryWorkflow" ? "var(--accent-cyan)" : undefined} />
+            <span className="sidebar-label" style={{ flex: 1 }}>Category Intel</span>
+          </div>
+
+          <div
+            className={`nav-item ${activeTab === "playbooks" ? "active" : ""}`}
+            onClick={() => setActiveTab("playbooks")}
+            title="Security Checklists & Assessment Playbooks"
+          >
+            <FileCheck size={18} color={activeTab === "playbooks" ? "var(--accent-cyan)" : undefined} />
+            <span className="sidebar-label" style={{ flex: 1 }}>Playbooks</span>
           </div>
 
           <div
             className={`nav-item ${activeTab === "mentor" ? "active" : ""}`}
             onClick={() => setActiveTab("mentor")}
+            title="Local AI Security Mentor"
           >
             <Sparkles size={18} />
-            <span>Local AI Mentor</span>
+            <span className="sidebar-label">Local AI Mentor</span>
           </div>
 
           <div
             className={`nav-item ${activeTab === "academy" ? "active" : ""}`}
             onClick={() => setActiveTab("academy")}
+            title="Cyber Academy Curriculum"
           >
             <GraduationCap size={18} />
-            <span>Cyber Academy</span>
+            <span className="sidebar-label">Cyber Academy</span>
+          </div>
+
+          <div
+            className={`nav-item ${activeTab === "methodologies" ? "active" : ""}`}
+            onClick={() => setActiveTab("methodologies")}
+            title="Detection Methodologies & Transparency Rules"
+          >
+            <BookOpen size={18} color={activeTab === "methodologies" ? "var(--accent-cyan)" : undefined} />
+            <span className="sidebar-label" style={{ flex: 1 }}>Methodologies</span>
           </div>
 
           <div
             className={`nav-item ${activeTab === "history" ? "active" : ""}`}
             onClick={() => setActiveTab("history")}
+            title="Audit History"
           >
             <History size={18} />
-            <span>Audit History ({scanHistory.length})</span>
+            <span className="sidebar-label" style={{ flex: 1 }}>Audit History</span>
+            {scanHistory.length > 0 && (
+              <span className="sidebar-badge" style={{ fontSize: "0.68rem", color: "var(--text-dim)", padding: "1px 6px", borderRadius: "10px", background: "var(--bg-card)" }}>
+                {scanHistory.length}
+              </span>
+            )}
+          </div>
+
+          {/* Group 4: Settings & Personalization */}
+          <div className="sidebar-section-title">System</div>
+          <div
+            className={`nav-item ${activeTab === "appearance" ? "active" : ""}`}
+            onClick={() => setActiveTab("appearance")}
+            title="Appearance & Personalization"
+          >
+            <Palette size={18} color={activeTab === "appearance" ? "var(--accent-cyan)" : undefined} />
+            <span className="sidebar-label">Appearance</span>
+          </div>
+
+          {/* Bottom Sidebar Collapse/Expand Toggle */}
+          <div
+            className="nav-item sidebar-collapse-btn"
+            style={{
+              marginTop: "auto",
+              borderTop: "1px solid var(--border-color)",
+              padding: "10px 12px",
+              color: "var(--text-dim)",
+              cursor: "pointer",
+            }}
+            onClick={handleToggleSidebar}
+            title={preferences.sidebarMode === "compact" || sidebarWidth <= 80 ? "Expand Sidebar (Ctrl+B)" : "Collapse Sidebar (Ctrl+B)"}
+          >
+            <PanelLeft size={18} />
+            <span className="sidebar-label">
+              {preferences.sidebarMode === "compact" || sidebarWidth <= 80 ? "Expand" : "Collapse"}
+            </span>
           </div>
         </aside>
 
         {/* Center Workspace */}
         <main className="workspace">
+          {/* Contextual Navigation Breadcrumbs & Scope Bar */}
+          <NavigationBreadcrumbs
+            activeTab={activeTab}
+            onNavigateTab={(tab) => setActiveTab(tab)}
+            targets={targets}
+            selectedTarget={selectedTarget}
+            onSelectTarget={(target) => setSelectedTarget(target)}
+            selectedFinding={activeFindingDetail || selectedFinding}
+            onCloseFinding={() => {
+              setActiveFindingDetail(null);
+              setSelectedFinding(null);
+            }}
+          />
+
           {/* TAB 0: SECURITY ANALYTICS */}
           {activeTab === "analytics" && (
             <Suspense fallback={<TabLoadingSkeleton />}>
@@ -860,11 +2539,19 @@ export default function App() {
           {/* TAB 1: TARGETS & SCOPE */}
           {activeTab === "targets" && (
             <div>
-              <div className="card">
-                <h2 className="card-title">
-                  <TargetIcon size={20} color="var(--accent-cyan)" />
-                  Configure Authorized Target
-                </h2>
+              <div className="card" data-tour="target-config-card">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                  <h2 className="card-title" style={{ margin: 0 }}>
+                    <TargetIcon size={20} color="var(--accent-cyan)" />
+                    Configure Authorized Target
+                  </h2>
+                  <ContextualHelpButton
+                    articleId="targets-scope"
+                    tourTrackId="targets"
+                    workflowId="first-security-scan"
+                    title="Target & Scope Guidance"
+                  />
+                </div>
                 <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginBottom: "16px" }}>
                   AppSec Nexus enforces strict scope validation. Any out-of-scope domain, redirect, or private IP will be blocked before any network request is transmitted.
                 </p>
@@ -920,7 +2607,7 @@ export default function App() {
               </div>
 
               {/* Target List */}
-              <div className="card">
+              <div className="card" data-tour="target-list-table">
                 <h3 className="card-title">Authorized Targets ({targets.length})</h3>
                 {targets.length === 0 ? (
                   <p style={{ color: "var(--text-dim)", fontSize: "0.85rem" }}>No targets configured yet.</p>
@@ -945,11 +2632,37 @@ export default function App() {
                           <div style={{ fontWeight: 600 }}>{t.name}</div>
                           <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>{t.primary_url}</div>
                         </div>
-                        {t.scope.allow_local_lab ? (
-                          <span className="badge badge-lab">Lab Mode</span>
-                        ) : (
-                          <span className="badge badge-locked">Protected Scope</span>
-                        )}
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          {t.scope.allow_local_lab ? (
+                            <span className="badge badge-lab">Lab Mode</span>
+                          ) : (
+                            <span className="badge badge-locked">Protected Scope</span>
+                          )}
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            style={{ padding: "4px 8px", fontSize: "0.75rem", display: "flex", alignItems: "center", gap: "4px" }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingTarget(t);
+                            }}
+                            title="Edit Target Configuration"
+                          >
+                            <Edit2 size={12} /> Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-danger"
+                            style={{ padding: "4px 8px", fontSize: "0.75rem", display: "flex", alignItems: "center", gap: "4px" }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeletingTarget(t);
+                            }}
+                            title="Delete Target & Associated Data"
+                          >
+                            <Trash2 size={12} /> Delete
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1085,7 +2798,7 @@ export default function App() {
 
               {/* VIEW 1: CORE TOOLS */}
               {toolHubTab === "tools" && (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "16px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))", gap: "16px" }}>
                   {tools.map((tool) => (
                     <div key={tool.id} className="card" style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
                       <div>
@@ -1155,7 +2868,7 @@ export default function App() {
                       </p>
                     </div>
                   ) : (
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: "16px" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))", gap: "16px" }}>
                       {plugins.map((plugin) => (
                         <div key={plugin.id} className="card" style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
                           <div>
@@ -1683,13 +3396,20 @@ export default function App() {
           {/* TAB 3: CRAWLER & ENDPOINTS */}
           {activeTab === "crawler" && (
             <div>
-              <div className="card">
+              <div className="card" data-tour="crawler-controls-card">
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
                   <div>
-                    <h2 className="card-title" style={{ margin: 0 }}>
-                      <Compass size={20} color="var(--accent-cyan)" />
-                      Bounded Low-Impact Crawler & Endpoint Discovery
-                    </h2>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <h2 className="card-title" style={{ margin: 0 }}>
+                        <Compass size={20} color="var(--accent-cyan)" />
+                        Bounded Low-Impact Crawler & Endpoint Discovery
+                      </h2>
+                      <ContextualHelpButton
+                        articleId="recon-crawler"
+                        tourTrackId="recon"
+                        title="Crawler & Recon Guidance"
+                      />
+                    </div>
                     <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginTop: "4px" }}>
                       Safe HTML link discovery, form action harvesting, and sensitive path auditing (.git, .env, robots.txt, sitemaps).
                     </p>
@@ -1729,6 +3449,16 @@ export default function App() {
                         <RotateCcw size={14} /> Refresh
                       </button>
                     )}
+                    {selectedTarget && endpoints.length > 0 && (
+                      <button
+                        type="button"
+                        className="btn btn-danger"
+                        onClick={() => setIsClearingEndpointsModalOpen(true)}
+                        title="Clear all discovered endpoints for this target"
+                      >
+                        <Trash2 size={14} /> Clear Endpoints
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -1751,7 +3481,8 @@ export default function App() {
                     No endpoints discovered yet. Click 'Start Discovery' above to crawl {selectedTarget?.primary_url || "target"}.
                   </p>
                 ) : (
-                  <table className="data-table">
+                  <div className="table-responsive" data-tour="discovered-endpoints-table">
+                    <table className="data-table">
                     <thead>
                       <tr>
                         <th>Method</th>
@@ -1760,6 +3491,7 @@ export default function App() {
                         <th>Source</th>
                         <th>Content-Type</th>
                         <th>Discovered At</th>
+                        <th style={{ textAlign: "right" }}>Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1808,11 +3540,23 @@ export default function App() {
                           <td style={{ color: "var(--text-dim)", fontSize: "0.75rem", fontFamily: "monospace" }}>
                             {ep.discovered_at.slice(11, 19)}
                           </td>
+                          <td style={{ textAlign: "right" }}>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              style={{ padding: "3px 7px", fontSize: "0.72rem", color: "var(--accent-rose)" }}
+                              onClick={() => handleDeleteEndpoint(ep)}
+                              title="Delete endpoint record"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                )}
+                </div>
+              )}
               </div>
             </div>
           )}
@@ -1822,10 +3566,18 @@ export default function App() {
             <div>
               <div className="card">
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
-                  <h3 className="card-title" style={{ margin: 0 }}>
-                    <Terminal size={18} color="var(--accent-cyan)" /> Live Scan Terminal ({activeTool})
-                  </h3>
-                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <h3 className="card-title" style={{ margin: 0 }}>
+                      <Terminal size={18} color="var(--accent-cyan)" /> Live Scan Terminal ({activeTool})
+                    </h3>
+                    <ContextualHelpButton
+                      articleId="scan-console"
+                      tourTrackId="scanner"
+                      workflowId="first-security-scan"
+                      title="Scan Console Guidance"
+                    />
+                  </div>
+                  <div data-tour="scan-execution-buttons" style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
                     <button
                       className="btn btn-secondary"
                       disabled={isScanning}
@@ -1892,10 +3644,19 @@ export default function App() {
                     >
                       Clear
                     </button>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => setActiveTab("terminal")}
+                      style={{ display: "inline-flex", alignItems: "center", gap: "4px", color: "var(--accent-cyan)" }}
+                      title="Open dedicated Multi-Terminal workspace with multiple sessions and split panes"
+                    >
+                      <Terminal size={13} />
+                      <span>Multi-Terminal Workspace</span>
+                    </button>
                   </div>
                 </div>
 
-                <div className="console-box" style={{ height: "450px" }}>
+                <div className="console-box" data-tour="scan-terminal-box" style={{ height: "450px" }}>
                   {scanLogs.length === 0 ? (
                     <div style={{ color: "var(--text-dim)" }}>
                       // Terminal ready. Select an authorized target and click any scan button above.
@@ -1913,11 +3674,54 @@ export default function App() {
             </div>
           )}
 
+          {/* TAB: MULTI-TERMINAL WORKSPACE */}
+          {activeTab === "terminal" && (
+            <Suspense fallback={<TabLoadingSkeleton />}>
+              <MultiTerminalWorkspace
+                targets={targets}
+                selectedTargetId={selectedTarget?.id || null}
+                onSelectTargetId={(id) => {
+                  const target = targets.find((t) => t.id === id);
+                  if (target) setSelectedTarget(target);
+                }}
+                onFindingsDiscovered={(newFindings) => {
+                  setFindings((prev) => [...prev, ...newFindings]);
+                }}
+                onEndpointsDiscovered={(newEndpoints) => {
+                  setEndpoints((prev) => [...prev, ...newEndpoints]);
+                }}
+              />
+            </Suspense>
+          )}
+
           {/* TAB 5: UNIFIED FINDINGS */}
           {activeTab === "findings" && (
+            activeFindingDetail ? (
+              <Suspense fallback={<TabLoadingSkeleton />}>
+                <VulnerabilityDetailPage
+                  finding={activeFindingDetail}
+                  onBack={() => setActiveFindingDetail(null)}
+                  onOpenMethodology={(methodologyId: string) => {
+                    setActiveMethodologyId(methodologyId);
+                    setActiveTab("methodologies");
+                  }}
+                  onOpenAiMentor={(prompt: string) => {
+                    setExternalMentorPrompt(prompt);
+                    setActiveTab("mentor");
+                  }}
+                  onFindingUpdated={(updated: Finding) => {
+                    setActiveFindingDetail(updated);
+                    if (selectedFinding?.id === updated.id) {
+                      setSelectedFinding(updated);
+                    }
+                    setFindings((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));
+                  }}
+                />
+              </Suspense>
+            ) : (
             <div>
               {/* Stat Cards */}
-              <div className="stat-grid">
+              <div className="stat-grid" data-tour="findings-stat-grid">
                 <div className="stat-card" style={{ borderLeft: "4px solid var(--accent-rose)" }}>
                   <span className="stat-label">Critical</span>
                   <span className="stat-value" style={{ color: "var(--accent-rose)" }}>{critCount}</span>
@@ -1943,19 +3747,35 @@ export default function App() {
               <div className="card">
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
                   <div>
-                    <h2 className="card-title" style={{ margin: 0 }}>
-                      <AlertTriangle size={20} color="var(--accent-amber)" />
-                      Unified Findings & Deduplication Engine ({findings.length})
-                    </h2>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <h2 className="card-title" style={{ margin: 0 }}>
+                        <AlertTriangle size={20} color="var(--accent-amber)" />
+                        Unified Findings & Deduplication Engine ({findings.length})
+                      </h2>
+                      <ContextualHelpButton
+                        articleId="findings-triage"
+                        tourTrackId="findings"
+                        workflowId="validate-false-positives"
+                        title="Findings & Triage Guidance"
+                      />
+                    </div>
                     {reportStatus && (
                       <div style={{ color: "var(--accent-emerald)", fontSize: "0.8rem", marginTop: "4px" }}>
                         ✓ {reportStatus}
                       </div>
                     )}
                   </div>
-                  <div style={{ display: "flex", gap: "8px" }}>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                     <button
+                      type="button"
                       className="btn btn-primary"
+                      onClick={() => setIsCreateFindingOpen(true)}
+                      title="Record manual observation or custom vulnerability"
+                    >
+                      <Plus size={14} /> New Finding
+                    </button>
+                    <button
+                      className="btn btn-secondary"
                       onClick={handleExportReport}
                       disabled={findings.length === 0}
                     >
@@ -1973,6 +3793,70 @@ export default function App() {
                     </button>
                   </div>
                 </div>
+
+                {/* DSA Binary Max-Heap Top-K Prioritized Exposures Strip */}
+                {topCriticalExposures.length > 0 && (
+                  <div
+                    style={{
+                      background: "rgba(239, 68, 68, 0.05)",
+                      border: "1px solid rgba(239, 68, 68, 0.2)",
+                      borderRadius: "8px",
+                      padding: "10px 14px",
+                      marginBottom: "16px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--accent-rose)", display: "flex", alignItems: "center", gap: "6px" }}>
+                        <ShieldAlert size={14} />
+                        Priority Triage Matrix (Binary Max-Heap Top-{topCriticalExposures.length})
+                      </span>
+                      <span style={{ fontSize: "0.7rem", color: "var(--text-dim)", fontFamily: "monospace" }}>
+                        O(K log N) Extraction
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                      {topCriticalExposures.filter((exp): exp is Finding => Boolean(exp && exp.id)).map((exp) => (
+                        <button
+                          key={exp.id}
+                          onClick={() => {
+                            setActiveFindingDetail(exp);
+                            setSelectedFinding(exp);
+                          }}
+                          style={{
+                            background: "var(--bg-primary)",
+                            border: `1px solid ${exp.severity === "Critical" ? "rgba(239, 68, 68, 0.4)" : "rgba(249, 115, 22, 0.4)"}`,
+                            borderRadius: "6px",
+                            padding: "6px 10px",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            textAlign: "left",
+                            transition: "all 0.15s ease",
+                          }}
+                          className="hover-card"
+                          title={`${exp.severity} | ${exp.affected_asset || "No asset"}`}
+                        >
+                          <span
+                            className={`badge badge-${exp.severity.toLowerCase()}`}
+                            style={{ fontSize: "0.65rem", padding: "2px 6px" }}
+                          >
+                            {exp.severity}
+                          </span>
+                          <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-main)", maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {exp.title}
+                          </span>
+                          <span style={{ fontSize: "0.65rem", color: "var(--text-dim)", background: "var(--bg-secondary)", padding: "1px 5px", borderRadius: "4px" }}>
+                            {exp.confidence ? `${exp.confidence}%` : exp.source_tool || "Triaged"}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Filter and Search Bar */}
                 <div className="filter-bar">
@@ -2000,29 +3884,160 @@ export default function App() {
                     ))}
                   </div>
 
-                  <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                    <span style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>Status:</span>
-                    <select
-                      value={findingStatusFilter}
-                      onChange={(e) => setFindingStatusFilter(e.target.value)}
-                      style={{
-                        background: "var(--bg-primary)",
-                        color: "var(--text-main)",
-                        border: "1px solid var(--border-color)",
-                        borderRadius: "6px",
-                        padding: "5px 8px",
-                        fontSize: "0.78rem",
-                      }}
+                  <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                      <span style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>Status:</span>
+                      <select
+                        value={findingStatusFilter}
+                        onChange={(e) => setFindingStatusFilter(e.target.value)}
+                        style={{
+                          background: "var(--bg-primary)",
+                          color: "var(--text-main)",
+                          border: "1px solid var(--border-color)",
+                          borderRadius: "6px",
+                          padding: "5px 8px",
+                          fontSize: "0.78rem",
+                        }}
+                      >
+                        <option value="ALL">All Statuses</option>
+                        <option value="NeedsValidation">Needs Validation</option>
+                        <option value="Confirmed">Confirmed</option>
+                        <option value="LikelyTruePositive">Likely True Positive</option>
+                        <option value="NeedsReview">Needs Review</option>
+                        <option value="Unconfirmed">Unconfirmed</option>
+                        <option value="LikelyFalsePositive">Likely False Positive</option>
+                        <option value="ValidationFailed">Validation Failed</option>
+                        <option value="NotApplicable">Not Applicable</option>
+                        <option value="New">New</option>
+                        <option value="AcceptedRisk">Accepted Risk</option>
+                        <option value="Fixed">Fixed</option>
+                      </select>
+                    </div>
+
+                    <button
+                      className="btn btn-secondary"
+                      style={{ fontSize: "0.75rem", padding: "5px 10px", display: "flex", alignItems: "center", gap: "5px" }}
+                      disabled={isBatchValidating || findings.length === 0}
+                      onClick={handleValidateAllFindings}
+                      title="Run deterministic non-destructive validation probes across findings"
                     >
-                      <option value="ALL">All Statuses</option>
-                      <option value="New">New</option>
-                      <option value="Confirmed">Confirmed</option>
-                      <option value="NeedsReview">Needs Review</option>
-                      <option value="AcceptedRisk">Accepted Risk</option>
-                      <option value="Fixed">Fixed</option>
-                    </select>
+                      {isBatchValidating ? (
+                        <Loader2 size={12} className="animate-spin" />
+                      ) : (
+                        <ShieldCheck size={13} color="var(--accent-emerald)" />
+                      )}
+                      <span>{isBatchValidating ? "Validating All..." : "Validate All Findings"}</span>
+                    </button>
+
+                    <div style={{ display: "flex", gap: "2px", background: "var(--bg-primary)", padding: "2px", borderRadius: "6px", border: "1px solid var(--border-color)" }}>
+                      <button
+                        type="button"
+                        className={`btn ${findingViewMode === "table" ? "btn-primary" : "btn-secondary"}`}
+                        style={{ padding: "4px 8px", fontSize: "0.72rem", display: "flex", alignItems: "center", gap: "4px" }}
+                        onClick={() => setFindingViewMode("table")}
+                        title="Display findings in table view"
+                      >
+                        <List size={13} />
+                        <span>Table</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn ${findingViewMode === "cards" ? "btn-primary" : "btn-secondary"}`}
+                        style={{ padding: "4px 8px", fontSize: "0.72rem", display: "flex", alignItems: "center", gap: "4px" }}
+                        onClick={() => setFindingViewMode("cards")}
+                        title="Display findings in card grid view"
+                      >
+                        <LayoutGrid size={13} />
+                        <span>Cards</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
+
+                {/* Multi-Select Bulk Actions Bar */}
+                {selectedFindingIds.size > 0 && (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      backgroundColor: "rgba(6, 182, 212, 0.12)",
+                      border: "1px solid var(--accent-cyan)",
+                      borderRadius: "8px",
+                      padding: "8px 14px",
+                      marginBottom: "12px",
+                      flexWrap: "wrap",
+                      gap: "10px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span className="badge badge-info" style={{ fontWeight: 700 }}>
+                        {selectedFindingIds.size} Selected
+                      </span>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ padding: "3px 8px", fontSize: "0.72rem" }}
+                        onClick={() => setSelectedFindingIds(new Set())}
+                      >
+                        Clear Selection
+                      </button>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                        <span style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>Bulk Status:</span>
+                        <select
+                          value={bulkStatusTarget}
+                          onChange={(e) => setBulkStatusTarget(e.target.value as FindingStatus)}
+                          style={{
+                            background: "var(--bg-secondary)",
+                            color: "var(--text-main)",
+                            border: "1px solid var(--border-color)",
+                            borderRadius: "4px",
+                            padding: "3px 8px",
+                            fontSize: "0.75rem",
+                          }}
+                        >
+                          <option value="Confirmed">Confirmed</option>
+                          <option value="Fixed">Fixed</option>
+                          <option value="AcceptedRisk">Accepted Risk</option>
+                          <option value="FalsePositive">False Positive</option>
+                          <option value="NeedsReview">Needs Review</option>
+                          <option value="NeedsValidation">Needs Validation</option>
+                        </select>
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          style={{ padding: "4px 10px", fontSize: "0.75rem" }}
+                          onClick={handleApplyBulkStatus}
+                        >
+                          Apply Status
+                        </button>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ padding: "4px 10px", fontSize: "0.75rem", display: "flex", alignItems: "center", gap: "4px" }}
+                        onClick={handleExportSelectedFindingsJson}
+                        title="Export selected findings as JSON"
+                      >
+                        <Download size={12} /> Export Selected
+                      </button>
+
+                      <button
+                        type="button"
+                        className="btn btn-danger"
+                        style={{ padding: "4px 10px", fontSize: "0.75rem", display: "flex", alignItems: "center", gap: "4px" }}
+                        onClick={() => setIsBulkDeleteModalOpen(true)}
+                        title="Delete selected findings"
+                      >
+                        <Trash2 size={12} /> Delete Selected
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {findings.length === 0 ? (
                   <p style={{ color: "var(--text-dim)", fontSize: "0.85rem" }}>
@@ -2033,85 +4048,693 @@ export default function App() {
                     No findings matching your filter criteria.
                   </p>
                 ) : (
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Severity</th>
-                        <th>Vulnerability</th>
-                        <th>Status</th>
-                        <th>Source Tool</th>
-                        <th>Affected Asset</th>
-                        <th>CWE</th>
-                        <th>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredFindings.map((f) => (
-                        <tr key={f.id} onClick={() => handleExplainWithAi(f)}>
-                          <td>
-                            <span
-                              className={`badge ${
-                                f.severity === "Critical"
-                                  ? "badge-critical"
-                                  : f.severity === "High"
-                                  ? "badge-high"
-                                  : f.severity === "Medium"
-                                  ? "badge-medium"
-                                  : "badge-low"
-                              }`}
-                            >
-                              {f.severity}
-                            </span>
-                          </td>
-                          <td style={{ fontWeight: 600 }}>{f.title}</td>
-                          <td onClick={(e) => e.stopPropagation()}>
-                            <select
-                              value={f.status}
-                              onChange={(e) => handleUpdateFindingStatus(f.id, e.target.value as FindingStatus)}
+                  <>
+                    {findingViewMode === "table" ? (
+                      <div className="table-responsive" data-tour="findings-data-table">
+                        <table className="data-table">
+                          <thead>
+                            <tr>
+                              <th style={{ width: "36px" }}>
+                                <button
+                                  type="button"
+                                  onClick={handleToggleSelectAll}
+                                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--accent-cyan)", display: "flex", alignItems: "center", padding: 0 }}
+                                  title="Select all on this page"
+                                >
+                                  {paginatedFindings.length > 0 && paginatedFindings.every((f) => selectedFindingIds.has(f.id)) ? (
+                                    <CheckSquare size={16} />
+                                  ) : (
+                                    <Square size={16} />
+                                  )}
+                                </button>
+                              </th>
+                              <th
+                                style={{ cursor: "pointer", userSelect: "none" }}
+                                onClick={() => {
+                                  if (findingSortField === "severity") {
+                                    setFindingSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+                                  } else {
+                                    setFindingSortField("severity");
+                                    setFindingSortDirection("desc");
+                                  }
+                                }}
+                                title="Sort by Severity"
+                              >
+                                <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                  <span>Severity</span>
+                                  {findingSortField === "severity" ? (
+                                    findingSortDirection === "asc" ? <ArrowUp size={12} color="var(--accent-cyan)" /> : <ArrowDown size={12} color="var(--accent-cyan)" />
+                                  ) : (
+                                    <ArrowUpDown size={12} color="var(--text-dim)" opacity={0.5} />
+                                  )}
+                                </div>
+                              </th>
+                              <th
+                                style={{ cursor: "pointer", userSelect: "none" }}
+                                onClick={() => {
+                                  if (findingSortField === "title") {
+                                    setFindingSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+                                  } else {
+                                    setFindingSortField("title");
+                                    setFindingSortDirection("asc");
+                                  }
+                                }}
+                                title="Sort by Vulnerability Title"
+                              >
+                                <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                  <span>Vulnerability</span>
+                                  {findingSortField === "title" ? (
+                                    findingSortDirection === "asc" ? <ArrowUp size={12} color="var(--accent-cyan)" /> : <ArrowDown size={12} color="var(--accent-cyan)" />
+                                  ) : (
+                                    <ArrowUpDown size={12} color="var(--text-dim)" opacity={0.5} />
+                                  )}
+                                </div>
+                              </th>
+                              <th
+                                style={{ cursor: "pointer", userSelect: "none" }}
+                                onClick={() => {
+                                  if (findingSortField === "validation_status") {
+                                    setFindingSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+                                  } else {
+                                    setFindingSortField("validation_status");
+                                    setFindingSortDirection("asc");
+                                  }
+                                }}
+                                title="Sort by Validation State"
+                              >
+                                <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                  <span>Validation State</span>
+                                  {findingSortField === "validation_status" ? (
+                                    findingSortDirection === "asc" ? <ArrowUp size={12} color="var(--accent-cyan)" /> : <ArrowDown size={12} color="var(--accent-cyan)" />
+                                  ) : (
+                                    <ArrowUpDown size={12} color="var(--text-dim)" opacity={0.5} />
+                                  )}
+                                </div>
+                              </th>
+                              <th
+                                style={{ cursor: "pointer", userSelect: "none" }}
+                                onClick={() => {
+                                  if (findingSortField === "status") {
+                                    setFindingSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+                                  } else {
+                                    setFindingSortField("status");
+                                    setFindingSortDirection("asc");
+                                  }
+                                }}
+                                title="Sort by Status"
+                              >
+                                <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                  <span>Status</span>
+                                  {findingSortField === "status" ? (
+                                    findingSortDirection === "asc" ? <ArrowUp size={12} color="var(--accent-cyan)" /> : <ArrowDown size={12} color="var(--accent-cyan)" />
+                                  ) : (
+                                    <ArrowUpDown size={12} color="var(--text-dim)" opacity={0.5} />
+                                  )}
+                                </div>
+                              </th>
+                              <th
+                                style={{ cursor: "pointer", userSelect: "none" }}
+                                onClick={() => {
+                                  if (findingSortField === "source_tool") {
+                                    setFindingSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+                                  } else {
+                                    setFindingSortField("source_tool");
+                                    setFindingSortDirection("asc");
+                                  }
+                                }}
+                                title="Sort by Source Tool"
+                              >
+                                <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                  <span>Source Tool</span>
+                                  {findingSortField === "source_tool" ? (
+                                    findingSortDirection === "asc" ? <ArrowUp size={12} color="var(--accent-cyan)" /> : <ArrowDown size={12} color="var(--accent-cyan)" />
+                                  ) : (
+                                    <ArrowUpDown size={12} color="var(--text-dim)" opacity={0.5} />
+                                  )}
+                                </div>
+                              </th>
+                              <th
+                                style={{ cursor: "pointer", userSelect: "none" }}
+                                onClick={() => {
+                                  if (findingSortField === "affected_asset") {
+                                    setFindingSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+                                  } else {
+                                    setFindingSortField("affected_asset");
+                                    setFindingSortDirection("asc");
+                                  }
+                                }}
+                                title="Sort by Affected Asset"
+                              >
+                                <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                  <span>Affected Asset</span>
+                                  {findingSortField === "affected_asset" ? (
+                                    findingSortDirection === "asc" ? <ArrowUp size={12} color="var(--accent-cyan)" /> : <ArrowDown size={12} color="var(--accent-cyan)" />
+                                  ) : (
+                                    <ArrowUpDown size={12} color="var(--text-dim)" opacity={0.5} />
+                                  )}
+                                </div>
+                              </th>
+                              <th
+                                style={{ cursor: "pointer", userSelect: "none" }}
+                                onClick={() => {
+                                  if (findingSortField === "cwe") {
+                                    setFindingSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+                                  } else {
+                                    setFindingSortField("cwe");
+                                    setFindingSortDirection("asc");
+                                  }
+                                }}
+                                title="Sort by CWE"
+                              >
+                                <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                  <span>CWE</span>
+                                  {findingSortField === "cwe" ? (
+                                    findingSortDirection === "asc" ? <ArrowUp size={12} color="var(--accent-cyan)" /> : <ArrowDown size={12} color="var(--accent-cyan)" />
+                                  ) : (
+                                    <ArrowUpDown size={12} color="var(--text-dim)" opacity={0.5} />
+                                  )}
+                                </div>
+                              </th>
+                              <th style={{ textAlign: "right" }}>Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {paginatedFindings.map((f) => (
+                              <React.Fragment key={f.id}>
+                                <tr
+                                  onClick={() => {
+                                    setActiveFindingDetail(f);
+                                    setSelectedFinding(f);
+                                  }}
+                                  style={{ cursor: "pointer" }}
+                                >
+                                  <td onClick={(e) => e.stopPropagation()} style={{ width: "36px" }}>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => handleToggleSelectFinding(f.id, e)}
+                                      style={{ background: "none", border: "none", cursor: "pointer", color: selectedFindingIds.has(f.id) ? "var(--accent-cyan)" : "var(--text-dim)", display: "flex", alignItems: "center", padding: 0 }}
+                                      title={selectedFindingIds.has(f.id) ? "Deselect finding" : "Select finding"}
+                                    >
+                                      {selectedFindingIds.has(f.id) ? (
+                                        <CheckSquare size={16} />
+                                      ) : (
+                                        <Square size={16} />
+                                      )}
+                                    </button>
+                                  </td>
+                                  <td>
+                                    <SeverityBadge severity={f.severity} size="sm" />
+                                  </td>
+                                  <td style={{ fontWeight: 600 }}>{f.title}</td>
+                                  <td>
+                                    <ValidationBadge
+                                      status={f.validation_status || f.status}
+                                      confidence={f.confidence}
+                                      size="sm"
+                                    />
+                                  </td>
+                                  <td onClick={(e) => e.stopPropagation()}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                      <StatusBadge status={f.status} size="sm" />
+                                      <select
+                                        value={f.status}
+                                        onChange={(e) => handleUpdateFindingStatus(f.id, e.target.value as FindingStatus)}
+                                        style={{
+                                          background: "var(--bg-secondary)",
+                                          color: "var(--text-main)",
+                                          border: "1px solid var(--border-color)",
+                                          borderRadius: "4px",
+                                          padding: "2px 5px",
+                                          fontSize: "0.72rem",
+                                        }}
+                                      >
+                                        <option value="NeedsValidation">Needs Validation</option>
+                                        <option value="Confirmed">Confirmed</option>
+                                        <option value="LikelyTruePositive">Likely True Positive</option>
+                                        <option value="NeedsReview">Needs Review</option>
+                                        <option value="Unconfirmed">Unconfirmed</option>
+                                        <option value="LikelyFalsePositive">Likely False Positive</option>
+                                        <option value="ValidationFailed">Validation Failed</option>
+                                        <option value="NotApplicable">Not Applicable</option>
+                                        <option value="New">New</option>
+                                        <option value="AcceptedRisk">Accepted Risk</option>
+                                        <option value="Fixed">Fixed</option>
+                                        <option value="FalsePositive">False Positive</option>
+                                      </select>
+                                    </div>
+                                  </td>
+                                  <td style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>{f.source_tool}</td>
+                                  <td style={{ color: "var(--text-dim)", fontSize: "0.8rem", maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {f.affected_asset}
+                                  </td>
+                                  <td>
+                                    <span style={{ fontFamily: "monospace", fontSize: "0.75rem", color: "var(--accent-cyan)" }}>
+                                      {f.cwe || "N/A"}
+                                    </span>
+                                  </td>
+                                  <td style={{ textAlign: "right" }}>
+                                    <div style={{ display: "flex", gap: "4px", justifyContent: "flex-end", flexWrap: "wrap" }}>
+                                      {/* Primary Expandable Details Accordion Toggle */}
+                                      <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        style={{
+                                          padding: "3px 8px",
+                                          fontSize: "0.7rem",
+                                          display: "flex",
+                                          alignItems: "center",
+                                          gap: "3px",
+                                          borderColor: expandedFindingIds.has(f.id) ? "var(--accent-cyan)" : "var(--border-color)",
+                                          background: expandedFindingIds.has(f.id) ? "var(--accent-primary-subtle)" : undefined,
+                                          color: expandedFindingIds.has(f.id) ? "var(--accent-cyan)" : undefined,
+                                          fontWeight: 600,
+                                        }}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          toggleExpandFinding(f.id);
+                                        }}
+                                        aria-expanded={expandedFindingIds.has(f.id)}
+                                        title={expandedFindingIds.has(f.id) ? "Hide detection details" : "Show detection details directly inside this row"}
+                                      >
+                                        {expandedFindingIds.has(f.id) ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                                        <span>{expandedFindingIds.has(f.id) ? "Hide Details" : "View Details"}</span>
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        style={{ padding: "3px 6px", fontSize: "0.7rem", display: "flex", alignItems: "center", gap: "3px", borderColor: "var(--accent-cyan)" }}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setActiveFindingDetail(f);
+                                          setSelectedFinding(f);
+                                        }}
+                                        title="Inspect Full Vulnerability Details, Beginner Guide & Scan Transparency"
+                                      >
+                                        <Eye size={10} color="var(--accent-cyan)" />
+                                        <span>Inspect</span>
+                                      </button>
+
+                                      <button
+                                        className="btn btn-secondary"
+                                        style={{ padding: "3px 6px", fontSize: "0.7rem", display: "flex", alignItems: "center", gap: "3px" }}
+                                        disabled={validatingFindingId === f.id}
+                                        onClick={async (e) => {
+                                          e.stopPropagation();
+                                          await handleValidateFinding(f.id);
+                                        }}
+                                        title="Run independent non-destructive validation probe"
+                                      >
+                                        {validatingFindingId === f.id ? (
+                                          <Loader2 size={10} className="animate-spin" />
+                                        ) : (
+                                          <ShieldCheck size={10} color="var(--accent-emerald)" />
+                                        )}
+                                        <span>Validate</span>
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        style={{ padding: "3px 6px", fontSize: "0.7rem", display: "flex", alignItems: "center", gap: "3px" }}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setEditingFinding(f);
+                                        }}
+                                        title="Edit Finding Record"
+                                      >
+                                        <Edit2 size={10} />
+                                        <span>Edit</span>
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        className="btn btn-danger"
+                                        style={{ padding: "3px 6px", fontSize: "0.7rem", display: "flex", alignItems: "center", gap: "3px" }}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setDeletingFinding(f);
+                                        }}
+                                        title="Delete Finding"
+                                      >
+                                        <Trash2 size={10} />
+                                        <span>Del</span>
+                                      </button>
+
+                                      <button
+                                        className="btn btn-secondary"
+                                        style={{ padding: "3px 6px", fontSize: "0.7rem", display: "flex", alignItems: "center", gap: "3px" }}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleExplainWithAi(f);
+                                        }}
+                                        title="Open in AI Mentor Chat"
+                                      >
+                                        <Sparkles size={10} /> AI
+                                      </button>
+
+                                      <button
+                                        className="btn btn-secondary"
+                                        style={{ padding: "3px 6px", fontSize: "0.7rem", display: "flex", alignItems: "center", gap: "3px" }}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setAcademySelectedVulnId(f.title);
+                                          setActiveTab("academy");
+                                        }}
+                                        title="Study in Cyber Academy"
+                                      >
+                                        <GraduationCap size={10} color="var(--accent-cyan)" /> Acad
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+
+                                {/* Expandable Inline Details Accordion inside finding table */}
+                                {expandedFindingIds.has(f.id) && (
+                                  <tr key={`${f.id}-expanded-details`} className="finding-expanded-detail-row">
+                                    <td colSpan={9} style={{ padding: 0, borderBottom: "2px solid var(--accent-cyan)", background: "var(--bg-secondary)" }}>
+                                      <FindingInlineDetailsAccordion
+                                        finding={f}
+                                        target={targets.find((t) => t.id === f.target_id) || selectedTarget}
+                                        onOpenMethodology={(mid) => {
+                                          setActiveMethodologyId(mid);
+                                          setActiveTab("methodologies");
+                                        }}
+                                        onOpenAiMentor={(prompt) => {
+                                          setExternalMentorPrompt(prompt);
+                                          setActiveTab("mentor");
+                                        }}
+                                        onValidateFinding={handleValidateFinding}
+                                        onFindingUpdated={(updated) => {
+                                          setFindings((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+                                          if (selectedFinding?.id === updated.id) {
+                                            setSelectedFinding(updated);
+                                          }
+                                        }}
+                                        onInspectFull={() => {
+                                          setActiveFindingDetail(f);
+                                          setSelectedFinding(f);
+                                        }}
+                                      />
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      /* Card Grid View where each finding is an independent card with its dropdown */
+                      <div
+                        className="findings-card-grid"
+                        data-tour="findings-card-grid"
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))",
+                          gap: "14px",
+                        }}
+                      >
+                        {paginatedFindings.map((f) => (
+                          <div
+                            key={f.id}
+                            className="card finding-card"
+                            style={{
+                              background: "var(--bg-secondary)",
+                              border: `1px solid ${expandedFindingIds.has(f.id) ? "var(--accent-cyan)" : "var(--border-color)"}`,
+                              borderRadius: "8px",
+                              padding: "14px",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "10px",
+                              transition: "border-color 0.2s ease, box-shadow 0.2s ease",
+                            }}
+                          >
+                            {/* Card Top Row: Checkbox, Severity, Validation, Status */}
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleToggleSelectFinding(f.id, e)}
+                                  style={{ background: "none", border: "none", cursor: "pointer", color: selectedFindingIds.has(f.id) ? "var(--accent-cyan)" : "var(--text-dim)", padding: 0 }}
+                                  title={selectedFindingIds.has(f.id) ? "Deselect finding" : "Select finding"}
+                                >
+                                  {selectedFindingIds.has(f.id) ? <CheckSquare size={16} /> : <Square size={16} />}
+                                </button>
+                                <SeverityBadge severity={f.severity} size="sm" />
+                              </div>
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                <ValidationBadge status={f.validation_status || f.status} confidence={f.confidence} size="sm" />
+                                <StatusBadge status={f.status} size="sm" />
+                              </div>
+                            </div>
+
+                            {/* Vulnerability Title */}
+                            <div
+                              onClick={() => {
+                                setActiveFindingDetail(f);
+                                setSelectedFinding(f);
+                              }}
                               style={{
-                                background: "var(--bg-secondary)",
+                                fontWeight: 700,
+                                fontSize: "0.92rem",
                                 color: "var(--text-main)",
-                                border: "1px solid var(--border-color)",
-                                borderRadius: "4px",
-                                padding: "3px 6px",
-                                fontSize: "0.75rem",
+                                cursor: "pointer",
+                                lineHeight: 1.4,
                               }}
                             >
-                              <option value="New">New</option>
-                              <option value="Confirmed">Confirmed</option>
-                              <option value="NeedsReview">Needs Review</option>
-                              <option value="AcceptedRisk">Accepted Risk</option>
-                              <option value="Fixed">Fixed</option>
-                            </select>
-                          </td>
-                          <td style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>{f.source_tool}</td>
-                          <td style={{ color: "var(--text-dim)", fontSize: "0.8rem", maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {f.affected_asset}
-                          </td>
-                          <td>
-                            <span style={{ fontFamily: "monospace", fontSize: "0.75rem", color: "var(--accent-cyan)" }}>
-                              {f.cwe || "N/A"}
-                            </span>
-                          </td>
-                          <td>
-                            <button
-                              className="btn btn-secondary"
-                              style={{ padding: "4px 10px", fontSize: "0.75rem" }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleExplainWithAi(f);
-                              }}
-                            >
-                              <Sparkles size={12} /> AI Explain
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                              {f.title}
+                            </div>
+
+                            {/* Target Asset, Tool & CWE */}
+                            <div style={{ fontSize: "0.78rem", display: "flex", flexDirection: "column", gap: "4px" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-dim)" }}>
+                                <Globe size={12} color="var(--accent-cyan)" />
+                                <span style={{ fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={f.affected_asset}>
+                                  {f.affected_asset}
+                                </span>
+                              </div>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "var(--text-muted)", fontSize: "0.72rem" }}>
+                                <span>Tool: <strong style={{ color: "var(--text-main)" }}>{f.source_tool}</strong> {f.tool_version ? `v${f.tool_version}` : ""}</span>
+                                <span style={{ fontFamily: "monospace", color: "var(--accent-cyan)" }}>{f.cwe || "N/A"}</span>
+                              </div>
+                            </div>
+
+                            {/* Card Action Bar */}
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "6px", paddingTop: "6px", borderTop: "1px solid var(--border-color)" }}>
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                style={{
+                                  padding: "4px 10px",
+                                  fontSize: "0.72rem",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                  borderColor: expandedFindingIds.has(f.id) ? "var(--accent-cyan)" : "var(--border-color)",
+                                  background: expandedFindingIds.has(f.id) ? "var(--accent-primary-subtle)" : undefined,
+                                  color: expandedFindingIds.has(f.id) ? "var(--accent-cyan)" : "var(--text-main)",
+                                  fontWeight: 600,
+                                }}
+                                onClick={() => toggleExpandFinding(f.id)}
+                                aria-expanded={expandedFindingIds.has(f.id)}
+                                title={expandedFindingIds.has(f.id) ? "Hide detection details" : "Show detection details inside card"}
+                              >
+                                {expandedFindingIds.has(f.id) ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                <span>{expandedFindingIds.has(f.id) ? "Hide Details" : "View Details"}</span>
+                              </button>
+
+                              <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary"
+                                  style={{ padding: "3px 6px", fontSize: "0.7rem", display: "flex", alignItems: "center", gap: "3px" }}
+                                  onClick={() => {
+                                    setActiveFindingDetail(f);
+                                    setSelectedFinding(f);
+                                  }}
+                                  title="Inspect full details page"
+                                >
+                                  <Eye size={10} color="var(--accent-cyan)" />
+                                  <span>Inspect</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary"
+                                  style={{ padding: "3px 6px", fontSize: "0.7rem", display: "flex", alignItems: "center", gap: "3px" }}
+                                  disabled={validatingFindingId === f.id}
+                                  onClick={async () => await handleValidateFinding(f.id)}
+                                  title="Run verification probe"
+                                >
+                                  {validatingFindingId === f.id ? <Loader2 size={10} className="animate-spin" /> : <ShieldCheck size={10} color="var(--accent-emerald)" />}
+                                  <span>Validate</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary"
+                                  style={{ padding: "3px 6px", fontSize: "0.7rem" }}
+                                  onClick={() => handleExplainWithAi(f)}
+                                  title="Open in AI Mentor"
+                                >
+                                  <Sparkles size={10} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary"
+                                  style={{ padding: "3px 6px", fontSize: "0.7rem" }}
+                                  onClick={() => {
+                                    setAcademySelectedVulnId(f.title);
+                                    setActiveTab("academy");
+                                  }}
+                                  title="Study in Cyber Academy"
+                                >
+                                  <GraduationCap size={10} color="var(--accent-cyan)" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Inline Expandable Details Accordion directly inside card */}
+                            {expandedFindingIds.has(f.id) && (
+                              <div style={{ marginTop: "6px" }}>
+                                <FindingInlineDetailsAccordion
+                                  finding={f}
+                                  target={targets.find((t) => t.id === f.target_id) || selectedTarget}
+                                  onOpenMethodology={(mid) => {
+                                    setActiveMethodologyId(mid);
+                                    setActiveTab("methodologies");
+                                  }}
+                                  onOpenAiMentor={(prompt) => {
+                                    setExternalMentorPrompt(prompt);
+                                    setActiveTab("mentor");
+                                  }}
+                                  onValidateFinding={handleValidateFinding}
+                                  onFindingUpdated={(updated) => {
+                                    setFindings((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+                                    if (selectedFinding?.id === updated.id) {
+                                      setSelectedFinding(updated);
+                                    }
+                                  }}
+                                  onInspectFull={() => {
+                                    setActiveFindingDetail(f);
+                                    setSelectedFinding(f);
+                                  }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                {/* Pagination Controls */}
+                {filteredFindings.length > 0 && (
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginTop: "16px",
+                      paddingTop: "12px",
+                      borderTop: "1px solid var(--border-color)",
+                      flexWrap: "wrap",
+                      gap: "12px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "0.82rem", color: "var(--text-muted)" }}>
+                      <span>
+                        Showing{" "}
+                        <strong style={{ color: "var(--text-main)" }}>
+                          {filteredFindings.length === 0 ? 0 : (findingPage - 1) * findingPageSize + 1}
+                        </strong>{" "}
+                        –{" "}
+                        <strong style={{ color: "var(--text-main)" }}>
+                          {Math.min(findingPage * findingPageSize, filteredFindings.length)}
+                        </strong>{" "}
+                        of <strong style={{ color: "var(--text-main)" }}>{filteredFindings.length}</strong> findings
+                      </span>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginLeft: "8px" }}>
+                        <span>Per page:</span>
+                        <select
+                          value={findingPageSize}
+                          onChange={(e) => setFindingPageSize(Number(e.target.value))}
+                          style={{
+                            background: "var(--bg-secondary)",
+                            color: "var(--text-main)",
+                            border: "1px solid var(--border-color)",
+                            borderRadius: "4px",
+                            padding: "2px 6px",
+                            fontSize: "0.78rem",
+                          }}
+                        >
+                          <option value={10}>10</option>
+                          <option value={25}>25</option>
+                          <option value={50}>50</option>
+                          <option value={100}>100</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={findingPage <= 1}
+                        onClick={() => setFindingPage(1)}
+                        style={{ padding: "4px 8px", fontSize: "0.75rem" }}
+                        title="First Page"
+                      >
+                        «
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={findingPage <= 1}
+                        onClick={() => setFindingPage((p) => Math.max(1, p - 1))}
+                        style={{ padding: "4px 10px", fontSize: "0.75rem" }}
+                        title="Previous Page"
+                      >
+                        Previous
+                      </button>
+                      <span style={{ fontSize: "0.8rem", padding: "0 6px", color: "var(--text-main)" }}>
+                        Page {findingPage} of {totalFindingPages}
+                      </span>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={findingPage >= totalFindingPages}
+                        onClick={() => setFindingPage((p) => Math.min(totalFindingPages, p + 1))}
+                        style={{ padding: "4px 10px", fontSize: "0.75rem" }}
+                        title="Next Page"
+                      >
+                        Next
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={findingPage >= totalFindingPages}
+                        onClick={() => setFindingPage(totalFindingPages)}
+                        style={{ padding: "4px 8px", fontSize: "0.75rem" }}
+                        title="Last Page"
+                      >
+                        »
+                      </button>
+                    </div>
+                  </div>
+                )}
+                  </>
                 )}
               </div>
             </div>
+            )
+          )}
+
+          {/* TAB: ISSUE DOCUMENTATION & TRACKING */}
+          {activeTab === "issues" && (
+            <IssueCenter
+              targets={targets}
+              currentTargetId={selectedTarget?.id || null}
+            />
           )}
 
           {/* TAB 6: IMPORT REPORTS */}
@@ -2182,198 +4805,681 @@ export default function App() {
             </div>
           )}
 
-          {/* TAB 7: AI MENTOR */}
+          {/* TAB 7: APPSEC AI — TWO-MODEL SECURITY WORKSPACE */}
           {activeTab === "mentor" && (
             <div className="card">
-              <h2 className="card-title">
-                <Sparkles size={20} color="var(--accent-cyan)" />
-                Local AI Security Mentor (Offline & Private)
-              </h2>
-              <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginBottom: "16px" }}>
-                Powered by your local LLM runtime (Ollama / llama.cpp). All code analysis, stack trace explanations, and remediation advice stay 100% on your laptop.
-              </p>
-
-              <div style={{ display: "flex", gap: "12px", marginBottom: "16px", flexWrap: "wrap", alignItems: "flex-end" }}>
+              {/* SECTION A: HEADER: APPSEC AI */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: "12px",
+                  marginBottom: "16px",
+                  paddingBottom: "14px",
+                  borderBottom: "1px solid var(--border-color)",
+                }}
+              >
                 <div>
-                  <label style={{ fontSize: "0.75rem", color: "var(--text-dim)", display: "block", marginBottom: "4px" }}>
-                    Explanation Persona
-                  </label>
-                  <select
-                    className="input-field"
-                    value={aiMode}
-                    onChange={(e: any) => setAiMode(e.target.value)}
-                    style={{ width: "240px" }}
+                  <h2 className="card-title" style={{ margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                    <Sparkles size={20} color="var(--accent-cyan)" />
+                    <span>AppSec AI</span>
+                  </h2>
+                  <p style={{ color: "var(--text-muted)", fontSize: "0.82rem", margin: "4px 0 0 0" }}>
+                    Your local AI assistant for web and API security.
+                  </p>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "4px 10px",
+                      borderRadius: "6px",
+                      background: aiAvailable ? "rgba(16, 185, 129, 0.1)" : "rgba(239, 68, 68, 0.1)",
+                      border: `1px solid ${aiAvailable ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.3)"}`,
+                      fontSize: "0.78rem",
+                      fontWeight: 600,
+                    }}
                   >
-                    <option value="beginner">Beginner / Learner Mode (Simple Analogies)</option>
-                    <option value="advanced">Senior Pentester Mode (Remediation & Code)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ fontSize: "0.75rem", color: "var(--text-dim)", display: "block", marginBottom: "4px" }}>
-                    Select Local Model
-                  </label>
-                  <div style={{ display: "flex", gap: "8px" }}>
-                    <select
-                      className="input-field"
-                      value={selectedModel}
-                      onChange={(e) => setSelectedModel(e.target.value)}
-                      style={{ width: "240px" }}
-                    >
-                      {aiModels.length === 0 ? (
-                        <option value="">No local models detected</option>
-                      ) : (
-                        aiModels.map((m) => (
-                          <option key={m} value={m}>
-                            {m} {m.includes("1b") ? "(Fast / Recommended)" : m.includes("8b") ? "(High RAM / 4.7GB)" : ""}
-                          </option>
-                        ))
-                      )}
-                    </select>
-                    <button
-                      className="btn btn-secondary"
-                      onClick={handleRefreshAiStatus}
-                      title="Refresh Ollama Models List"
-                      style={{ padding: "8px 10px", display: "flex", alignItems: "center", gap: "4px" }}
-                    >
-                      <RotateCcw size={14} /> Refresh
-                    </button>
+                    <span
+                      style={{
+                        width: 7,
+                        height: 7,
+                        borderRadius: "50%",
+                        backgroundColor: aiAvailable ? "var(--accent-emerald)" : "var(--accent-rose)",
+                        display: "inline-block",
+                      }}
+                    />
+                    <span style={{ color: aiAvailable ? "var(--accent-emerald)" : "var(--accent-rose)" }}>
+                      {aiAvailable
+                        ? `Ollama Online${ollamaSystemInfo?.version ? ` (v${ollamaSystemInfo.version})` : ""}`
+                        : "Ollama Offline (Run 'ollama serve')"}
+                    </span>
                   </div>
-                </div>
 
-                <div style={{ paddingBottom: "8px", fontSize: "0.8rem" }}>
-                  {aiAvailable ? (
-                    <span style={{ color: "var(--accent-emerald)", display: "flex", alignItems: "center", gap: "6px", fontWeight: 600 }}>
-                      <span style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: "var(--accent-emerald)", display: "inline-block" }}></span>
-                      ✓ Ollama Online & Ready ({aiModels.length} models installed)
-                    </span>
-                  ) : (
-                    <span style={{ color: "var(--accent-rose)", display: "flex", alignItems: "center", gap: "4px" }}>
-                      ● Ollama Offline (Run 'ollama serve')
-                    </span>
-                  )}
+                  <button
+                    className="btn btn-secondary"
+                    onClick={handleRefreshAiStatus}
+                    style={{ padding: "6px 10px", fontSize: "0.76rem", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                    title="Refresh Ollama connection and local models"
+                  >
+                    <RotateCcw size={13} />
+                    <span>Refresh</span>
+                  </button>
                 </div>
               </div>
 
-              {/* Quick Model Download & Library Section */}
-              <div style={{ background: "rgba(6, 182, 212, 0.08)", border: "1px solid rgba(6, 182, 212, 0.2)", borderRadius: "8px", padding: "14px", marginBottom: "18px" }}>
-                <div style={{ fontWeight: 600, fontSize: "0.85rem", marginBottom: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
-                  <ArrowDownCircle size={15} color="var(--accent-cyan)" /> Local Model Library & Quick Install:
-                </div>
-                <div style={{ display: "flex", gap: "8px", marginTop: "8px", flexWrap: "wrap" }}>
-                  {[
-                    { id: "llama3.2:1b", label: "Llama 3.2 (1B - 1.3GB Fast)" },
-                    { id: "llama3:8b", label: "Llama 3 (8B - 4.7GB)" },
-                    { id: "qwen2.5-coder:1.5b", label: "Qwen 2.5 Coder (1.5B - 1.0GB)" },
-                    { id: "llama3.2:3b", label: "Llama 3.2 (3B - 2.0GB)" },
-                    { id: "qwen2.5-coder:7b", label: "Qwen 2.5 Coder (7B)" },
-                    { id: "mistral:7b", label: "Mistral (7B)" }
-                  ].map((model) => {
-                    const isInstalled = aiModels.some(
-                      (m) => m === model.id || m.startsWith(model.id.split(":")[0])
-                    );
-                    const isSelected = selectedModel.startsWith(model.id.split(":")[0]);
-                    return (
-                      <button
-                        key={model.id}
-                        className={`btn ${isSelected ? "btn-primary" : "btn-secondary"}`}
-                        style={{
-                          fontSize: "0.78rem",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "6px",
-                          borderColor: isInstalled ? "var(--accent-emerald)" : undefined,
-                        }}
-                        disabled={Boolean(pullingModel)}
-                        onClick={() => {
-                          if (isInstalled) {
-                            const exact =
-                              aiModels.find(
-                                (m) => m === model.id || m.startsWith(model.id.split(":")[0])
-                              ) || model.id;
-                            setSelectedModel(exact);
-                          } else {
-                            handlePullModel(model.id);
-                          }
-                        }}
-                      >
-                        {isInstalled ? (
-                          <>
-                            <span style={{ color: "var(--accent-emerald)", fontWeight: 700 }}>✓</span>
-                            <span>{model.label}</span>
-                            <span
+              {/* SECTION B: TWO MODEL CARDS */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+                  gap: "14px",
+                  marginBottom: "16px",
+                }}
+              >
+                {/* CARD 1: QUICK SECURITY AI */}
+                {(() => {
+                  const isQuickActive = activeAiRole === "quick";
+                  const isQuickInst = isModelInstalled(quickModel, aiModels);
+                  return (
+                    <div
+                      data-testid="quick-security-ai-card"
+                      onClick={() => handleSelectAiRole("quick")}
+                      style={{
+                        background: isQuickActive ? "rgba(6, 182, 212, 0.08)" : "var(--bg-secondary)",
+                        border: `2px solid ${isQuickActive ? "var(--accent-cyan)" : "var(--border-color)"}`,
+                        borderRadius: "10px",
+                        padding: "16px",
+                        cursor: "pointer",
+                        transition: "all 0.18s ease-in-out",
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "space-between",
+                        boxShadow: isQuickActive ? "0 0 16px rgba(6, 182, 212, 0.15)" : "none",
+                      }}
+                      className="hover-card"
+                    >
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <div
                               style={{
-                                fontSize: "0.68rem",
-                                opacity: 0.9,
-                                backgroundColor: isSelected ? "rgba(255,255,255,0.2)" : "rgba(16, 185, 129, 0.2)",
-                                color: isSelected ? "#fff" : "var(--accent-emerald)",
-                                padding: "1px 5px",
-                                borderRadius: "4px",
-                                fontWeight: 600,
+                                width: "32px",
+                                height: "32px",
+                                borderRadius: "8px",
+                                background: "rgba(6, 182, 212, 0.15)",
+                                border: "1px solid rgba(6, 182, 212, 0.3)",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                color: "var(--accent-cyan)",
                               }}
                             >
-                              {isSelected ? "Active" : "Installed"}
+                              <Zap size={18} />
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--text-main)" }}>
+                                Quick Security AI
+                              </div>
+                              <div style={{ fontSize: "0.72rem", color: "var(--accent-cyan)", fontWeight: 600 }}>
+                                Fast & Lightweight
+                              </div>
+                            </div>
+                          </div>
+
+                          {isQuickActive ? (
+                            <span
+                              style={{
+                                backgroundColor: "var(--accent-cyan)",
+                                color: "#000",
+                                fontSize: "0.68rem",
+                                fontWeight: 700,
+                                padding: "2px 8px",
+                                borderRadius: "12px",
+                              }}
+                            >
+                              Active Model
                             </span>
-                          </>
-                        ) : (
-                          <>
-                            <span>Download {model.label}</span>
-                          </>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
+                          ) : (
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              style={{ fontSize: "0.72rem", padding: "2px 8px" }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSelectAiRole("quick");
+                              }}
+                            >
+                              Activate
+                            </button>
+                          )}
+                        </div>
 
-                {/* Real-time Download Progress Bar */}
-                {pullProgress && (
-                  <div style={{ marginTop: "12px", background: "rgba(15, 23, 42, 0.7)", padding: "12px", borderRadius: "6px", border: "1px solid rgba(6, 182, 212, 0.3)" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.82rem", marginBottom: "6px" }}>
-                      <span style={{ fontWeight: 600, color: "var(--accent-cyan)" }}>
-                        {pullProgress.model}: {pullProgress.status}
-                      </span>
-                      <span style={{ fontWeight: 700, color: pullProgress.done ? "var(--accent-emerald)" : "var(--accent-cyan)" }}>
-                        {pullProgress.percentage.toFixed(1)}%
-                      </span>
-                    </div>
+                        <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", margin: "8px 0 12px 0", lineHeight: "1.4" }}>
+                          Small and fast local model suitable for routine questions, learning explanations, summaries, and lightweight code assistance.
+                        </p>
+                      </div>
 
-                    <div style={{ width: "100%", height: "8px", background: "rgba(255, 255, 255, 0.1)", borderRadius: "4px", overflow: "hidden" }}>
                       <div
                         style={{
-                          width: `${Math.min(100, Math.max(pullProgress.percentage, 0))}%`,
-                          height: "100%",
-                          background: pullProgress.done ? "var(--accent-emerald)" : "linear-gradient(90deg, #06b6d4, #10b981)",
-                          borderRadius: "4px",
-                          transition: "width 0.2s ease-in-out"
+                          borderTop: "1px solid var(--border-color)",
+                          paddingTop: "10px",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          fontSize: "0.75rem",
                         }}
-                      />
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Model:</span>
+                          <span style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--text-main)" }}>
+                            {quickModel}
+                          </span>
+                        </div>
+
+                        <span
+                          style={{
+                            fontSize: "0.7rem",
+                            fontWeight: 600,
+                            color: isQuickInst ? "var(--accent-emerald)" : "var(--accent-amber)",
+                            background: isQuickInst ? "rgba(16, 185, 129, 0.1)" : "rgba(245, 158, 11, 0.1)",
+                            padding: "1px 6px",
+                            borderRadius: "4px",
+                          }}
+                        >
+                          {isQuickInst ? "✓ Ready" : "⚠ Not Installed"}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* CARD 2: DEEP SECURITY AI */}
+                {(() => {
+                  const isDeepActive = activeAiRole === "deep";
+                  const isDeepInst = isModelInstalled(deepModel, aiModels);
+                  return (
+                    <div
+                      data-testid="deep-security-ai-card"
+                      onClick={() => handleSelectAiRole("deep")}
+                      style={{
+                        background: isDeepActive ? "rgba(168, 85, 247, 0.08)" : "var(--bg-secondary)",
+                        border: `2px solid ${isDeepActive ? "var(--accent-purple, #a855f7)" : "var(--border-color)"}`,
+                        borderRadius: "10px",
+                        padding: "16px",
+                        cursor: "pointer",
+                        transition: "all 0.18s ease-in-out",
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "space-between",
+                        boxShadow: isDeepActive ? "0 0 16px rgba(168, 85, 247, 0.15)" : "none",
+                      }}
+                      className="hover-card"
+                    >
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <div
+                              style={{
+                                width: "32px",
+                                height: "32px",
+                                borderRadius: "8px",
+                                background: "rgba(168, 85, 247, 0.15)",
+                                border: "1px solid rgba(168, 85, 247, 0.3)",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                color: "var(--accent-purple, #a855f7)",
+                              }}
+                            >
+                              <Cpu size={18} />
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--text-main)" }}>
+                                Deep Security AI
+                              </div>
+                              <div style={{ fontSize: "0.72rem", color: "var(--accent-purple, #a855f7)", fontWeight: 600 }}>
+                                Deep Reasoning & Pentest Review
+                              </div>
+                            </div>
+                          </div>
+
+                          {isDeepActive ? (
+                            <span
+                              style={{
+                                backgroundColor: "var(--accent-purple, #a855f7)",
+                                color: "#fff",
+                                fontSize: "0.68rem",
+                                fontWeight: 700,
+                                padding: "2px 8px",
+                                borderRadius: "12px",
+                              }}
+                            >
+                              Active Model
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              style={{ fontSize: "0.72rem", padding: "2px 8px" }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSelectAiRole("deep");
+                              }}
+                            >
+                              Activate
+                            </button>
+                          )}
+                        </div>
+
+                        <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", margin: "8px 0 12px 0", lineHeight: "1.4" }}>
+                          More thorough reasoning for complex vulnerability root-cause analysis, dual-perspective auditing, code review, and remediation planning.
+                        </p>
+                      </div>
+
+                      <div
+                        style={{
+                          borderTop: "1px solid var(--border-color)",
+                          paddingTop: "10px",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          fontSize: "0.75rem",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Model:</span>
+                          <span style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--text-main)" }}>
+                            {deepModel}
+                          </span>
+                        </div>
+
+                        <span
+                          style={{
+                            fontSize: "0.7rem",
+                            fontWeight: 600,
+                            color: isDeepInst ? "var(--accent-emerald)" : "var(--accent-amber)",
+                            background: isDeepInst ? "rgba(168, 85, 247, 0.1)" : "rgba(245, 158, 11, 0.1)",
+                            padding: "1px 6px",
+                            borderRadius: "4px",
+                          }}
+                        >
+                          {isDeepInst ? "✓ Ready" : "⚠ Not Installed"}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Security Guidance Disclaimer */}
+              <div
+                style={{
+                  fontSize: "0.74rem",
+                  color: "var(--text-dim)",
+                  background: "var(--bg-primary)",
+                  border: "1px solid var(--border-color)",
+                  borderRadius: "6px",
+                  padding: "8px 12px",
+                  marginBottom: "16px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                }}
+              >
+                <AlertTriangle size={14} color="var(--accent-amber)" style={{ flexShrink: 0 }} />
+                <span>
+                  <strong>Security Notice:</strong> AI suggestions provide guidance and analytical hypotheses. Never assume a vulnerability is confirmed solely because the model says so — always verify with deterministic scan evidence and authorized lab validation.
+                </span>
+              </div>
+
+              {/* SECTION C: COLLAPSIBLE MODEL SETUP */}
+              <div
+                style={{
+                  background: "var(--bg-secondary)",
+                  border: "1px solid var(--border-color)",
+                  borderRadius: "8px",
+                  marginBottom: "12px",
+                  overflow: "hidden",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setIsModelSetupOpen(!isModelSetupOpen)}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "10px 14px",
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    color: "var(--text-main)",
+                    fontWeight: 600,
+                    fontSize: "0.82rem",
+                  }}
+                >
+                  <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <Settings2 size={15} color="var(--accent-cyan)" />
+                    <span>Model Setup</span>
+                  </span>
+                  {isModelSetupOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </button>
+
+                {isModelSetupOpen && (
+                  <div style={{ padding: "0 14px 14px 14px", borderTop: "1px solid var(--border-color)", paddingTop: "12px" }}>
+                    {aiModels.length === 1 && (
+                      <div
+                        style={{
+                          fontSize: "0.76rem",
+                          background: "rgba(6, 182, 212, 0.08)",
+                          border: "1px solid rgba(6, 182, 212, 0.25)",
+                          borderRadius: "6px",
+                          padding: "8px 12px",
+                          marginBottom: "12px",
+                          color: "var(--accent-cyan)",
+                        }}
+                      >
+                        ℹ <strong>Single Model Detected:</strong> Only 1 local model (<code>{aiModels[0]}</code>) is installed. Both Quick and Deep slots are currently mapped to this model. You can install an additional model below to separate routine speed from deep reasoning.
+                      </div>
+                    )}
+
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "12px", marginBottom: "14px" }}>
+                      {/* Quick Slot Assign */}
+                      <div>
+                        <label style={{ fontSize: "0.74rem", color: "var(--text-dim)", display: "block", marginBottom: "4px" }}>
+                          Quick Security AI Slot Model:
+                        </label>
+                        <select
+                          className="input-field"
+                          value={quickModel}
+                          onChange={(e) => handleAssignModelSlot("quick", e.target.value)}
+                          style={{ width: "100%", fontSize: "0.8rem", height: "32px" }}
+                        >
+                          {aiModels.length === 0 ? (
+                            <option value={quickModel}>{quickModel} (Not installed)</option>
+                          ) : (
+                            aiModels.map((m) => (
+                              <option key={`quick-${m}`} value={m}>
+                                {m} {m === deepModel ? "(Shared with Deep slot)" : ""}
+                              </option>
+                            ))
+                          )}
+                        </select>
+                      </div>
+
+                      {/* Deep Slot Assign */}
+                      <div>
+                        <label style={{ fontSize: "0.74rem", color: "var(--text-dim)", display: "block", marginBottom: "4px" }}>
+                          Deep Security AI Slot Model:
+                        </label>
+                        <select
+                          className="input-field"
+                          value={deepModel}
+                          onChange={(e) => handleAssignModelSlot("deep", e.target.value)}
+                          style={{ width: "100%", fontSize: "0.8rem", height: "32px" }}
+                        >
+                          {aiModels.length === 0 ? (
+                            <option value={deepModel}>{deepModel} (Not installed)</option>
+                          ) : (
+                            aiModels.map((m) => (
+                              <option key={`deep-${m}`} value={m}>
+                                {m} {m === quickModel ? "(Shared with Quick slot)" : ""}
+                              </option>
+                            ))
+                          )}
+                        </select>
+                      </div>
                     </div>
 
-                    {pullProgress.total > 0 && (
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "4px" }}>
-                        <span>{(pullProgress.completed / (1024 * 1024)).toFixed(1)} MB / {(pullProgress.total / (1024 * 1024)).toFixed(1)} MB</span>
-                        <span>{pullProgress.done ? "Complete ✓" : "Downloading layer..."}</span>
+                    {/* Pull Model Section */}
+                    <div style={{ borderTop: "1px dashed var(--border-color)", paddingTop: "12px" }}>
+                      <div style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--text-main)", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
+                        <ArrowDownCircle size={14} color="var(--accent-cyan)" />
+                        <span>Install / Pull Ollama Model</span>
+                      </div>
+
+                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "10px" }}>
+                        <input
+                          type="text"
+                          className="input-field"
+                          placeholder="e.g. llama3.2:1b, llama3:8b, qwen2.5-coder:1.5b"
+                          value={customModelInput}
+                          onChange={(e) => setCustomModelInput(e.target.value)}
+                          style={{ flex: 1, minWidth: "220px", height: "32px", fontSize: "0.8rem" }}
+                          disabled={Boolean(pullingModel)}
+                        />
+                        <button
+                          className="btn btn-primary"
+                          disabled={!customModelInput.trim() || Boolean(pullingModel) || !aiAvailable}
+                          onClick={() => handlePullModel(customModelInput.trim())}
+                          style={{ padding: "0 14px", height: "32px", fontSize: "0.78rem" }}
+                        >
+                          {pullingModel ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+                          <span>{pullingModel ? "Pulling..." : "Install Model"}</span>
+                        </button>
+                      </div>
+
+                      {/* Recommended 1-Click Pull Buttons */}
+                      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                        <span style={{ fontSize: "0.72rem", color: "var(--text-dim)", alignSelf: "center" }}>
+                          Recommendations:
+                        </span>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ fontSize: "0.72rem", padding: "3px 8px" }}
+                          disabled={Boolean(pullingModel) || isModelInstalled(RECOMMENDED_QUICK_MODEL, aiModels)}
+                          onClick={() => handlePullModel(RECOMMENDED_QUICK_MODEL)}
+                        >
+                          {isModelInstalled(RECOMMENDED_QUICK_MODEL, aiModels) ? "✓ Quick (1B) Installed" : `⚡ Download Quick: ${RECOMMENDED_QUICK_MODEL} (1.3GB)`}
+                        </button>
+
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ fontSize: "0.72rem", padding: "3px 8px" }}
+                          disabled={Boolean(pullingModel) || isModelInstalled(RECOMMENDED_DEEP_MODEL, aiModels)}
+                          onClick={() => handlePullModel(RECOMMENDED_DEEP_MODEL)}
+                        >
+                          {isModelInstalled(RECOMMENDED_DEEP_MODEL, aiModels) ? "✓ Deep (8B) Installed" : `🧠 Download Deep: ${RECOMMENDED_DEEP_MODEL} (4.7GB)`}
+                        </button>
+                      </div>
+
+                      {/* Download Progress Bar */}
+                      {pullProgress && (
+                        <div style={{ marginTop: "12px", background: "var(--bg-primary)", padding: "10px", borderRadius: "6px", border: "1px solid var(--border-color)" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem", marginBottom: "4px" }}>
+                            <span style={{ fontWeight: 600, color: "var(--accent-cyan)" }}>
+                              {pullProgress.model}: {pullProgress.status}
+                            </span>
+                            <span style={{ fontWeight: 700, color: pullProgress.done ? "var(--accent-emerald)" : "var(--accent-cyan)" }}>
+                              {pullProgress.percentage.toFixed(1)}%
+                            </span>
+                          </div>
+
+                          <div style={{ width: "100%", height: "6px", background: "var(--border-color)", borderRadius: "3px", overflow: "hidden" }}>
+                            <div
+                              style={{
+                                width: `${Math.min(100, Math.max(pullProgress.percentage, 0))}%`,
+                                height: "100%",
+                                background: pullProgress.done ? "var(--accent-emerald)" : "linear-gradient(90deg, #06b6d4, #10b981)",
+                                borderRadius: "3px",
+                                transition: "width 0.2s ease-in-out",
+                              }}
+                            />
+                          </div>
+
+                          {pullProgress.total > 0 && (
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "4px" }}>
+                              <span>{(pullProgress.completed / (1024 * 1024)).toFixed(1)} MB / {(pullProgress.total / (1024 * 1024)).toFixed(1)} MB</span>
+                              <span>{pullProgress.done ? "Complete ✓" : "Downloading layer..."}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {pullStatus && !pullProgress && (
+                        <div style={{ fontSize: "0.76rem", color: "var(--accent-cyan)", marginTop: "8px" }}>
+                          {pullStatus}
+                        </div>
+                      )}
+
+                      {/* Advanced Persona Directive Setting */}
+                      <div style={{ marginTop: "12px", borderTop: "1px dashed var(--border-color)", paddingTop: "10px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+                          <div>
+                            <span style={{ fontSize: "0.76rem", fontWeight: 600, color: "var(--text-main)" }}>
+                              Explanation Persona Mode:
+                            </span>
+                            <span style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginLeft: "6px" }}>
+                              (Controls baseline guidance depth)
+                            </span>
+                          </div>
+                          <select
+                            className="input-field"
+                            value={aiMode}
+                            onChange={(e: any) => setAiMode(e.target.value)}
+                            style={{ fontSize: "0.75rem", height: "28px", padding: "2px 8px" }}
+                          >
+                            <option value="beginner">Beginner / Learner Mode (Simple Analogies)</option>
+                            <option value="advanced">Senior Pentester Mode (Remediation & Code)</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* SECTION D: COLLAPSIBLE SYSTEM INFORMATION */}
+              <div
+                style={{
+                  background: "var(--bg-secondary)",
+                  border: "1px solid var(--border-color)",
+                  borderRadius: "8px",
+                  marginBottom: "16px",
+                  overflow: "hidden",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setIsSystemInfoOpen(!isSystemInfoOpen)}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "10px 14px",
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    color: "var(--text-main)",
+                    fontWeight: 600,
+                    fontSize: "0.82rem",
+                  }}
+                >
+                  <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <Info size={15} color="var(--accent-cyan)" />
+                    <span>System Information</span>
+                  </span>
+                  {isSystemInfoOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </button>
+
+                {isSystemInfoOpen && (
+                  <div style={{ padding: "0 14px 14px 14px", borderTop: "1px solid var(--border-color)", paddingTop: "12px", fontSize: "0.78rem" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "10px" }}>
+                      <div>
+                        <span style={{ color: "var(--text-dim)", display: "block" }}>Connection Status:</span>
+                        <span style={{ fontWeight: 600, color: aiAvailable ? "var(--accent-emerald)" : "var(--accent-rose)" }}>
+                          {aiAvailable ? "● Online & Responding" : "● Offline / Unreachable"}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span style={{ color: "var(--text-dim)", display: "block" }}>Installed Ollama Version:</span>
+                        <span style={{ fontWeight: 600, fontFamily: "monospace" }}>
+                          {ollamaSystemInfo?.version ? `v${ollamaSystemInfo.version}` : aiAvailable ? "Installed (Version Unknown)" : "Unavailable (Ollama Offline)"}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span style={{ color: "var(--text-dim)", display: "block" }}>Ollama Server Endpoint:</span>
+                        <span style={{ fontFamily: "monospace" }}>
+                          {ollamaSystemInfo?.endpoint || "http://127.0.0.1:11434"}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span style={{ color: "var(--text-dim)", display: "block" }}>Active Security AI Role:</span>
+                        <span style={{ fontWeight: 600, color: activeAiRole === "deep" ? "var(--accent-purple, #a855f7)" : "var(--accent-cyan)" }}>
+                          {activeAiRole === "deep" ? `🧠 Deep Security AI (${deepModel})` : `⚡ Quick Security AI (${quickModel})`}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span style={{ color: "var(--text-dim)", display: "block" }}>Configured Slots:</span>
+                        <span>
+                          Quick: <code>{quickModel}</code> • Deep: <code>{deepModel}</code>
+                        </span>
+                      </div>
+
+                      <div>
+                        <span style={{ color: "var(--text-dim)", display: "block" }}>Local Models Installed:</span>
+                        <span>{aiModels.length} models detected</span>
+                      </div>
+                    </div>
+
+                    {ollamaSystemInfo?.last_checked && (
+                      <div style={{ marginTop: "10px", color: "var(--text-dim)", fontSize: "0.72rem" }}>
+                        Last Checked: {new Date(ollamaSystemInfo.last_checked).toLocaleTimeString()}
+                      </div>
+                    )}
+
+                    {ollamaSystemInfo?.error_message && (
+                      <div style={{ marginTop: "8px", color: "var(--accent-rose)", fontSize: "0.74rem" }}>
+                        ⚠ {ollamaSystemInfo.error_message}
                       </div>
                     )}
                   </div>
                 )}
-
-                {pullStatus && !pullProgress && (
-                  <div style={{ fontSize: "0.8rem", color: "var(--accent-cyan)", marginTop: "8px" }}>
-                    {pullStatus}
-                  </div>
-                )}
               </div>
 
-              {/* Interactive AI Mentor Chat & Flowchart Engine */}
-              <div style={{ marginTop: "16px" }}>
+              {/* SECTION E: INTEGRATED SECURITY MENTOR CHAT */}
+              <div>
                 <Suspense fallback={<TabLoadingSkeleton />}>
                   <MentorChat
                     selectedFinding={selectedFinding}
                     selectedModel={selectedModel}
                     aiMode={aiMode}
                     aiAvailable={aiAvailable}
+                    aiModels={aiModels}
+                    quickModel={quickModel}
+                    deepModel={deepModel}
+                    activeRole={activeAiRole}
+                    onSelectRole={handleSelectAiRole}
+                    activeCategory={activeCategory}
+                    onSelectCategory={setActiveCategory}
+                    isAiEnabled={isAiEnabled}
+                    onToggleAiEnabled={(enabled) => {
+                      setIsAiEnabled(enabled);
+                      localStorage.setItem("appsec_ai_mentor_enabled", String(enabled));
+                    }}
+                    onSelectModel={setSelectedModel}
                     onSelectFinding={setSelectedFinding}
+                    onRefreshAiStatus={handleRefreshAiStatus}
+                    onFindingValidated={(updated) => {
+                      setFindings((prev) =>
+                        prev.map((f) => (f.id === updated.id ? updated : f))
+                      );
+                    }}
+                    initialPrompt={externalMentorPrompt}
                   />
                 </Suspense>
               </div>
@@ -2389,8 +5495,9 @@ export default function App() {
                   setFindings((prev) => [...newF, ...prev]);
                 }}
                 onNavigateFinding={(f) => {
+                  setActiveFindingDetail(f);
                   setSelectedFinding(f);
-                  setActiveTab("mentor");
+                  setActiveTab("findings");
                 }}
               />
             </Suspense>
@@ -2400,14 +5507,34 @@ export default function App() {
           {activeTab === "history" && (
             <div>
               <div className="card">
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
                   <h2 className="card-title" style={{ margin: 0 }}>
                     <History size={20} color="var(--accent-cyan)" />
                     Scan Audit History ({scanHistory.length})
                   </h2>
-                  <button className="btn btn-secondary" onClick={loadInitialData}>
-                    <RotateCcw size={14} /> Refresh
-                  </button>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => setIsAuditLogModalOpen(true)}
+                      title="View System & Security Audit Trail"
+                    >
+                      <History size={14} /> Audit Trail
+                    </button>
+                    {scanHistory.length > 0 && (
+                      <button
+                        type="button"
+                        className="btn btn-danger"
+                        onClick={() => setIsClearingScanHistoryModalOpen(true)}
+                        title="Clear all scan execution history"
+                      >
+                        <Trash2 size={14} /> Clear History
+                      </button>
+                    )}
+                    <button className="btn btn-secondary" onClick={loadInitialData}>
+                      <RotateCcw size={14} /> Refresh
+                    </button>
+                  </div>
                 </div>
 
                 {scanHistory.length === 0 ? (
@@ -2415,36 +5542,50 @@ export default function App() {
                     No scan executions recorded yet. Run a scan from the Tool Hub or Scan Console.
                   </p>
                 ) : (
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Target URL</th>
-                        <th>Tool Used</th>
-                        <th>Status</th>
-                        <th>Findings Discovered</th>
-                        <th>Duration</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {scanHistory.map((s, idx) => (
-                        <tr key={s.scan_id || idx}>
-                          <td style={{ fontWeight: 600 }}>{s.target_url}</td>
-                          <td>
-                            <span style={{ color: "var(--accent-cyan)", fontWeight: 500 }}>
-                              {s.tool}
-                            </span>
-                          </td>
-                          <td>
-                            <span className="badge badge-locked">{s.status}</span>
-                          </td>
-                          <td style={{ fontWeight: 600 }}>{s.findings_count} findings</td>
-                          <td style={{ color: "var(--text-dim)", fontFamily: "monospace", fontSize: "0.8rem" }}>
-                            {s.duration_ms} ms
-                          </td>
+                  <div className="table-responsive">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Target URL</th>
+                          <th>Tool Used</th>
+                          <th>Status</th>
+                          <th>Findings Discovered</th>
+                          <th>Duration</th>
+                          <th style={{ textAlign: "right" }}>Action</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {scanHistory.map((s, idx) => (
+                          <tr key={s.scan_id || idx}>
+                            <td style={{ fontWeight: 600 }}>{s.target_url}</td>
+                            <td>
+                              <span style={{ color: "var(--accent-cyan)", fontWeight: 500 }}>
+                                {s.tool}
+                              </span>
+                            </td>
+                            <td>
+                              <span className="badge badge-locked">{s.status}</span>
+                            </td>
+                            <td style={{ fontWeight: 600 }}>{s.findings_count} findings</td>
+                            <td style={{ color: "var(--text-dim)", fontFamily: "monospace", fontSize: "0.8rem" }}>
+                              {s.duration_ms} ms
+                            </td>
+                            <td style={{ textAlign: "right" }}>
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                style={{ padding: "3px 7px", fontSize: "0.72rem", color: "var(--accent-rose)" }}
+                                onClick={() => handleDeleteScanHistory(s)}
+                                title="Delete scan execution record"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
             </div>
@@ -2454,6 +5595,8 @@ export default function App() {
           {activeTab === "academy" && (
             <Suspense fallback={<TabLoadingSkeleton />}>
               <CyberAcademy
+                findings={findings}
+                initialSelectedVulnId={academySelectedVulnId}
                 onNavigateScanner={(toolId) => {
                   setActiveTool(toolId);
                   setActiveTab("scanner");
@@ -2464,16 +5607,158 @@ export default function App() {
               />
             </Suspense>
           )}
+
+          {/* TAB 9: APPEARANCE & PERSONALIZATION */}
+          {activeTab === "appearance" && (
+            <Suspense fallback={<TabLoadingSkeleton />}>
+              <AppearanceSettings />
+            </Suspense>
+          )}
+
+          {/* TAB 10: CATEGORY WORKFLOW INTELLIGENCE */}
+          {activeTab === "categoryWorkflow" && (
+            <Suspense fallback={<TabLoadingSkeleton />}>
+              <CategoryWorkflowView
+                category={activeCategory}
+                targets={targets}
+                selectedTarget={selectedTarget}
+                onSelectTarget={(target) => setSelectedTarget(target)}
+                findings={findings}
+                onFindingsAdded={(newFindings) => {
+                  setFindings((prev) => [...newFindings, ...prev]);
+                  addToast({
+                    type: "success",
+                    title: "Findings Linked",
+                    description: `Added ${newFindings.length} finding(s) from category assessment.`,
+                  });
+                }}
+                onLaunchAiMentor={(_initialPrompt) => {
+                  setActiveTab("mentor");
+                }}
+                onOpenChecklists={() => {
+                  setActiveTab("playbooks");
+                }}
+                onNavigateToOrchestration={() => {
+                  setActiveTab("orchestration");
+                }}
+                onNavigateToFindings={() => {
+                  setActiveTab("findings");
+                }}
+              />
+            </Suspense>
+          )}
+
+          {/* TAB 11: SECURITY CHECKLISTS & PLAYBOOKS */}
+          {activeTab === "playbooks" && (
+            <Suspense fallback={<TabLoadingSkeleton />}>
+              <ChecklistPlaybookCenter
+                initialCategory={activeCategory}
+                targets={targets}
+                onFindingsAdded={(newFindings) => {
+                  setFindings((prev) => [...newFindings, ...prev]);
+                  addToast({
+                    type: "success",
+                    title: "Findings Linked",
+                    description: `Added ${newFindings.length} finding(s) from playbook run.`,
+                  });
+                }}
+                onLaunchAiMentor={(_prompt) => {
+                  setActiveTab("mentor");
+                }}
+              />
+            </Suspense>
+          )}
+
+          {/* TAB 12: BURP SUITE INTEGRATION */}
+          {activeTab === "burp" && (
+            <Suspense fallback={<TabLoadingSkeleton />}>
+              <BurpIntegrationView
+                activeTarget={selectedTarget}
+                findings={findings}
+                onImportFindings={(imported) => {
+                  setFindings((prev) => [...imported, ...prev]);
+                  addToast({
+                    type: "success",
+                    title: "Burp Findings Imported",
+                    description: `Successfully imported ${imported.length} finding(s) from Burp Suite.`,
+                  });
+                }}
+                onNavigateToMentor={(prompt) => {
+                  setExternalMentorPrompt(prompt);
+                  setActiveTab("mentor");
+                }}
+              />
+            </Suspense>
+          )}
+
+          {/* TAB 13: DETECTION METHODOLOGY EXPLORER */}
+          {activeTab === "methodologies" && (
+            <Suspense fallback={<TabLoadingSkeleton />}>
+              <MethodologyExplorer
+                initialMethodologyId={activeMethodologyId}
+                onSelectMethodology={(m: MethodologyDefinition) => setActiveMethodologyId(m.id)}
+                onOpenAiMentor={(prompt: string) => {
+                  setExternalMentorPrompt(prompt);
+                  setActiveTab("mentor");
+                }}
+              />
+            </Suspense>
+          )}
         </main>
 
         {/* Right Collapsible AI Mentor Drawer (when finding selected) */}
-        {selectedFinding && activeTab === "findings" && (
-          <aside className="ai-drawer" style={{ width: "460px", maxWidth: "90vw" }}>
+        {selectedFinding && !activeFindingDetail && activeTab === "findings" && (
+          <aside
+            className="ai-drawer"
+            style={{
+              width: isDrawerMaximized ? "calc(100vw - 280px)" : `${drawerWidth}px`,
+              maxWidth: "96vw",
+              position: "relative",
+              transition: isResizingDrawer ? "none" : "width 0.2s ease",
+            }}
+          >
+            {/* Left Edge Drag Handle to Resize Inspector */}
+            <div
+              onPointerDown={handleDrawerPointerDown}
+              onDoubleClick={() => setIsDrawerMaximized((prev) => !prev)}
+              title="Drag to resize inspector drawer width, double-click to toggle maximize/restore"
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "6px",
+                height: "100%",
+                cursor: "col-resize",
+                zIndex: 30,
+                backgroundColor: isResizingDrawer ? "var(--accent-cyan)" : "transparent",
+                transition: "background-color 0.15s ease",
+              }}
+            />
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
               <div style={{ fontWeight: 700, fontSize: "0.95rem", display: "flex", alignItems: "center", gap: "8px" }}>
                 <Sparkles size={16} color="var(--accent-cyan)" /> AI Mentor & Flowcharts
               </div>
               <div style={{ display: "flex", gap: "6px" }}>
+                <button
+                  className="btn btn-secondary"
+                  style={{ padding: "2px 8px", fontSize: "0.72rem", display: "flex", alignItems: "center", gap: "4px" }}
+                  onClick={() => setIsDrawerMaximized(!isDrawerMaximized)}
+                  title={isDrawerMaximized ? "Restore Inspector Size" : "Maximize Inspector"}
+                >
+                  {isDrawerMaximized ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+                  <span>{isDrawerMaximized ? "Restore" : "Maximize"}</span>
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  style={{ padding: "2px 8px", fontSize: "0.72rem", display: "flex", alignItems: "center", gap: "4px" }}
+                  onClick={() => {
+                    setAcademySelectedVulnId(selectedFinding.title);
+                    setActiveTab("academy");
+                  }}
+                  title="Study in Cyber Academy"
+                >
+                  <GraduationCap size={12} color="var(--accent-cyan)" /> Academy
+                </button>
                 <button
                   className="btn btn-secondary"
                   style={{ padding: "2px 8px", fontSize: "0.72rem" }}
@@ -2507,13 +5792,198 @@ export default function App() {
                   selectedModel={selectedModel}
                   aiMode={aiMode}
                   aiAvailable={aiAvailable}
+                  aiModels={aiModels}
+                  quickModel={quickModel}
+                  deepModel={deepModel}
+                  activeRole={activeAiRole}
+                  onSelectRole={handleSelectAiRole}
+                  activeCategory={activeCategory}
+                  onSelectCategory={setActiveCategory}
+                  isAiEnabled={isAiEnabled}
+                  onToggleAiEnabled={(enabled) => {
+                    setIsAiEnabled(enabled);
+                    localStorage.setItem("appsec_ai_mentor_enabled", String(enabled));
+                  }}
+                  onSelectModel={setSelectedModel}
                   onSelectFinding={setSelectedFinding}
+                  onRefreshAiStatus={handleRefreshAiStatus}
                 />
               </Suspense>
             </div>
           </aside>
         )}
       </div>
+
+      {/* Global Developer-Tool Command Palette */}
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        onNavigateTab={(tab) => setActiveTab(tab)}
+        onQuickScan={(toolId) => handleRunScan(toolId)}
+        onExportReport={handleExportReport}
+        onEmergencyStop={handleEmergencyStop}
+        findings={findings}
+        targets={targets}
+        onSelectFinding={(f) => {
+          setActiveFindingDetail(f);
+          setSelectedFinding(f);
+          setActiveTab("findings");
+        }}
+      />
+
+      {/* Global Keyboard Shortcuts Cheat Sheet Modal */}
+      <KeyboardShortcutsModal
+        isOpen={isShortcutsModalOpen}
+        onClose={() => setIsShortcutsModalOpen(false)}
+      />
+
+      {/* Workspace Customization Drawer */}
+      <WorkspaceControlsDrawer
+        isOpen={Boolean(drawers.workspaceControls)}
+        onClose={() => closeDrawer("workspaceControls")}
+        activeTab={activeTab}
+        onSelectTab={(tab) => setActiveTab(tab as TabType)}
+      />
+
+      {/* Quick AI Floating Assistant Drawer */}
+      <SlidingDrawer
+        isOpen={Boolean(drawers.aiMentorDrawer)}
+        onClose={() => closeDrawer("aiMentorDrawer")}
+        title="Quick AI Security Assistant"
+        subtitle="Ask questions, generate defensive fixes, or inspect findings without navigating away"
+        storageKey="quick_ai_drawer"
+      >
+        <Suspense fallback={<TabLoadingSkeleton />}>
+          <MentorChat
+            selectedFinding={selectedFinding}
+            selectedModel={selectedModel}
+            aiMode={aiMode}
+            aiAvailable={aiAvailable}
+            aiModels={aiModels}
+            quickModel={quickModel}
+            deepModel={deepModel}
+            activeRole={activeAiRole}
+            onSelectRole={handleSelectAiRole}
+            activeCategory={activeCategory}
+            onSelectCategory={setActiveCategory}
+            isAiEnabled={isAiEnabled}
+            onToggleAiEnabled={(enabled) => {
+              setIsAiEnabled(enabled);
+              localStorage.setItem("appsec_ai_mentor_enabled", String(enabled));
+            }}
+            onSelectModel={setSelectedModel}
+            onSelectFinding={setSelectedFinding}
+            onRefreshAiStatus={handleRefreshAiStatus}
+          />
+        </Suspense>
+      </SlidingDrawer>
+
+      {/* Target Edit Modal */}
+      <TargetEditModal
+        isOpen={Boolean(editingTarget)}
+        target={editingTarget}
+        onSave={handleUpdateTarget}
+        onClose={() => setEditingTarget(null)}
+      />
+
+      {/* Target Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={Boolean(deletingTarget)}
+        title="Delete Authorized Target"
+        message="Are you sure you want to delete this target? This action will permanently remove the target and cascade-delete all associated findings, crawler endpoints, and verification records from the database."
+        recordIdentifier={deletingTarget ? `${deletingTarget.name} (${deletingTarget.primary_url})` : undefined}
+        confirmLabel="Delete Target"
+        confirmVariant="danger"
+        isLoading={isDeletingTarget}
+        onConfirm={handleConfirmDeleteTarget}
+        onClose={() => {
+          if (!isDeletingTarget) setDeletingTarget(null);
+        }}
+      />
+
+      {/* Finding Create Modal */}
+      <FindingCreateModal
+        isOpen={isCreateFindingOpen}
+        targets={targets}
+        defaultTargetId={selectedTarget?.id}
+        onCreated={handleCreateFinding}
+        onClose={() => setIsCreateFindingOpen(false)}
+      />
+
+      {/* Finding Edit Modal */}
+      <FindingEditModal
+        isOpen={Boolean(editingFinding)}
+        finding={editingFinding}
+        onSave={handleUpdateFinding}
+        onClose={() => setEditingFinding(null)}
+      />
+
+      {/* Finding Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={Boolean(deletingFinding)}
+        title="Delete Vulnerability Finding"
+        message="Are you sure you want to delete this security finding? This will also remove any associated validation history."
+        recordIdentifier={deletingFinding ? `${deletingFinding.title} [${deletingFinding.severity}]` : undefined}
+        confirmLabel="Delete Finding"
+        confirmVariant="danger"
+        isLoading={isDeletingFinding}
+        onConfirm={handleConfirmDeleteFinding}
+        onClose={() => {
+          if (!isDeletingFinding) setDeletingFinding(null);
+        }}
+      />
+
+      {/* Bulk Delete Findings Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={isBulkDeleteModalOpen}
+        title="Bulk Delete Findings"
+        message={`Are you sure you want to permanently delete the ${selectedFindingIds.size} selected findings and their validation records?`}
+        confirmLabel={`Delete ${selectedFindingIds.size} Findings`}
+        confirmVariant="danger"
+        isLoading={isBulkDeleting}
+        onConfirm={handleConfirmBulkDelete}
+        onClose={() => {
+          if (!isBulkDeleting) setIsBulkDeleteModalOpen(false);
+        }}
+      />
+
+      {/* Clear Endpoints Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={isClearingEndpointsModalOpen}
+        title="Clear Discovered Endpoints"
+        message={`Are you sure you want to delete all ${endpoints.length} discovered endpoints for target "${selectedTarget?.name || "Active Target"}"?`}
+        confirmLabel="Clear All Endpoints"
+        confirmVariant="danger"
+        onConfirm={handleClearEndpoints}
+        onClose={() => setIsClearingEndpointsModalOpen(false)}
+      />
+
+      {/* Clear Scan History Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={isClearingScanHistoryModalOpen}
+        title="Clear Scan Execution History"
+        message={`Are you sure you want to clear all ${scanHistory.length} recorded scan executions?`}
+        confirmLabel="Clear History"
+        confirmVariant="danger"
+        onConfirm={handleClearScanHistory}
+        onClose={() => setIsClearingScanHistoryModalOpen(false)}
+      />
+
+      {/* Audit Log Modal */}
+      <AuditLogModal
+        isOpen={isAuditLogModalOpen}
+        onClose={() => setIsAuditLogModalOpen(false)}
+      />
+
+      {/* Global Interactive Product Tour Overlay */}
+      <InteractiveTourOverlay />
+
+      {/* Searchable Help Center & Knowledgebase Modal */}
+      <HelpCenterModal />
+
+      {/* Interactive Guided Checklists & Workflows Drawer */}
+      <GuidedWorkflowsDrawer />
     </div>
+  </TourProvider>
   );
 }

@@ -1,22 +1,40 @@
 pub mod baseline;
+pub mod checkov;
 pub mod docker;
 pub mod external_gui;
+pub mod ffuf;
+pub mod gitleaks;
 pub mod httpx;
+pub mod jadx;
+pub mod katana;
 pub mod nmap;
 pub mod nuclei;
 pub mod ollama;
+pub mod osv_scanner;
+pub mod schemathesis;
 pub mod semgrep;
 pub mod sqlmap;
+pub mod trivy;
+pub mod tshark;
 
 use baseline::NativeBaselineAdapter;
+use checkov::CheckovAdapter;
 use docker::DockerAdapter;
 use external_gui::ExternalGuiAdapter;
+use ffuf::FfufAdapter;
+use gitleaks::GitleaksAdapter;
 use httpx::HttpxAdapter;
+use jadx::JadxAdapter;
+use katana::KatanaAdapter;
 use nmap::NmapAdapter;
 use nuclei::NucleiAdapter;
 use ollama::OllamaAdapter;
+use osv_scanner::OsvScannerAdapter;
+use schemathesis::SchemathesisAdapter;
 use semgrep::SemgrepAdapter;
 use sqlmap::SqlmapAdapter;
+use trivy::TrivyAdapter;
+use tshark::TsharkAdapter;
 
 use crate::models::{DiscoveredEndpoint, Finding};
 use serde::{Deserialize, Serialize};
@@ -106,6 +124,8 @@ pub struct ToolAdapterMetadata {
     pub resolved_path: Option<String>,
     pub custom_path: Option<String>,
     pub is_available: bool,
+    pub is_enabled: bool,
+    pub install_source: Option<String>,
     pub description: String,
     pub documentation_url: String,
     pub requires_docker: bool,
@@ -144,6 +164,32 @@ pub trait SecurityToolAdapter: Send + Sync {
     fn description(&self) -> &str;
     fn documentation_url(&self) -> &str;
 
+    fn install_source(&self) -> Option<String> {
+        match self.id() {
+            "baseline" => Some("Built-in Native Rust Engine".to_string()),
+            "nuclei" => Some("Local Portable Binary (tools/bin)".to_string()),
+            "httpx" => Some("Local Portable Binary (tools/bin)".to_string()),
+            "katana" => Some("Local Portable Binary (tools/bin)".to_string()),
+            "ffuf" => Some("WinGet Package (ffuf.ffuf)".to_string()),
+            "schemathesis" => Some("Python pip (schemathesis)".to_string()),
+            "semgrep" => Some("Python pip (semgrep)".to_string()),
+            "gitleaks" => Some("WinGet Package (Gitleaks.Gitleaks)".to_string()),
+            "osv_scanner" => Some("Google Portable Binary (tools/bin)".to_string()),
+            "trivy" => Some("WinGet Package (AquaSecurity.Trivy)".to_string()),
+            "checkov" => Some("Python pip (checkov)".to_string()),
+            "nmap" => Some("Local System Nmap / Zenmap CLI".to_string()),
+            "tshark" => Some("Wireshark & Npcap 1.88 Driver".to_string()),
+            "jadx" => Some("Portable JADX 1.5.6 + JDK 21".to_string()),
+            "ollama" => Some("Local Ollama Service (:11434)".to_string()),
+            "docker" => Some("Docker Desktop CLI & Daemon".to_string()),
+            "sqlmap" => Some("Python pip / Git CLI".to_string()),
+            "burpsuite" => Some("Burp Suite Community Edition + Montoya Connector".to_string()),
+            "owasp_zap" => Some("OWASP ZAP Desktop".to_string()),
+            "wireshark" => Some("Wireshark GUI Desktop".to_string()),
+            _ => None,
+        }
+    }
+
     /// Resolves executable path considering custom overrides and standard system locations
     fn resolve_path(&self, custom_override: Option<&str>) -> Option<String>;
 
@@ -168,6 +214,7 @@ pub trait SecurityToolAdapter: Send + Sync {
 pub struct AdapterRegistry {
     adapters: HashMap<String, Box<dyn SecurityToolAdapter>>,
     custom_paths: Arc<RwLock<HashMap<String, String>>>,
+    enabled_states: Arc<RwLock<HashMap<String, bool>>>,
 }
 
 impl AdapterRegistry {
@@ -186,27 +233,63 @@ impl AdapterRegistry {
         let h = HttpxAdapter::new(bin_dir.clone());
         map.insert(h.id().to_string(), Box::new(h));
 
-        // 4. nmap
-        let nm = NmapAdapter::new(bin_dir.clone());
-        map.insert(nm.id().to_string(), Box::new(nm));
+        // 4. katana
+        let kat = KatanaAdapter::new(bin_dir.clone());
+        map.insert(kat.id().to_string(), Box::new(kat));
 
-        // 5. ollama
-        let o = OllamaAdapter::new();
-        map.insert(o.id().to_string(), Box::new(o));
+        // 5. ffuf
+        let f = FfufAdapter::new(bin_dir.clone());
+        map.insert(f.id().to_string(), Box::new(f));
 
-        // 6. docker
-        let d = DockerAdapter::new();
-        map.insert(d.id().to_string(), Box::new(d));
+        // 6. schemathesis
+        let st = SchemathesisAdapter::new();
+        map.insert(st.id().to_string(), Box::new(st));
 
         // 7. semgrep
         let s = SemgrepAdapter::new();
         map.insert(s.id().to_string(), Box::new(s));
 
-        // 8. sqlmap
+        // 8. gitleaks
+        let gl = GitleaksAdapter::new();
+        map.insert(gl.id().to_string(), Box::new(gl));
+
+        // 9. osv_scanner
+        let osv = OsvScannerAdapter::new(bin_dir.clone());
+        map.insert(osv.id().to_string(), Box::new(osv));
+
+        // 10. trivy
+        let tr = TrivyAdapter::new();
+        map.insert(tr.id().to_string(), Box::new(tr));
+
+        // 11. checkov
+        let ck = CheckovAdapter::new();
+        map.insert(ck.id().to_string(), Box::new(ck));
+
+        // 12. nmap
+        let nm = NmapAdapter::new(bin_dir.clone());
+        map.insert(nm.id().to_string(), Box::new(nm));
+
+        // 13. tshark
+        let tsh = TsharkAdapter::new();
+        map.insert(tsh.id().to_string(), Box::new(tsh));
+
+        // 14. jadx
+        let jdx = JadxAdapter::new(bin_dir.clone());
+        map.insert(jdx.id().to_string(), Box::new(jdx));
+
+        // 15. ollama
+        let o = OllamaAdapter::new();
+        map.insert(o.id().to_string(), Box::new(o));
+
+        // 16. docker
+        let d = DockerAdapter::new();
+        map.insert(d.id().to_string(), Box::new(d));
+
+        // 17. sqlmap
         let sq = SqlmapAdapter::new();
         map.insert(sq.id().to_string(), Box::new(sq));
 
-        // 9. External GUI Tools
+        // 18. External GUI Tools
         let burp = ExternalGuiAdapter::new_burp();
         map.insert(burp.id().to_string(), Box::new(burp));
 
@@ -219,11 +302,13 @@ impl AdapterRegistry {
         Self {
             adapters: map,
             custom_paths: Arc::new(RwLock::new(HashMap::new())),
+            enabled_states: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
     pub fn list_adapters(&self) -> Vec<ToolAdapterMetadata> {
         let paths = self.custom_paths.read().unwrap();
+        let states = self.enabled_states.read().unwrap();
         let mut list = Vec::new();
 
         for adapter in self.adapters.values() {
@@ -231,6 +316,7 @@ impl AdapterRegistry {
             let detection_state = adapter.detect(custom);
             let is_available = detection_state == ToolDetectionState::InstalledAndReady;
             let resolved_path = adapter.resolve_path(custom);
+            let is_enabled = *states.get(adapter.id()).unwrap_or(&true);
 
             list.push(ToolAdapterMetadata {
                 id: adapter.id().to_string(),
@@ -243,15 +329,20 @@ impl AdapterRegistry {
                 resolved_path,
                 custom_path: custom.map(|s| s.to_string()),
                 is_available,
+                is_enabled,
+                install_source: adapter.install_source(),
                 description: adapter.description().to_string(),
                 documentation_url: adapter.documentation_url().to_string(),
                 requires_docker: adapter.integration_type() == IntegrationType::DockerContainer,
             });
         }
 
-        // Keep deterministic order: baseline, nuclei, httpx, nmap, ollama, docker, semgrep, sqlmap, burp, zap, wireshark
+        // Keep deterministic categorized order:
+        // Web & API -> SAST & Code -> Network & Android -> AI & Runtime -> External GUI
         let order = [
-            "baseline", "nuclei", "httpx", "nmap", "ollama", "docker", "semgrep", "sqlmap",
+            "baseline", "nuclei", "httpx", "katana", "ffuf", "schemathesis",
+            "semgrep", "gitleaks", "osv_scanner", "trivy", "checkov",
+            "nmap", "tshark", "jadx", "ollama", "docker", "sqlmap",
             "burpsuite", "owasp_zap", "wireshark",
         ];
         list.sort_by_key(|item| {
@@ -259,6 +350,21 @@ impl AdapterRegistry {
         });
 
         list
+    }
+
+    pub fn is_enabled(&self, tool_id: &str) -> bool {
+        let states = self.enabled_states.read().unwrap();
+        *states.get(tool_id).unwrap_or(&true)
+    }
+
+    pub fn set_enabled(&self, tool_id: String, enabled: bool) {
+        let mut states = self.enabled_states.write().unwrap();
+        states.insert(tool_id, enabled);
+    }
+
+    pub fn load_enabled_states(&self, states: HashMap<String, bool>) {
+        let mut current = self.enabled_states.write().unwrap();
+        *current = states;
     }
 
     pub fn get_adapter(&self, id: &str) -> Option<&Box<dyn SecurityToolAdapter>> {
@@ -299,6 +405,10 @@ impl AdapterRegistry {
         id: &str,
         input: AdapterInput,
     ) -> Result<AdapterOutput, String> {
+        if !self.is_enabled(id) {
+            return Err(format!("Security tool '{}' is currently disabled in Tool Settings. Enable it before running scans.", id));
+        }
+
         let adapter = self
             .adapters
             .get(id)

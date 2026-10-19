@@ -47,8 +47,9 @@ export function WorkflowsView() {
           alignItems: "center",
           flexWrap: "wrap",
           gap: "12px",
-          background: "linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.8) 100%)",
-          border: "1px solid var(--border-color)"
+          background: "var(--bg-card)",
+          border: "1px solid var(--border-color)",
+          boxShadow: "var(--shadow-md)",
         }}
       >
         <div>
@@ -176,7 +177,7 @@ export function WorkflowsView() {
           </div>
 
           {/* Objective Statement */}
-          <div style={{ background: "rgba(15, 23, 42, 0.8)", border: "1px solid var(--border-color)", borderRadius: "8px", padding: "14px", marginBottom: "16px" }}>
+          <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "8px", padding: "14px", marginBottom: "16px", boxShadow: "var(--shadow-sm)" }}>
             <div style={{ fontWeight: 700, fontSize: "0.82rem", color: "var(--accent-cyan)", marginBottom: "4px" }}>
               Operational Objective:
             </div>
@@ -191,7 +192,7 @@ export function WorkflowsView() {
               style={{
                 background: currentStage.appsecNexusIntegration.isSupported
                   ? "rgba(6, 182, 212, 0.08)"
-                  : "rgba(255, 255, 255, 0.04)",
+                  : "var(--bg-card)",
                 border: `1px solid ${currentStage.appsecNexusIntegration.isSupported ? "rgba(6, 182, 212, 0.3)" : "var(--border-color)"}`,
                 borderRadius: "8px",
                 padding: "12px 16px",
@@ -214,7 +215,7 @@ export function WorkflowsView() {
           )}
 
           {/* 4-Box Detailed Grid */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "14px", marginBottom: "18px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))", gap: "14px", marginBottom: "18px" }}>
             {/* Box 1: Inputs Required */}
             <div style={{ background: "var(--bg-secondary)", borderRadius: "8px", padding: "14px", border: "1px solid var(--border-color)" }}>
               <div style={{ fontWeight: 700, fontSize: "0.84rem", color: "var(--text-main)", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
@@ -249,7 +250,7 @@ export function WorkflowsView() {
                   <span
                     key={idx}
                     style={{
-                      background: "rgba(15, 23, 42, 0.8)",
+                      background: "var(--bg-card)",
                       border: "1px solid var(--border-color)",
                       borderRadius: "6px",
                       padding: "4px 8px",

@@ -133,7 +133,7 @@ export function SecurityFlowchart({ vulnerabilityType = "general", customTitle }
         <span>{title}</span>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))", gap: "16px" }}>
         {/* Red: Attack Vector Flow */}
         <div
           style={{
@@ -153,13 +153,13 @@ export function SecurityFlowchart({ vulnerabilityType = "general", customTitle }
               <div key={idx}>
                 <div
                   style={{
-                    backgroundColor: "rgba(15, 23, 42, 0.8)",
-                    border: "1px solid rgba(239, 68, 68, 0.2)",
+                    backgroundColor: "var(--bg-card)",
+                    border: "1px solid rgba(239, 68, 68, 0.3)",
                     borderRadius: "6px",
                     padding: "8px 10px",
                   }}
                 >
-                  <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#fca5a5" }}>
+                  <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--accent-rose)" }}>
                     {step.title}
                   </div>
                   <div style={{ fontSize: "0.74rem", color: "var(--text-muted)", marginTop: "2px" }}>
@@ -167,7 +167,7 @@ export function SecurityFlowchart({ vulnerabilityType = "general", customTitle }
                   </div>
                 </div>
                 {idx < attackSteps.length - 1 && (
-                  <div style={{ display: "flex", justifyContent: "center", padding: "2px 0", color: "#f87171" }}>
+                  <div style={{ display: "flex", justifyContent: "center", padding: "2px 0", color: "var(--accent-rose)" }}>
                     ↓
                   </div>
                 )}
@@ -195,13 +195,13 @@ export function SecurityFlowchart({ vulnerabilityType = "general", customTitle }
               <div key={idx}>
                 <div
                   style={{
-                    backgroundColor: "rgba(15, 23, 42, 0.8)",
-                    border: "1px solid rgba(16, 185, 129, 0.2)",
+                    backgroundColor: "var(--bg-card)",
+                    border: "1px solid rgba(16, 185, 129, 0.3)",
                     borderRadius: "6px",
                     padding: "8px 10px",
                   }}
                 >
-                  <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#86efac" }}>
+                  <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--accent-emerald)" }}>
                     {step.title}
                   </div>
                   <div style={{ fontSize: "0.74rem", color: "var(--text-muted)", marginTop: "2px" }}>
@@ -209,7 +209,7 @@ export function SecurityFlowchart({ vulnerabilityType = "general", customTitle }
                   </div>
                 </div>
                 {idx < defenseSteps.length - 1 && (
-                  <div style={{ display: "flex", justifyContent: "center", padding: "2px 0", color: "#4ade80" }}>
+                  <div style={{ display: "flex", justifyContent: "center", padding: "2px 0", color: "var(--accent-emerald)" }}>
                     ↓
                   </div>
                 )}

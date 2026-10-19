@@ -8,6 +8,8 @@ import {
   WorkflowJob,
   Target,
   ToolCapability,
+  SystemResourceStatus,
+  AdapterOutput,
 } from "../types";
 import {
   Wrench,
@@ -28,6 +30,15 @@ import {
   FolderGit2,
   Server,
   Zap,
+  HardDrive,
+  Gauge,
+  Power,
+  Terminal,
+  Check,
+  RefreshCw,
+  Sliders,
+  ShieldCheck,
+  Eye,
 } from "lucide-react";
 
 interface OrchestrationHubProps {
@@ -36,6 +47,9 @@ interface OrchestrationHubProps {
   onSelectTarget: (id: string) => void;
   onNavigateToFindings: () => void;
 }
+
+type ToolCategoryTab = "all" | "web" | "sast" | "network" | "runtime" | "gui";
+type ToolStatusFilter = "all" | "ready" | "action_needed" | "enabled_only";
 
 export const OrchestrationHub: React.FC<OrchestrationHubProps> = ({
   targets,
@@ -54,13 +68,36 @@ export const OrchestrationHub: React.FC<OrchestrationHubProps> = ({
   const [jobs, setJobs] = useState<WorkflowJob[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
 
+  // System Hardware Telemetry
+  const [systemResources, setSystemResources] = useState<SystemResourceStatus | null>(null);
+  const [loadingResources, setLoadingResources] = useState<boolean>(false);
+
   // Health check modal / state
   const [healthResults, setHealthResults] = useState<Record<string, ToolHealthCheckResult>>({});
   const [testingHealth, setTestingHealth] = useState<Record<string, boolean>>({});
 
+  // Tool Filters
+  const [toolCategoryTab, setToolCategoryTab] = useState<ToolCategoryTab>("all");
+  const [toolStatusFilter, setToolStatusFilter] = useState<ToolStatusFilter>("all");
+  const [filterQuery, setFilterQuery] = useState("");
+  const [togglingTools, setTogglingTools] = useState<Record<string, boolean>>({});
+
   // Custom path modal
   const [editingPathTool, setEditingPathTool] = useState<ToolAdapterMetadata | null>(null);
   const [customPathInput, setCustomPathInput] = useState("");
+
+  // Setup Guide modal
+  const [guideTool, setGuideTool] = useState<ToolAdapterMetadata | null>(null);
+  const [copiedCmd, setCopiedCmd] = useState(false);
+
+  // Tool Execution modal
+  const [executingTool, setExecutingTool] = useState<ToolAdapterMetadata | null>(null);
+  const [execTargetId, setExecTargetId] = useState<string>(selectedTargetId || (targets[0]?.id ?? ""));
+  const [execTargetUrl, setExecTargetUrl] = useState<string>("");
+  const [execParams, setExecParams] = useState<Record<string, string>>({});
+  const [isExecutingTool, setIsExecutingTool] = useState<boolean>(false);
+  const [toolExecOutput, setToolExecOutput] = useState<AdapterOutput | null>(null);
+  const [toolExecError, setToolExecError] = useState<string | null>(null);
 
   // Extension Manifest Modal
   const [showManifestModal, setShowManifestModal] = useState(false);
@@ -85,7 +122,6 @@ export const OrchestrationHub: React.FC<OrchestrationHubProps> = ({
 
   // Workflow launch state
   const [launchingWfId, setLaunchingWfId] = useState<string | null>(null);
-  const [filterQuery, setFilterQuery] = useState("");
 
   useEffect(() => {
     loadAllData();
@@ -93,8 +129,37 @@ export const OrchestrationHub: React.FC<OrchestrationHubProps> = ({
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    if (selectedTargetId) {
+      setExecTargetId(selectedTargetId);
+      const target = targets.find((t) => t.id === selectedTargetId);
+      if (target) setExecTargetUrl(target.primary_url);
+    } else if (targets.length > 0) {
+      setExecTargetId(targets[0].id);
+      setExecTargetUrl(targets[0].primary_url);
+    }
+  }, [selectedTargetId, targets]);
+
   const loadAllData = async () => {
-    await Promise.all([loadAdapters(), loadExtensions(), loadWorkflows(), loadJobs()]);
+    await Promise.all([
+      loadAdapters(),
+      loadExtensions(),
+      loadWorkflows(),
+      loadJobs(),
+      loadSystemResources(),
+    ]);
+  };
+
+  const loadSystemResources = async () => {
+    setLoadingResources(true);
+    try {
+      const data = await invoke<SystemResourceStatus>("get_system_resource_status");
+      setSystemResources(data);
+    } catch (e) {
+      console.warn("Could not query host system resources:", e);
+    } finally {
+      setLoadingResources(false);
+    }
   };
 
   const loadAdapters = async () => {
@@ -133,12 +198,29 @@ export const OrchestrationHub: React.FC<OrchestrationHubProps> = ({
     }
   };
 
+  const handleToggleTool = async (adapter: ToolAdapterMetadata) => {
+    const nextState = !adapter.is_enabled;
+    setTogglingTools((prev) => ({ ...prev, [adapter.id]: true }));
+    try {
+      await invoke("toggle_tool_adapter_enabled", {
+        toolId: adapter.id,
+        enabled: nextState,
+      });
+      setAdapters((prev) =>
+        prev.map((a) => (a.id === adapter.id ? { ...a, is_enabled: nextState } : a))
+      );
+    } catch (e) {
+      alert("Failed to toggle tool enablement: " + e);
+    } finally {
+      setTogglingTools((prev) => ({ ...prev, [adapter.id]: false }));
+    }
+  };
+
   const handleTestHealth = async (toolId: string) => {
     setTestingHealth((prev) => ({ ...prev, [toolId]: true }));
     try {
       const res = await invoke<ToolHealthCheckResult>("run_tool_health_check", { toolId });
       setHealthResults((prev) => ({ ...prev, [toolId]: res }));
-      // Reload adapters to reflect fresh state
       await loadAdapters();
     } catch (e) {
       alert("Health check failed: " + e);
@@ -220,6 +302,219 @@ export const OrchestrationHub: React.FC<OrchestrationHubProps> = ({
     }
   };
 
+  // Tool Direct Execution Logic
+  const handleOpenExecuteModal = (adapter: ToolAdapterMetadata) => {
+    setExecutingTool(adapter);
+    setToolExecOutput(null);
+    setToolExecError(null);
+
+    const target = targets.find((t) => t.id === execTargetId) || targets[0];
+    const initialUrl = target ? target.primary_url : "https://example.com";
+    setExecTargetUrl(initialUrl);
+
+    // Initial safe parameter defaults tailored to the tool
+    const initialParams: Record<string, string> = {};
+    if (adapter.id === "nuclei") {
+      initialParams["severity"] = "low,medium,high,critical";
+      initialParams["concurrency"] = "5";
+      initialParams["rate_limit"] = "30";
+    } else if (adapter.id === "katana") {
+      initialParams["depth"] = "2";
+      initialParams["max_pages"] = "20";
+    } else if (adapter.id === "ffuf") {
+      initialParams["wordlist"] = "tools/wordlists/common.txt";
+      initialParams["rate"] = "25";
+    } else if (adapter.id === "semgrep" || adapter.id === "gitleaks" || adapter.id === "checkov" || adapter.id === "trivy") {
+      initialParams["path"] = ".";
+    } else if (adapter.id === "tshark") {
+      initialParams["duration_sec"] = "10";
+      initialParams["max_packets"] = "50";
+    } else if (adapter.id === "jadx") {
+      initialParams["apk_path"] = "app.apk";
+    }
+    setExecParams(initialParams);
+  };
+
+  const handleExecuteTool = async () => {
+    if (!executingTool) return;
+    setIsExecutingTool(true);
+    setToolExecError(null);
+    setToolExecOutput(null);
+
+    try {
+      const output = await invoke<AdapterOutput>("execute_tool_adapter", {
+        toolId: executingTool.id,
+        targetId: execTargetId,
+        targetUrl: execTargetUrl,
+        parameters: execParams,
+      });
+      setToolExecOutput(output);
+    } catch (err: any) {
+      setToolExecError(typeof err === "string" ? err : err?.message || "Execution failed");
+    } finally {
+      setIsExecutingTool(false);
+    }
+  };
+
+  // Helper mapping for categories
+  const matchesCategoryTab = (adapter: ToolAdapterMetadata, tab: ToolCategoryTab): boolean => {
+    if (tab === "all") return true;
+    const cat = adapter.category.toLowerCase();
+    const id = adapter.id.toLowerCase();
+
+    if (tab === "web") {
+      return (
+        cat.includes("web") ||
+        cat.includes("api") ||
+        ["baseline", "nuclei", "httpx", "katana", "ffuf", "schemathesis", "sqlmap"].includes(id)
+      );
+    }
+    if (tab === "sast") {
+      return (
+        cat.includes("sast") ||
+        cat.includes("source") ||
+        cat.includes("iac") ||
+        cat.includes("secret") ||
+        ["semgrep", "gitleaks", "osv_scanner", "trivy", "checkov"].includes(id)
+      );
+    }
+    if (tab === "network") {
+      return (
+        cat.includes("network") ||
+        cat.includes("android") ||
+        ["nmap", "tshark", "jadx"].includes(id)
+      );
+    }
+    if (tab === "runtime") {
+      return (
+        cat.includes("ai") ||
+        cat.includes("runtime") ||
+        ["ollama", "docker"].includes(id)
+      );
+    }
+    if (tab === "gui") {
+      return (
+        adapter.integration_type === "external_gui" ||
+        ["burpsuite", "owasp_zap", "wireshark"].includes(id)
+      );
+    }
+    return true;
+  };
+
+  const matchesStatusFilter = (adapter: ToolAdapterMetadata, filter: ToolStatusFilter): boolean => {
+    if (filter === "all") return true;
+    if (filter === "ready") return adapter.is_available;
+    if (filter === "action_needed") return !adapter.is_available;
+    if (filter === "enabled_only") return adapter.is_enabled;
+    return true;
+  };
+
+  const getFilteredAdapters = (): ToolAdapterMetadata[] => {
+    return adapters.filter((a) => {
+      const matchesCat = matchesCategoryTab(a, toolCategoryTab);
+      const matchesStatus = matchesStatusFilter(a, toolStatusFilter);
+      const matchesQuery =
+        !filterQuery ||
+        a.name.toLowerCase().includes(filterQuery.toLowerCase()) ||
+        a.description.toLowerCase().includes(filterQuery.toLowerCase()) ||
+        a.category.toLowerCase().includes(filterQuery.toLowerCase()) ||
+        (a.install_source && a.install_source.toLowerCase().includes(filterQuery.toLowerCase()));
+      return matchesCat && matchesStatus && matchesQuery;
+    });
+  };
+
+  const getInstallInstructions = (toolId: string) => {
+    switch (toolId) {
+      case "nuclei":
+      case "httpx":
+      case "katana":
+      case "osv_scanner":
+        return {
+          title: "Pre-Configured Portable Windows Binary",
+          command: `# Tool executable is placed in project tools\\bin\n.\\tools\\bin\\${toolId}.exe -version`,
+          note: "Binary is bundled directly in the AppSec local tools directory. Click 'Test Health' to verify execution.",
+        };
+      case "ffuf":
+        return {
+          title: "WinGet Package Manager",
+          command: "winget install --id ffuf.ffuf -e --accept-source-agreements --accept-package-agreements",
+          note: "Installs official x64 Windows binary into user WinGet packages.",
+        };
+      case "semgrep":
+        return {
+          title: "Python 3 Pip Package",
+          command: "python -m pip install --user semgrep",
+          note: "Installs Semgrep SAST into user Python Scripts directory. No administrator elevation needed.",
+        };
+      case "schemathesis":
+        return {
+          title: "Python 3 Pip Package",
+          command: "python -m pip install --user schemathesis",
+          note: "Installs Schemathesis API schema fuzzer for OpenAPI / REST / GraphQL.",
+        };
+      case "gitleaks":
+        return {
+          title: "WinGet Package Manager",
+          command: "winget install --id Gitleaks.Gitleaks -e --accept-source-agreements --accept-package-agreements",
+          note: "High-performance git repo and secret scanner for API keys and tokens.",
+        };
+      case "trivy":
+        return {
+          title: "WinGet Package Manager",
+          command: "winget install --id AquaSecurity.Trivy -e --accept-source-agreements --accept-package-agreements",
+          note: "Vulnerability and SBOM scanner for dependencies and container images.",
+        };
+      case "checkov":
+        return {
+          title: "Python 3 Pip Package",
+          command: "python -m pip install --user checkov",
+          note: "Static analysis for Infrastructure-as-Code (Terraform, Dockerfiles, CloudFormation).",
+        };
+      case "tshark":
+        return {
+          title: "Wireshark CLI & Npcap Driver",
+          command: "winget install --id WiresharkFoundation.Wireshark -e",
+          note: "Provides TShark and Npcap 1.88 packet capture driver at C:\\Program Files\\Wireshark\\tshark.exe.",
+        };
+      case "jadx":
+        return {
+          title: "Portable JADX + Oracle JDK 21",
+          command: `# Download portable zip to tools\\jadx:\nInvoke-WebRequest -Uri "https://github.com/skylot/jadx/releases/download/v1.5.6/jadx-1.5.6.zip" -OutFile "jadx.zip"; Expand-Archive jadx.zip -DestinationPath tools\\jadx`,
+          note: "Runs decompilation on existing Oracle JDK 21 without requiring administrator privileges.",
+        };
+      case "burpsuite":
+        return {
+          title: "Burp Suite Community Edition + Connector Hook",
+          command: `# Launch Burp with AppSec Connector on port 41785:\nStart-Process "$env:LOCALAPPDATA\\Programs\\BurpSuite\\BurpSuite.exe"`,
+          note: "Extension AppSec-Burp-Connector.jar enables live ingestion of HTTP Proxy history into AppSec.",
+        };
+      case "ollama":
+        return {
+          title: "Local Ollama LLM Service",
+          command: "ollama serve\n# Download cybersecurity models:\nollama pull appsec-teacher-8b",
+          note: "Runs private local LLM inference on loopback port 11434.",
+        };
+      case "docker":
+        return {
+          title: "Docker Desktop Engine",
+          command: "Start-Process 'C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe'",
+          note: "Used for ephemeral containerized security scanners and vulnerable labs.",
+        };
+      case "nmap":
+        return {
+          title: "Nmap Network Scanner",
+          command: "winget install --id Insecure.Nmap -e --accept-source-agreements --accept-package-agreements",
+          note: "If upstream certificate fails, use TShark or place portable nmap.exe in tools\\bin\\.",
+        };
+      default:
+        return {
+          title: "Standard Executable Installation",
+          command: `# Add binary to PATH or specify Custom Path in AppSec:\nwhere.exe ${toolId}`,
+          note: "Ensure binary is accessible from PowerShell or configure custom path in tool card.",
+        };
+    }
+  };
+
   const getDetectionBadge = (state: string) => {
     switch (state) {
       case "installed_and_ready":
@@ -292,11 +587,12 @@ export const OrchestrationHub: React.FC<OrchestrationHubProps> = ({
     return cap.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   };
 
+  const filteredAdapters = getFilteredAdapters();
   const selectedJob = jobs.find((j) => j.job_id === selectedJobId) || jobs[0];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Header & Sub-Nav */}
+      {/* Top Banner & Header */}
       <div
         className="card"
         style={{
@@ -305,30 +601,31 @@ export const OrchestrationHub: React.FC<OrchestrationHubProps> = ({
           alignItems: "center",
           flexWrap: "wrap",
           gap: 16,
-          background: "linear-gradient(135deg, rgba(16, 26, 45, 0.95), rgba(10, 16, 30, 0.95))",
-          border: "1px solid rgba(0, 240, 255, 0.2)",
+          background: "var(--bg-card)",
+          border: "1px solid var(--border-color)",
+          boxShadow: "var(--shadow-md)",
         }}
       >
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <Wrench size={24} color="var(--accent-cyan)" />
             <h2 style={{ margin: 0, fontSize: "1.3rem", fontWeight: 700 }}>
-              Universal Tool & Extension Orchestration Platform
+              Universal Security Tool & Ecosystem Orchestrator
             </h2>
           </div>
           <p style={{ margin: "4px 0 0", color: "var(--text-muted)", fontSize: "0.85rem" }}>
-            Modular security adapter contracts, bounded Windows detection, DAG multi-step workflows, and approval gates.
+            20 integrated security tools, live physical hardware telemetry, scoped execution bounds, and DAG pipelines.
           </p>
         </div>
 
-        {/* Target Selector Pill */}
+        {/* Target Context Selector */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>Target Context:</span>
           <select
             className="input-field"
             value={selectedTargetId}
             onChange={(e) => onSelectTarget(e.target.value)}
-            style={{ width: 220, padding: "6px 12px", fontSize: "0.85rem" }}
+            style={{ width: 230, padding: "6px 12px", fontSize: "0.85rem" }}
           >
             {targets.length === 0 ? (
               <option value="">No targets registered</option>
@@ -344,14 +641,14 @@ export const OrchestrationHub: React.FC<OrchestrationHubProps> = ({
       </div>
 
       {/* Sub Tabs Bar */}
-      <div style={{ display: "flex", gap: 10, borderBottom: "1px solid var(--border-color)", paddingBottom: 10 }}>
+      <div style={{ display: "flex", gap: 10, borderBottom: "1px solid var(--border-color)", paddingBottom: 10, flexWrap: "wrap" }}>
         <button
           className={`tab-btn ${activeSubTab === "tools" ? "active" : ""}`}
           onClick={() => setActiveSubTab("tools")}
           style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: 8 }}
         >
           <Cpu size={16} />
-          <span>Security Tools & Adapters ({adapters.length})</span>
+          <span>Security Tool Ecosystem ({adapters.length})</span>
         </button>
 
         <button
@@ -390,180 +687,477 @@ export const OrchestrationHub: React.FC<OrchestrationHubProps> = ({
       {/* ========================================================= */}
       {activeSubTab === "tools" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-            <div style={{ position: "relative", width: 320 }}>
-              <Search size={16} style={{ position: "absolute", left: 10, top: 10, color: "var(--text-muted)" }} />
-              <input
-                type="text"
-                placeholder="Search tools, capabilities, tags..."
-                className="input-field"
-                value={filterQuery}
-                onChange={(e) => setFilterQuery(e.target.value)}
-                style={{ paddingLeft: 34, width: "100%", fontSize: "0.85rem" }}
-              />
-            </div>
-            <button
-              className="btn btn-secondary"
-              onClick={loadAdapters}
-              style={{ fontSize: "0.8rem", padding: "6px 14px" }}
+          {/* HARDWARE TELEMETRY & PHYSICAL CONSTRAINTS BANNER */}
+          {systemResources && (
+            <div
+              className="card"
+              style={{
+                background: "var(--bg-card)",
+                border: systemResources.disk_warning || systemResources.ram_warning
+                  ? "1px solid rgba(255, 152, 0, 0.4)"
+                  : "1px solid var(--border-color)",
+                padding: "16px 20px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+              }}
             >
-              Refresh Adapters
-            </button>
-          </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <Gauge size={20} color="var(--accent-cyan)" />
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700 }}>
+                      Host Physical Hardware Telemetry & Safe Concurrency Bounds
+                    </h4>
+                    <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                      {systemResources.os} • Real-time Windows kernel resource probes
+                    </span>
+                  </div>
+                </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 16 }}>
-            {adapters
-              .filter(
-                (a) =>
-                  a.name.toLowerCase().includes(filterQuery.toLowerCase()) ||
-                  a.description.toLowerCase().includes(filterQuery.toLowerCase()) ||
-                  a.category.toLowerCase().includes(filterQuery.toLowerCase())
-              )
-              .map((adapter) => {
-                const health = healthResults[adapter.id];
-                const isTesting = testingHealth[adapter.id];
+                <button
+                  className="btn btn-secondary"
+                  onClick={loadSystemResources}
+                  disabled={loadingResources}
+                  style={{ fontSize: "0.75rem", padding: "4px 10px", display: "flex", alignItems: "center", gap: 6 }}
+                >
+                  <RefreshCw size={12} className={loadingResources ? "spin-anim" : ""} />
+                  {loadingResources ? "Checking..." : "Refresh Hardware Telemetry"}
+                </button>
+              </div>
 
-                return (
-                  <div
-                    key={adapter.id}
-                    className="card"
+              {/* Gauges Grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))", gap: 16 }}>
+                {/* Storage Gauge */}
+                <div
+                  style={{
+                    background: "var(--bg-secondary)",
+                    padding: "10px 14px",
+                    borderRadius: 8,
+                    border: "1px solid var(--border-color)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 6,
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: "0.78rem", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                      <HardDrive size={14} color="var(--accent-cyan)" /> C: Storage
+                    </span>
+                    <span
+                      className={`badge ${systemResources.disk_warning ? "badge-high" : "badge-success"}`}
+                      style={{ fontSize: "0.7rem" }}
+                    >
+                      {systemResources.disk_free_gb} GB Free
+                    </span>
+                  </div>
+                  {/* Progress bar */}
+                  <div style={{ width: "100%", height: 6, background: "rgba(255,255,255,0.08)", borderRadius: 3, overflow: "hidden" }}>
+                    <div
+                      style={{
+                        width: `${Math.min(100, Math.max(0, (systemResources.disk_used_gb / (systemResources.disk_total_gb || 1)) * 100))}%`,
+                        height: "100%",
+                        background: systemResources.disk_warning ? "var(--sev-high)" : "var(--accent-cyan)",
+                        borderRadius: 3,
+                      }}
+                    />
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "var(--text-muted)" }}>
+                    <span>Used: {systemResources.disk_used_gb} GB</span>
+                    <span>Total: {systemResources.disk_total_gb} GB</span>
+                  </div>
+                </div>
+
+                {/* RAM Gauge */}
+                <div
+                  style={{
+                    background: "var(--bg-secondary)",
+                    padding: "10px 14px",
+                    borderRadius: 8,
+                    border: "1px solid var(--border-color)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 6,
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: "0.78rem", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                      <Cpu size={14} color="var(--accent-cyan)" /> Physical RAM
+                    </span>
+                    <span
+                      className={`badge ${systemResources.ram_warning ? "badge-high" : "badge-success"}`}
+                      style={{ fontSize: "0.7rem" }}
+                    >
+                      {systemResources.ram_avail_mb} MB Free
+                    </span>
+                  </div>
+                  {/* Progress bar */}
+                  <div style={{ width: "100%", height: 6, background: "rgba(255,255,255,0.08)", borderRadius: 3, overflow: "hidden" }}>
+                    <div
+                      style={{
+                        width: `${Math.min(100, Math.max(0, (systemResources.ram_used_mb / (systemResources.ram_total_mb || 1)) * 100))}%`,
+                        height: "100%",
+                        background: systemResources.ram_warning ? "var(--sev-high)" : "var(--accent-cyan)",
+                        borderRadius: 3,
+                      }}
+                    />
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "var(--text-muted)" }}>
+                    <span>Used: {systemResources.ram_used_mb} MB</span>
+                    <span>Total: {systemResources.ram_total_mb} MB</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Physical Warning Alert */}
+              {systemResources.warnings && systemResources.warnings.length > 0 && (
+                <div
+                  style={{
+                    background: "rgba(255, 152, 0, 0.08)",
+                    borderLeft: "3px solid var(--sev-high)",
+                    padding: "8px 12px",
+                    borderRadius: 6,
+                    fontSize: "0.75rem",
+                    color: "var(--text-secondary)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 4,
+                  }}
+                >
+                  <div style={{ fontWeight: 600, color: "var(--sev-high)", display: "flex", alignItems: "center", gap: 6 }}>
+                    <AlertTriangle size={14} /> Active Hardware Boundaries & Safe Execution Policy
+                  </div>
+                  {systemResources.warnings.map((w, idx) => (
+                    <div key={idx}>• {w}</div>
+                  ))}
+                  <div style={{ color: "var(--text-muted)", marginTop: 2 }}>
+                    Scans automatically cap artifact temp files to 200MB and run at reduced process concurrency to preserve host responsiveness.
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* CATEGORY & STATUS FILTERS BAR */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {/* Category tabs */}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginRight: 4, display: "flex", alignItems: "center", gap: 4 }}>
+                <Sliders size={12} /> Domain:
+              </span>
+              {[
+                { id: "all", label: `All Tools (${adapters.length})` },
+                { id: "web", label: `Web & API (${adapters.filter((a) => matchesCategoryTab(a, "web")).length})` },
+                { id: "sast", label: `SAST & Secrets (${adapters.filter((a) => matchesCategoryTab(a, "sast")).length})` },
+                { id: "network", label: `Network & Android (${adapters.filter((a) => matchesCategoryTab(a, "network")).length})` },
+                { id: "runtime", label: `AI & Runtime (${adapters.filter((a) => matchesCategoryTab(a, "runtime")).length})` },
+                { id: "gui", label: `External GUI (${adapters.filter((a) => matchesCategoryTab(a, "gui")).length})` },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  data-testid={`domain-tab-${tab.id}`}
+                  onClick={() => setToolCategoryTab(tab.id as ToolCategoryTab)}
+                  style={{
+                    padding: "4px 12px",
+                    fontSize: "0.78rem",
+                    borderRadius: 16,
+                    border: toolCategoryTab === tab.id ? "1px solid var(--accent-cyan)" : "1px solid var(--border-color)",
+                    background: toolCategoryTab === tab.id ? "rgba(0, 240, 255, 0.15)" : "var(--bg-secondary)",
+                    color: toolCategoryTab === tab.id ? "var(--accent-cyan)" : "var(--text-secondary)",
+                    cursor: "pointer",
+                    fontWeight: toolCategoryTab === tab.id ? 600 : 400,
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Status & Search row */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Status:</span>
+                {[
+                  { id: "all", label: "All States" },
+                  { id: "ready", label: "Installed & Ready" },
+                  { id: "action_needed", label: "Action Needed" },
+                  { id: "enabled_only", label: "Enabled Only" },
+                ].map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => setToolStatusFilter(s.id as ToolStatusFilter)}
                     style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      justifyContent: "space-between",
-                      gap: 12,
-                      border: adapter.is_available
-                        ? "1px solid rgba(0, 240, 255, 0.25)"
-                        : "1px solid rgba(255, 255, 255, 0.08)",
-                      background: "rgba(16, 24, 40, 0.65)",
+                      padding: "3px 10px",
+                      fontSize: "0.72rem",
+                      borderRadius: 12,
+                      border: toolStatusFilter === s.id ? "1px solid var(--accent-cyan)" : "1px solid var(--border-color)",
+                      background: toolStatusFilter === s.id ? "rgba(0, 240, 255, 0.1)" : "transparent",
+                      color: toolStatusFilter === s.id ? "var(--accent-cyan)" : "var(--text-muted)",
+                      cursor: "pointer",
                     }}
                   >
-                    <div>
-                      {/* Card Header */}
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
-                        <div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 600 }}>{adapter.name}</h3>
-                            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>v{adapter.version}</span>
-                          </div>
-                          <span style={{ fontSize: "0.75rem", color: "var(--accent-cyan)", fontWeight: 500 }}>
-                            {adapter.category}
-                          </span>
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Search input */}
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <div style={{ position: "relative", width: 280 }}>
+                  <Search size={14} style={{ position: "absolute", left: 10, top: 9, color: "var(--text-muted)" }} />
+                  <input
+                    type="text"
+                    placeholder="Search tools, packaging, capabilities..."
+                    className="input-field"
+                    value={filterQuery}
+                    onChange={(e) => setFilterQuery(e.target.value)}
+                    style={{ paddingLeft: 30, width: "100%", fontSize: "0.8rem", padding: "5px 10px 5px 30px" }}
+                  />
+                </div>
+                <button
+                  className="btn btn-secondary"
+                  onClick={loadAdapters}
+                  style={{ fontSize: "0.75rem", padding: "5px 12px" }}
+                >
+                  Refresh
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* TOOLS GRID */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 320px), 1fr))", gap: 16 }}>
+            {filteredAdapters.map((adapter) => {
+              const health = healthResults[adapter.id];
+              const isTesting = testingHealth[adapter.id];
+              const isToggling = togglingTools[adapter.id];
+
+              return (
+                <div
+                  key={adapter.id}
+                  className="card"
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "space-between",
+                    gap: 12,
+                    border: !adapter.is_enabled
+                      ? "1px dashed rgba(255, 255, 255, 0.15)"
+                      : adapter.is_available
+                      ? "1px solid rgba(0, 240, 255, 0.25)"
+                      : "1px solid var(--border-color)",
+                    background: "var(--bg-card)",
+                    opacity: adapter.is_enabled ? 1 : 0.65,
+                    boxShadow: adapter.is_available && adapter.is_enabled ? "0 2px 8px rgba(0, 240, 255, 0.05)" : "none",
+                  }}
+                >
+                  <div>
+                    {/* Card Header & Enable Switch */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+                      <div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 600 }}>{adapter.name}</h3>
+                          <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>v{adapter.version}</span>
                         </div>
-                        {getDetectionBadge(adapter.detection_state)}
+                        <span style={{ fontSize: "0.72rem", color: "var(--accent-cyan)", fontWeight: 500 }}>
+                          {adapter.category}
+                        </span>
                       </div>
 
-                      {/* Description */}
-                      <p style={{ margin: "8px 0 10px", fontSize: "0.82rem", color: "var(--text-secondary)", lineHeight: 1.4 }}>
-                        {adapter.description}
-                      </p>
-
-                      {/* Capabilities pills */}
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
-                        {adapter.capabilities.map((c) => (
-                          <span
-                            key={c}
-                            style={{
-                              fontSize: "0.7rem",
-                              background: "rgba(255, 255, 255, 0.06)",
-                              padding: "2px 8px",
-                              borderRadius: 4,
-                              color: "var(--text-muted)",
-                            }}
-                          >
-                            {formatCapability(c)}
-                          </span>
-                        ))}
-                      </div>
-
-                      {/* Path info */}
-                      <div
-                        style={{
-                          fontSize: "0.72rem",
-                          background: "rgba(0, 0, 0, 0.25)",
-                          padding: "6px 10px",
-                          borderRadius: 6,
-                          fontFamily: "monospace",
-                          color: adapter.resolved_path ? "var(--text-secondary)" : "var(--sev-high)",
-                          wordBreak: "break-all",
-                        }}
-                      >
-                        <strong>Resolved:</strong> {adapter.resolved_path || "Not found on host"}
-                        {adapter.custom_path && (
-                          <div style={{ color: "var(--accent-cyan)", marginTop: 2 }}>
-                            <strong>Custom Override:</strong> {adapter.custom_path}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Health check feedback if tested */}
-                      {health && (
-                        <div
+                      {/* Enable/Disable Toggle Button */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <button
+                          data-testid={`toggle-tool-${adapter.id}`}
+                          onClick={() => handleToggleTool(adapter)}
+                          disabled={isToggling}
+                          title={adapter.is_enabled ? "Click to disable tool" : "Click to enable tool"}
                           style={{
-                            marginTop: 8,
-                            padding: "6px 10px",
-                            borderRadius: 6,
-                            background: health.healthy ? "rgba(0, 230, 118, 0.1)" : "rgba(255, 82, 82, 0.1)",
-                            borderLeft: `3px solid ${health.healthy ? "var(--sev-low)" : "var(--sev-high)"}`,
-                            fontSize: "0.75rem",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 4,
+                            padding: "3px 8px",
+                            borderRadius: 12,
+                            fontSize: "0.68rem",
+                            cursor: "pointer",
+                            background: adapter.is_enabled ? "rgba(0, 230, 118, 0.15)" : "rgba(255, 255, 255, 0.06)",
+                            border: adapter.is_enabled ? "1px solid rgba(0, 230, 118, 0.4)" : "1px solid var(--border-color)",
+                            color: adapter.is_enabled ? "var(--sev-low)" : "var(--text-muted)",
+                            fontWeight: 600,
                           }}
                         >
-                          <div style={{ fontWeight: 600, color: health.healthy ? "var(--sev-low)" : "var(--sev-high)" }}>
-                            {health.healthy ? "✓ Verified Responsive" : "⚠ Health Probe Failed"} ({health.latency_ms} ms)
-                          </div>
-                          <div style={{ color: "var(--text-secondary)", marginTop: 2 }}>{health.message}</div>
+                          <Power size={10} />
+                          {adapter.is_enabled ? "Enabled" : "Disabled"}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Packaging / Install Source & Status Badges */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, flexWrap: "wrap", gap: 6 }}>
+                      {getDetectionBadge(adapter.detection_state)}
+                      {adapter.install_source && (
+                        <span
+                          style={{
+                            fontSize: "0.68rem",
+                            background: "rgba(0, 240, 255, 0.08)",
+                            border: "1px solid rgba(0, 240, 255, 0.2)",
+                            color: "var(--accent-cyan)",
+                            padding: "2px 6px",
+                            borderRadius: 4,
+                          }}
+                        >
+                          {adapter.install_source}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Description */}
+                    <p style={{ margin: "8px 0 10px", fontSize: "0.82rem", color: "var(--text-secondary)", lineHeight: 1.4 }}>
+                      {adapter.description}
+                    </p>
+
+                    {/* Capabilities pills */}
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+                      {adapter.capabilities.map((c) => (
+                        <span
+                          key={c}
+                          style={{
+                            fontSize: "0.68rem",
+                            background: "rgba(255, 255, 255, 0.06)",
+                            padding: "2px 8px",
+                            borderRadius: 4,
+                            color: "var(--text-muted)",
+                          }}
+                        >
+                          {formatCapability(c)}
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* Path info */}
+                    <div
+                      style={{
+                        fontSize: "0.72rem",
+                        background: "var(--bg-secondary)",
+                        border: "1px solid var(--border-color)",
+                        padding: "6px 10px",
+                        borderRadius: 6,
+                        fontFamily: "monospace",
+                        color: adapter.resolved_path ? "var(--text-secondary)" : "var(--sev-high)",
+                        wordBreak: "break-all",
+                      }}
+                    >
+                      <strong>Resolved:</strong> {adapter.resolved_path || "Not found on host system"}
+                      {adapter.custom_path && (
+                        <div style={{ color: "var(--accent-cyan)", marginTop: 2 }}>
+                          <strong>Custom Override:</strong> {adapter.custom_path}
                         </div>
                       )}
                     </div>
 
-                    {/* Actions */}
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        gap: 8,
-                        paddingTop: 10,
-                        borderTop: "1px solid rgba(255, 255, 255, 0.06)",
-                      }}
-                    >
+                    {/* Health check feedback if tested */}
+                    {health && (
+                      <div
+                        style={{
+                          marginTop: 8,
+                          padding: "6px 10px",
+                          borderRadius: 6,
+                          background: health.healthy ? "rgba(0, 230, 118, 0.1)" : "rgba(255, 82, 82, 0.1)",
+                          borderLeft: `3px solid ${health.healthy ? "var(--sev-low)" : "var(--sev-high)"}`,
+                          fontSize: "0.75rem",
+                        }}
+                      >
+                        <div style={{ fontWeight: 600, color: health.healthy ? "var(--sev-low)" : "var(--sev-high)" }}>
+                          {health.healthy ? "✓ Verified Responsive" : "⚠ Health Probe Failed"} ({health.latency_ms} ms)
+                        </div>
+                        <div style={{ color: "var(--text-secondary)", marginTop: 2 }}>{health.message}</div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Actions Bar */}
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: 8,
+                      paddingTop: 10,
+                      borderTop: "1px solid rgba(255, 255, 255, 0.06)",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <div style={{ display: "flex", gap: 6 }}>
+                      {/* Execute Tool / Run Scan Button */}
+                      <button
+                        className="btn btn-primary"
+                        data-testid={`run-tool-${adapter.id}`}
+                        onClick={() => handleOpenExecuteModal(adapter)}
+                        disabled={!adapter.is_available || !adapter.is_enabled}
+                        style={{
+                          fontSize: "0.75rem",
+                          padding: "4px 10px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                      >
+                        <Play size={12} /> Run Tool
+                      </button>
+
+                      {/* Test Health Button */}
                       <button
                         className="btn btn-secondary"
+                        data-testid={`health-tool-${adapter.id}`}
                         onClick={() => handleTestHealth(adapter.id)}
                         disabled={isTesting}
                         style={{ fontSize: "0.75rem", padding: "4px 10px", display: "flex", alignItems: "center", gap: 6 }}
                       >
                         <Zap size={12} color="var(--accent-cyan)" />
-                        {isTesting ? "Testing..." : "Test Health"}
+                        {isTesting ? "Testing..." : "Health"}
+                      </button>
+                    </div>
+
+                    <div style={{ display: "flex", gap: 6 }}>
+                      {/* Install / Setup Guide Button */}
+                      <button
+                        className="btn btn-secondary"
+                        data-testid={`guide-tool-${adapter.id}`}
+                        onClick={() => setGuideTool(adapter)}
+                        title="View Windows Installation & Setup Guide"
+                        style={{ fontSize: "0.75rem", padding: "4px 8px", display: "flex", alignItems: "center", gap: 4 }}
+                      >
+                        <Terminal size={12} /> Guide
                       </button>
 
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <button
-                          className="btn btn-secondary"
-                          onClick={() => {
-                            setEditingPathTool(adapter);
-                            setCustomPathInput(adapter.custom_path || adapter.resolved_path || "");
-                          }}
-                          style={{ fontSize: "0.75rem", padding: "4px 10px" }}
-                        >
-                          Custom Path
-                        </button>
+                      {/* Custom Path Button */}
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => {
+                          setEditingPathTool(adapter);
+                          setCustomPathInput(adapter.custom_path || adapter.resolved_path || "");
+                        }}
+                        title="Configure Custom Binary Path Override"
+                        style={{ fontSize: "0.75rem", padding: "4px 8px" }}
+                      >
+                        Path
+                      </button>
 
-                        <a
-                          href={adapter.documentation_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="btn btn-secondary"
-                          style={{ fontSize: "0.75rem", padding: "4px 8px", display: "flex", alignItems: "center" }}
-                          title="Official Documentation"
-                        >
-                          <ExternalLink size={12} />
-                        </a>
-                      </div>
+                      {/* External Docs */}
+                      <a
+                        href={adapter.documentation_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn btn-secondary"
+                        style={{ fontSize: "0.75rem", padding: "4px 8px", display: "flex", alignItems: "center" }}
+                        title="Official Documentation"
+                      >
+                        <ExternalLink size={12} />
+                      </a>
                     </div>
                   </div>
-                );
-              })}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -591,11 +1185,12 @@ export const OrchestrationHub: React.FC<OrchestrationHubProps> = ({
                 key={wf.id}
                 className="card"
                 style={{
-                  background: "rgba(16, 24, 40, 0.75)",
-                  border: "1px solid rgba(0, 240, 255, 0.18)",
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--border-color)",
                   display: "flex",
                   flexDirection: "column",
                   gap: 16,
+                  boxShadow: "var(--shadow-sm)",
                 }}
               >
                 {/* Pipeline Header */}
@@ -645,10 +1240,10 @@ export const OrchestrationHub: React.FC<OrchestrationHubProps> = ({
                           minWidth: 200,
                           padding: "10px 14px",
                           borderRadius: 8,
-                          background: "rgba(10, 16, 30, 0.8)",
+                          background: "var(--bg-secondary)",
                           border: step.requires_approval
                             ? "1px solid var(--sev-high)"
-                            : "1px solid rgba(255, 255, 255, 0.12)",
+                            : "1px solid var(--border-color)",
                           boxShadow: step.requires_approval ? "0 0 10px rgba(255, 152, 0, 0.15)" : "none",
                         }}
                       >
@@ -716,7 +1311,9 @@ export const OrchestrationHub: React.FC<OrchestrationHubProps> = ({
               gap: 12,
               maxHeight: "75vh",
               overflowY: "auto",
-              background: "rgba(16, 24, 40, 0.75)",
+              background: "var(--bg-card)",
+              border: "1px solid var(--border-color)",
+              boxShadow: "var(--shadow-sm)",
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -741,8 +1338,8 @@ export const OrchestrationHub: React.FC<OrchestrationHubProps> = ({
                       padding: "10px 12px",
                       borderRadius: 8,
                       cursor: "pointer",
-                      background: isSelected ? "rgba(0, 240, 255, 0.12)" : "rgba(255, 255, 255, 0.03)",
-                      border: isSelected ? "1px solid var(--accent-cyan)" : "1px solid rgba(255, 255, 255, 0.06)",
+                      background: isSelected ? "rgba(0, 240, 255, 0.12)" : "var(--bg-secondary)",
+                      border: isSelected ? "1px solid var(--accent-cyan)" : "1px solid var(--border-color)",
                       display: "flex",
                       flexDirection: "column",
                       gap: 4,
@@ -773,8 +1370,9 @@ export const OrchestrationHub: React.FC<OrchestrationHubProps> = ({
                 display: "flex",
                 flexDirection: "column",
                 gap: 16,
-                background: "rgba(16, 24, 40, 0.75)",
-                border: "1px solid rgba(0, 240, 255, 0.2)",
+                background: "var(--bg-card)",
+                border: "1px solid var(--border-color)",
+                boxShadow: "var(--shadow-sm)",
               }}
             >
               {/* Job Header */}
@@ -862,8 +1460,8 @@ export const OrchestrationHub: React.FC<OrchestrationHubProps> = ({
                     style={{
                       padding: "10px 14px",
                       borderRadius: 8,
-                      background: "rgba(0, 0, 0, 0.3)",
-                      border: "1px solid rgba(255, 255, 255, 0.08)",
+                      background: "var(--bg-secondary)",
+                      border: "1px solid var(--border-color)",
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
@@ -950,18 +1548,19 @@ export const OrchestrationHub: React.FC<OrchestrationHubProps> = ({
             </button>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 300px), 1fr))", gap: 16 }}>
             {extensions.map((ext) => (
               <div
                 key={ext.manifest.id}
                 className="card"
                 style={{
-                  background: "rgba(16, 24, 40, 0.7)",
-                  border: ext.state === "enabled" ? "1px solid rgba(0, 230, 118, 0.3)" : "1px solid rgba(255, 255, 255, 0.08)",
+                  background: "var(--bg-card)",
+                  border: ext.state === "enabled" ? "1px solid rgba(0, 230, 118, 0.3)" : "1px solid var(--border-color)",
                   display: "flex",
                   flexDirection: "column",
                   justifyContent: "space-between",
                   gap: 12,
+                  boxShadow: "var(--shadow-sm)",
                 }}
               >
                 <div>
@@ -994,7 +1593,8 @@ export const OrchestrationHub: React.FC<OrchestrationHubProps> = ({
                         key={c}
                         style={{
                           fontSize: "0.68rem",
-                          background: "rgba(255, 255, 255, 0.06)",
+                          background: "var(--bg-secondary)",
+                          border: "1px solid var(--border-color)",
                           padding: "2px 6px",
                           borderRadius: 4,
                         }}
@@ -1028,6 +1628,315 @@ export const OrchestrationHub: React.FC<OrchestrationHubProps> = ({
           </div>
         </div>
       )}
+
+      {/* ========================================================= */}
+      {/* DIRECT TOOL EXECUTION MODAL */}
+      {/* ========================================================= */}
+      {executingTool && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0, 0, 0, 0.8)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: 20,
+          }}
+        >
+          <div
+            className="card"
+            style={{
+              width: "min(100%, 650px)",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              display: "flex",
+              flexDirection: "column",
+              gap: 14,
+              boxShadow: "var(--shadow-lg)",
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "1.15rem", display: "flex", alignItems: "center", gap: 8 }}>
+                  <Play size={18} color="var(--accent-cyan)" /> Execute Tool: {executingTool.name}
+                </h3>
+                <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                  {executingTool.category} • {executingTool.install_source || "CLI Process"}
+                </span>
+              </div>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setExecutingTool(null)}
+                style={{ fontSize: "0.75rem", padding: "4px 8px" }}
+              >
+                ✕ Close
+              </button>
+            </div>
+
+            {/* Target & Scope Info */}
+            <div
+              style={{
+                background: "var(--bg-secondary)",
+                padding: "10px 14px",
+                borderRadius: 8,
+                border: "1px solid var(--border-color)",
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: "0.78rem", fontWeight: 600 }}>Target Scope Authorization:</span>
+                <span className="badge badge-success" style={{ fontSize: "0.7rem", display: "flex", alignItems: "center", gap: 4 }}>
+                  <ShieldCheck size={12} /> Authorization Enforced
+                </span>
+              </div>
+
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <select
+                  className="input-field"
+                  value={execTargetId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setExecTargetId(id);
+                    const t = targets.find((item) => item.id === id);
+                    if (t) setExecTargetUrl(t.primary_url);
+                  }}
+                  style={{ flex: 1, fontSize: "0.82rem", padding: "6px 10px" }}
+                >
+                  {targets.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} ({t.primary_url})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                Target URL: <code style={{ color: "var(--accent-cyan)" }}>{execTargetUrl}</code>
+              </div>
+            </div>
+
+            {/* Configurable Parameters */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <span style={{ fontSize: "0.78rem", fontWeight: 600 }}>Execution Parameters:</span>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {Object.entries(execParams).map(([key, val]) => (
+                  <div key={key}>
+                    <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", textTransform: "capitalize" }}>
+                      {key.replace(/_/g, " ")}:
+                    </label>
+                    <input
+                      type="text"
+                      className="input-field"
+                      value={val}
+                      onChange={(e) => setExecParams({ ...execParams, [key]: e.target.value })}
+                      style={{ width: "100%", fontSize: "0.8rem", padding: "4px 8px", marginTop: 2 }}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Launch Action */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+              <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
+                Timeout: 300s • Rate-limited safe process
+              </span>
+              <button
+                className="btn btn-primary"
+                onClick={handleExecuteTool}
+                disabled={isExecutingTool}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "8px 18px",
+                  fontSize: "0.85rem",
+                }}
+              >
+                <Play size={14} className={isExecutingTool ? "spin-anim" : ""} />
+                {isExecutingTool ? "Executing Tool..." : "Run Safe Assessment"}
+              </button>
+            </div>
+
+            {/* Error Message */}
+            {toolExecError && (
+              <div
+                style={{
+                  background: "rgba(255, 82, 82, 0.12)",
+                  border: "1px solid var(--sev-high)",
+                  padding: "8px 12px",
+                  borderRadius: 6,
+                  color: "var(--sev-high)",
+                  fontSize: "0.78rem",
+                }}
+              >
+                ⚠ {toolExecError}
+              </div>
+            )}
+
+            {/* Execution Result & Console */}
+            {toolExecOutput && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span className={`badge ${toolExecOutput.status === "Success" ? "badge-success" : "badge-high"}`}>
+                      {toolExecOutput.status}
+                    </span>
+                    <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                      Duration: {toolExecOutput.duration_ms} ms
+                    </span>
+                  </div>
+
+                  {toolExecOutput.findings.length > 0 && (
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => {
+                        setExecutingTool(null);
+                        onNavigateToFindings();
+                      }}
+                      style={{ fontSize: "0.75rem", padding: "4px 10px", display: "flex", alignItems: "center", gap: 4 }}
+                    >
+                      <Eye size={12} /> View Findings ({toolExecOutput.findings.length})
+                    </button>
+                  )}
+                </div>
+
+                {/* Console Log Output */}
+                <div
+                  style={{
+                    background: "#080c14",
+                    padding: 10,
+                    borderRadius: 6,
+                    maxHeight: 180,
+                    overflowY: "auto",
+                    fontFamily: "monospace",
+                    fontSize: "0.75rem",
+                    color: "var(--accent-cyan)",
+                    border: "1px solid rgba(0, 240, 255, 0.15)",
+                  }}
+                >
+                  {toolExecOutput.logs.length === 0 ? (
+                    <div style={{ color: "var(--text-muted)" }}>Execution completed with 0 console messages.</div>
+                  ) : (
+                    toolExecOutput.logs.map((log, idx) => <div key={idx}>{log}</div>)
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* INSTALL & SETUP GUIDE MODAL */}
+      {/* ========================================================= */}
+      {guideTool && (() => {
+        const info = getInstallInstructions(guideTool.id);
+        return (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(0, 0, 0, 0.8)",
+              backdropFilter: "blur(4px)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1000,
+              padding: 20,
+            }}
+          >
+            <div className="card" style={{ width: "min(100%, 580px)", display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "1.15rem", display: "flex", alignItems: "center", gap: 8 }}>
+                    <Terminal size={18} color="var(--accent-cyan)" /> Setup Guide: {guideTool.name}
+                  </h3>
+                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                    Method: {info.title}
+                  </span>
+                </div>
+                <button className="btn btn-secondary" onClick={() => setGuideTool(null)} style={{ fontSize: "0.75rem", padding: "4px 8px" }}>
+                  ✕ Close
+                </button>
+              </div>
+
+              <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--text-secondary)" }}>
+                {info.note}
+              </p>
+
+              <div>
+                <label style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Windows PowerShell Installation Command:</label>
+                <div
+                  style={{
+                    background: "#080c14",
+                    padding: "10px 14px",
+                    borderRadius: 6,
+                    fontFamily: "monospace",
+                    fontSize: "0.8rem",
+                    color: "var(--accent-cyan)",
+                    border: "1px solid rgba(0, 240, 255, 0.2)",
+                    marginTop: 4,
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-all",
+                    position: "relative",
+                  }}
+                >
+                  {info.command}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+                <a
+                  href={guideTool.documentation_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ fontSize: "0.75rem", color: "var(--accent-cyan)", display: "flex", alignItems: "center", gap: 4 }}
+                >
+                  <ExternalLink size={12} /> Official Project Releases & Documentation
+                </a>
+
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      navigator.clipboard.writeText(info.command);
+                      setCopiedCmd(true);
+                      setTimeout(() => setCopiedCmd(false), 2000);
+                    }}
+                    style={{ fontSize: "0.78rem", padding: "5px 14px", display: "flex", alignItems: "center", gap: 6 }}
+                  >
+                    {copiedCmd ? <Check size={14} color="var(--sev-low)" /> : null}
+                    {copiedCmd ? "Copied!" : "Copy Command"}
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => {
+                      setGuideTool(null);
+                      handleTestHealth(guideTool.id);
+                    }}
+                    style={{ fontSize: "0.78rem", padding: "5px 14px" }}
+                  >
+                    Test Health After Install
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ========================================================= */}
       {/* CUSTOM PATH OVERRIDE MODAL */}

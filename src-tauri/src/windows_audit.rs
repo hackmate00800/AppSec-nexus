@@ -73,7 +73,7 @@ impl WindowsAuditor {
 
         // Query services using WMIC or PowerShell
         let output = Command::new("powershell")
-            .args(&[
+            .args([
                 "-NoProfile",
                 "-NonInteractive",
                 "-Command",
@@ -126,7 +126,7 @@ impl WindowsAuditor {
         use std::os::windows::process::CommandExt;
 
         let output = Command::new("reg")
-            .args(&[
+            .args([
                 "query",
                 r"HKLM\SOFTWARE\Policies\Microsoft\Windows\Installer",
                 "/v",
@@ -160,7 +160,7 @@ impl WindowsAuditor {
         use std::os::windows::process::CommandExt;
 
         let output = Command::new("reg")
-            .args(&[
+            .args([
                 "query",
                 r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System",
                 "/v",
@@ -194,7 +194,7 @@ impl WindowsAuditor {
         use std::os::windows::process::CommandExt;
 
         let output = Command::new("reg")
-            .args(&[
+            .args([
                 "query",
                 r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run",
             ])
@@ -237,7 +237,7 @@ impl WindowsAuditor {
         use std::os::windows::process::CommandExt;
 
         let output = Command::new("powershell")
-            .args(&[
+            .args([
                 "-NoProfile",
                 "-NonInteractive",
                 "-Command",

@@ -274,6 +274,261 @@ impl JobManager {
         };
         default_workflows.insert(controlled_active.id.clone(), controlled_active);
 
+        // 5. Category-Specific: Web Application Vulnerability Suite
+        let web_pipeline = WorkflowDefinition {
+            id: "wf_web_pipeline".to_string(),
+            name: "Web Application Vulnerability Suite".to_string(),
+            description: "Automated Web Security Assessment: Native baseline policy check, Katana route spidering, and Nuclei OWASP vulnerability detection.".to_string(),
+            category: "web".to_string(),
+            tags: vec!["web".to_string(), "owasp".to_string(), "katana".to_string(), "nuclei".to_string()],
+            steps: vec![
+                WorkflowStepDefinition {
+                    step_id: "step_baseline".to_string(),
+                    name: "1. Baseline Security & Headers Check".to_string(),
+                    tool_id: "baseline".to_string(),
+                    depends_on: vec![],
+                    input_mapping: HashMap::new(),
+                    requires_approval: false,
+                    timeout_seconds: 60,
+                    continue_on_failure: true,
+                },
+                WorkflowStepDefinition {
+                    step_id: "step_katana".to_string(),
+                    name: "2. Katana High-Performance Web Spidering".to_string(),
+                    tool_id: "katana".to_string(),
+                    depends_on: vec!["step_baseline".to_string()],
+                    input_mapping: HashMap::new(),
+                    requires_approval: false,
+                    timeout_seconds: 120,
+                    continue_on_failure: true,
+                },
+                WorkflowStepDefinition {
+                    step_id: "step_nuclei".to_string(),
+                    name: "3. Nuclei OWASP & CVE Vulnerability Scan".to_string(),
+                    tool_id: "nuclei".to_string(),
+                    depends_on: vec!["step_katana".to_string()],
+                    input_mapping: HashMap::new(),
+                    requires_approval: false,
+                    timeout_seconds: 180,
+                    continue_on_failure: true,
+                },
+            ],
+            is_builtin: true,
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
+        };
+        default_workflows.insert(web_pipeline.id.clone(), web_pipeline);
+
+        // 6. Category-Specific: API & Microservices Security Pipeline
+        let api_pipeline = WorkflowDefinition {
+            id: "wf_api_pipeline".to_string(),
+            name: "API & Microservices Security Pipeline".to_string(),
+            description: "API Security Evaluation: Endpoint probing, service profiling, and Schemathesis contract & schema fuzzing.".to_string(),
+            category: "api".to_string(),
+            tags: vec!["api".to_string(), "schemathesis".to_string(), "rest".to_string(), "fuzzing".to_string()],
+            steps: vec![
+                WorkflowStepDefinition {
+                    step_id: "step_httpx".to_string(),
+                    name: "1. API Endpoint Probing & Content-Type Profiling".to_string(),
+                    tool_id: "httpx".to_string(),
+                    depends_on: vec![],
+                    input_mapping: HashMap::new(),
+                    requires_approval: false,
+                    timeout_seconds: 60,
+                    continue_on_failure: true,
+                },
+                WorkflowStepDefinition {
+                    step_id: "step_schemathesis".to_string(),
+                    name: "2. Schemathesis Property-Based API Fuzzing".to_string(),
+                    tool_id: "schemathesis".to_string(),
+                    depends_on: vec!["step_httpx".to_string()],
+                    input_mapping: HashMap::new(),
+                    requires_approval: false,
+                    timeout_seconds: 120,
+                    continue_on_failure: true,
+                },
+            ],
+            is_builtin: true,
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
+        };
+        default_workflows.insert(api_pipeline.id.clone(), api_pipeline);
+
+        // 7. Category-Specific: Source Code & Secret Leak Audit (SAST)
+        let software_pipeline = WorkflowDefinition {
+            id: "wf_software_pipeline".to_string(),
+            name: "Source Code & Secret Leak Audit (SAST)".to_string(),
+            description: "Source code auditing: Gitleaks secrets detection, Semgrep static analysis, and OSV-Scanner dependency vulnerability checks.".to_string(),
+            category: "software".to_string(),
+            tags: vec!["software".to_string(), "sast".to_string(), "gitleaks".to_string(), "semgrep".to_string(), "osv".to_string()],
+            steps: vec![
+                WorkflowStepDefinition {
+                    step_id: "step_gitleaks".to_string(),
+                    name: "1. Gitleaks Secrets & Token Detection".to_string(),
+                    tool_id: "gitleaks".to_string(),
+                    depends_on: vec![],
+                    input_mapping: HashMap::new(),
+                    requires_approval: false,
+                    timeout_seconds: 90,
+                    continue_on_failure: true,
+                },
+                WorkflowStepDefinition {
+                    step_id: "step_semgrep".to_string(),
+                    name: "2. Semgrep SAST Security Analysis".to_string(),
+                    tool_id: "semgrep".to_string(),
+                    depends_on: vec![],
+                    input_mapping: HashMap::new(),
+                    requires_approval: false,
+                    timeout_seconds: 120,
+                    continue_on_failure: true,
+                },
+                WorkflowStepDefinition {
+                    step_id: "step_osv".to_string(),
+                    name: "3. OSV-Scanner Dependency Vulnerability Check".to_string(),
+                    tool_id: "osv_scanner".to_string(),
+                    depends_on: vec![],
+                    input_mapping: HashMap::new(),
+                    requires_approval: false,
+                    timeout_seconds: 90,
+                    continue_on_failure: true,
+                },
+            ],
+            is_builtin: true,
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
+        };
+        default_workflows.insert(software_pipeline.id.clone(), software_pipeline);
+
+        // 8. Category-Specific: Network Protocol & Traffic Inspection
+        let network_pipeline = WorkflowDefinition {
+            id: "wf_network_pipeline".to_string(),
+            name: "Network Protocol & Traffic Inspection".to_string(),
+            description: "Network Infrastructure Security: Nmap port and service enumeration followed by TShark protocol & cleartext traffic inspection.".to_string(),
+            category: "network".to_string(),
+            tags: vec!["network".to_string(), "nmap".to_string(), "tshark".to_string(), "ports".to_string()],
+            steps: vec![
+                WorkflowStepDefinition {
+                    step_id: "step_nmap".to_string(),
+                    name: "1. Nmap Port & Service Discovery".to_string(),
+                    tool_id: "nmap".to_string(),
+                    depends_on: vec![],
+                    input_mapping: HashMap::new(),
+                    requires_approval: false,
+                    timeout_seconds: 120,
+                    continue_on_failure: true,
+                },
+                WorkflowStepDefinition {
+                    step_id: "step_tshark".to_string(),
+                    name: "2. TShark Network Traffic & Protocol Audit".to_string(),
+                    tool_id: "tshark".to_string(),
+                    depends_on: vec!["step_nmap".to_string()],
+                    input_mapping: HashMap::new(),
+                    requires_approval: false,
+                    timeout_seconds: 90,
+                    continue_on_failure: true,
+                },
+            ],
+            is_builtin: true,
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
+        };
+        default_workflows.insert(network_pipeline.id.clone(), network_pipeline);
+
+        // 9. Category-Specific: Cloud & Infrastructure Configuration Audit
+        let cloud_pipeline = WorkflowDefinition {
+            id: "wf_cloud_pipeline".to_string(),
+            name: "Cloud & Infrastructure Configuration Audit".to_string(),
+            description: "Cloud Security: Checkov Infrastructure-as-Code misconfiguration analysis and AquaSecurity Trivy vulnerability auditing.".to_string(),
+            category: "cloud".to_string(),
+            tags: vec!["cloud".to_string(), "iac".to_string(), "checkov".to_string(), "trivy".to_string()],
+            steps: vec![
+                WorkflowStepDefinition {
+                    step_id: "step_checkov".to_string(),
+                    name: "1. Checkov IaC Misconfiguration & Compliance Scan".to_string(),
+                    tool_id: "checkov".to_string(),
+                    depends_on: vec![],
+                    input_mapping: HashMap::new(),
+                    requires_approval: false,
+                    timeout_seconds: 120,
+                    continue_on_failure: true,
+                },
+                WorkflowStepDefinition {
+                    step_id: "step_trivy".to_string(),
+                    name: "2. Trivy Container & Cloud Vulnerability Scan".to_string(),
+                    tool_id: "trivy".to_string(),
+                    depends_on: vec![],
+                    input_mapping: HashMap::new(),
+                    requires_approval: false,
+                    timeout_seconds: 120,
+                    continue_on_failure: true,
+                },
+            ],
+            is_builtin: true,
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
+        };
+        default_workflows.insert(cloud_pipeline.id.clone(), cloud_pipeline);
+
+        // 10. Category-Specific: Android Mobile Security Audit
+        let android_pipeline = WorkflowDefinition {
+            id: "wf_android_pipeline".to_string(),
+            name: "Android Mobile Application Security Audit".to_string(),
+            description: "Mobile AppSec: Skylot JADX decompilation and AndroidManifest.xml security configuration analysis.".to_string(),
+            category: "android".to_string(),
+            tags: vec!["android".to_string(), "jadx".to_string(), "apk".to_string(), "mobile".to_string()],
+            steps: vec![
+                WorkflowStepDefinition {
+                    step_id: "step_jadx".to_string(),
+                    name: "1. JADX Decompilation & Manifest Analysis".to_string(),
+                    tool_id: "jadx".to_string(),
+                    depends_on: vec![],
+                    input_mapping: HashMap::new(),
+                    requires_approval: false,
+                    timeout_seconds: 180,
+                    continue_on_failure: false,
+                },
+            ],
+            is_builtin: true,
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
+        };
+        default_workflows.insert(android_pipeline.id.clone(), android_pipeline);
+
+        // 11. Category-Specific: Controlled Lab Exploit Validation (Gated)
+        let lab_pipeline = WorkflowDefinition {
+            id: "wf_lab_pipeline".to_string(),
+            name: "Controlled Lab Exploit Validation (Gated)".to_string(),
+            description: "Lab-Only Verification: Target probe followed by human operator approval gate prior to non-destructive proof-of-concept validation.".to_string(),
+            category: "lab".to_string(),
+            tags: vec!["lab".to_string(), "validation".to_string(), "approval-gate".to_string(), "safe".to_string()],
+            steps: vec![
+                WorkflowStepDefinition {
+                    step_id: "step_httpx".to_string(),
+                    name: "1. Target Environment Diagnostic Probe".to_string(),
+                    tool_id: "httpx".to_string(),
+                    depends_on: vec![],
+                    input_mapping: HashMap::new(),
+                    requires_approval: false,
+                    timeout_seconds: 60,
+                    continue_on_failure: false,
+                },
+                WorkflowStepDefinition {
+                    step_id: "step_lab_exploit_val".to_string(),
+                    name: "2. Lab Exploit Proof-of-Concept [OPERATOR APPROVAL REQUIRED]".to_string(),
+                    tool_id: "nuclei".to_string(),
+                    depends_on: vec!["step_httpx".to_string()],
+                    input_mapping: HashMap::new(),
+                    requires_approval: true,
+                    timeout_seconds: 180,
+                    continue_on_failure: false,
+                },
+            ],
+            is_builtin: true,
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
+        };
+        default_workflows.insert(lab_pipeline.id.clone(), lab_pipeline);
+
         Self {
             workflows: Arc::new(RwLock::new(default_workflows)),
             active_jobs: Arc::new(RwLock::new(HashMap::new())),

@@ -25,6 +25,31 @@ impl SemgrepAdapter {
             }
         }
 
+        let mut candidates = Vec::new();
+
+        // 1. Check Python User Scripts directories on Windows
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            candidates.push(PathBuf::from(&appdata).join(r"Python\Python314\Scripts\semgrep.exe"));
+            candidates.push(PathBuf::from(&appdata).join(r"Python\Python313\Scripts\semgrep.exe"));
+            candidates.push(PathBuf::from(&appdata).join(r"Python\Python312\Scripts\semgrep.exe"));
+            candidates.push(PathBuf::from(&appdata).join(r"Python\Python311\Scripts\semgrep.exe"));
+            candidates.push(PathBuf::from(&appdata).join(r"Python\Scripts\semgrep.exe"));
+        }
+        if let Ok(localappdata) = std::env::var("LOCALAPPDATA") {
+            candidates.push(PathBuf::from(&localappdata).join(r"Programs\Python\Python314\Scripts\semgrep.exe"));
+            candidates.push(PathBuf::from(&localappdata).join(r"Programs\Python\Python313\Scripts\semgrep.exe"));
+        }
+        candidates.push(PathBuf::from(r"C:\Python314\Scripts\semgrep.exe"));
+        candidates.push(PathBuf::from(r"C:\Python313\Scripts\semgrep.exe"));
+
+        // 2. Check candidate paths
+        for c in &candidates {
+            if c.exists() {
+                return Some(c.clone());
+            }
+        }
+
+        // 3. Check system PATH
         if let Ok(path_var) = std::env::var("PATH") {
             for dir in std::env::split_paths(&path_var) {
                 let direct = dir.join("semgrep.exe");
@@ -126,7 +151,14 @@ impl SecurityToolAdapter for SemgrepAdapter {
                 }
             };
 
-            match Command::new(&exe_path).arg("--version").output().await {
+            let mut cmd = Command::new(&exe_path);
+            cmd.arg("--version");
+            if let Some(parent) = exe_path.parent() {
+                let cur = std::env::var("PATH").unwrap_or_default();
+                cmd.env("PATH", format!("{};{}", parent.display(), cur));
+            }
+
+            match cmd.output().await {
                 Ok(output) => {
                     let out_str = String::from_utf8_lossy(&output.stdout).to_string();
                     let version_line = out_str.lines().next().unwrap_or("Semgrep detected").trim().to_string();
@@ -169,6 +201,10 @@ impl SecurityToolAdapter for SemgrepAdapter {
                 .unwrap_or_else(|| ".".to_string());
 
             let mut cmd = Command::new(&exe_path);
+            if let Some(parent) = exe_path.parent() {
+                let cur = std::env::var("PATH").unwrap_or_default();
+                cmd.env("PATH", format!("{};{}", parent.display(), cur));
+            }
             cmd.args(&[
                 "scan",
                 "--config",

@@ -15,7 +15,39 @@ export interface Target {
 }
 
 export type FindingSeverity = "Critical" | "High" | "Medium" | "Low" | "Info";
-export type FindingStatus = "New" | "Confirmed" | "NeedsReview" | "AcceptedRisk" | "Fixed";
+export type FindingStatus =
+  | "New"
+  | "NeedsValidation"
+  | "Validating"
+  | "Confirmed"
+  | "LikelyTruePositive"
+  | "NeedsReview"
+  | "Unconfirmed"
+  | "LikelyFalsePositive"
+  | "ValidationFailed"
+  | "NotApplicable"
+  | "AcceptedRisk"
+  | "Fixed"
+  | "FalsePositive";
+
+export interface ValidationRecord {
+  id: string;
+  finding_id: string;
+  target_id: string;
+  status: string;
+  hypothesis: string;
+  test_method: string;
+  preconditions: string;
+  expected_observation: string;
+  actual_observation: string;
+  supporting_evidence: string;
+  contradicting_evidence: string;
+  confidence_score: number;
+  confidence_rationale: string;
+  executed_at: string;
+  duration_ms: number;
+  error_message?: string;
+}
 
 export interface Finding {
   id: string;
@@ -32,6 +64,27 @@ export interface Finding {
   status: FindingStatus;
   created_at: string;
   fingerprint?: string;
+  validation_status?: string;
+}
+
+export interface FindingUpdatePayload {
+  title: string;
+  severity: FindingSeverity;
+  confidence: number;
+  affected_asset: string;
+  evidence: string;
+  cwe?: string;
+  remediation: string;
+  status: FindingStatus;
+}
+
+export interface AuditLogRecord {
+  id: string;
+  entity_type: string;
+  entity_id: string;
+  action: string;
+  details_json: string;
+  timestamp: string;
 }
 
 export interface ToolInfo {
@@ -181,9 +234,24 @@ export interface ToolAdapterMetadata {
   resolved_path?: string;
   custom_path?: string;
   is_available: boolean;
+  is_enabled: boolean;
+  install_source?: string;
   description: string;
   documentation_url: string;
   requires_docker: boolean;
+}
+
+export interface SystemResourceStatus {
+  os: string;
+  disk_total_gb: number;
+  disk_free_gb: number;
+  disk_used_gb: number;
+  disk_warning: boolean;
+  ram_total_mb: number;
+  ram_avail_mb: number;
+  ram_used_mb: number;
+  ram_warning: boolean;
+  warnings: string[];
 }
 
 export interface AdapterOutput {
@@ -323,4 +391,302 @@ export interface WorkflowJob {
   logs: string[];
 }
 
+export type AiTaskStatus = "Queued" | "Running" | "Completed" | "Failed" | "Cancelled";
+
+export interface AiTask {
+  id: string;
+  conversation_id: string;
+  model: string;
+  prompt_preview: string;
+  status: AiTaskStatus;
+  system_prompt?: string;
+  messages_json: string;
+  result?: string;
+  error?: string;
+  created_at: string;
+  started_at?: string;
+  completed_at?: string;
+  duration_ms: number;
+}
+
+export interface AiChatMessageRecord {
+  id: string;
+  conversation_id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  timestamp: string;
+  task_id?: string;
+}
+
+export type WorkspacePreset = "default" | "compact" | "analyst" | "pentest" | "api" | "learning";
+export type WorkspaceDensity = "compact" | "normal" | "spacious";
+
+export interface PanelState {
+  id: string;
+  title: string;
+  visible: boolean;
+  minimized: boolean;
+  maximized: boolean;
+  collapsed: boolean;
+  width?: number;
+  height?: number;
+  previousDimensions?: { width?: number; height?: number };
+}
+
+export interface WorkspaceTabItem {
+  id: string;
+  label: string;
+  closable: boolean;
+  pinned?: boolean;
+}
+
+export interface WorkspaceLayoutConfig {
+  preset: WorkspacePreset;
+  sidebarWidth: number;
+  sidebarCollapsed: boolean;
+  findingsSplitRatio: number;
+  findingsDetailsMaximized: boolean;
+  density: WorkspaceDensity;
+  dashboardWidgetOrder: string[];
+  tabOrder: string[];
+  closedTabs: string[];
+  panels: Record<string, PanelState>;
+}
+
+export type SecurityAiRole = "quick" | "deep";
+
+export interface OllamaSystemInfo {
+  is_online: boolean;
+  version: string | null;
+  endpoint: string;
+  installed_models: string[];
+  last_checked: string;
+  error_message: string | null;
+}
+
+export interface SecurityAiWorkspaceConfig {
+  quick_model: string;
+  deep_model: string;
+  active_model_role: SecurityAiRole;
+}
+
+// -------------------------------------------------------------
+// ISSUE DOCUMENTATION & TRACKING SYSTEM
+// -------------------------------------------------------------
+export type IssueCategory =
+  | "SecurityVulnerability"
+  | "FunctionalBug"
+  | "UiUxGlitch"
+  | "BackendApiError"
+  | "DatabaseIssue"
+  | "ToolExecutionFailure"
+  | "PerformanceIssue"
+  | "ConfigurationIssue"
+  | "ManualReport";
+
+export type IssueSeverity = "Critical" | "High" | "Medium" | "Low" | "Info";
+
+export type IssueStatus =
+  | "Open"
+  | "Investigating"
+  | "Confirmed"
+  | "FalsePositive"
+  | "Fixed"
+  | "AcceptedRisk"
+  | "RetestFailed"
+  | "Closed";
+
+export type IssueVerificationStatus =
+  | "AutomatedObservation"
+  | "NeedsValidation"
+  | "HumanVerified"
+  | "RetestedValid"
+  | "FalsePositive";
+
+export type IssueSource =
+  | "Scanner"
+  | "Recon"
+  | "ToolExecution"
+  | "AiEngine"
+  | "SystemDiagnostic"
+  | "ManualReport";
+
+export interface IssueHistoryItem {
+  timestamp: string;
+  action: string;
+  actor: string;
+  details: string;
+}
+
+export interface IssueNote {
+  id: string;
+  author: string;
+  text: string;
+  timestamp: string;
+}
+
+export interface IssueRecord {
+  id: string;
+  title: string;
+  category: IssueCategory;
+  subtype: string;
+  severity: IssueSeverity;
+  status: IssueStatus;
+  verification_status: IssueVerificationStatus;
+  affected_target_id?: string | null;
+  affected_target_name?: string | null;
+  affected_component: string;
+  source: IssueSource;
+  occurrence_count: number;
+  first_detected: string;
+  last_detected: string;
+  description: string;
+  reproduction_steps?: string | null;
+  expected_behavior?: string | null;
+  actual_behavior?: string | null;
+  error_details?: string | null;
+  evidence?: string | null;
+  root_cause?: string | null;
+  impact_assessment?: string | null;
+  remediation_guidance?: string | null;
+  tags_json: string;
+  assigned_owner?: string | null;
+  notes_json: string;
+  related_finding_id?: string | null;
+  related_tool_id?: string | null;
+  history_json: string;
+  resolution_summary?: string | null;
+  resolved_at?: string | null;
+  fingerprint: string;
+}
+
+export interface IssueCreatePayload {
+  title: string;
+  category: IssueCategory;
+  subtype?: string;
+  severity: IssueSeverity;
+  status?: IssueStatus;
+  verification_status?: IssueVerificationStatus;
+  affected_target_id?: string | null;
+  affected_target_name?: string | null;
+  affected_component: string;
+  source?: IssueSource;
+  description: string;
+  reproduction_steps?: string | null;
+  expected_behavior?: string | null;
+  actual_behavior?: string | null;
+  error_details?: string | null;
+  evidence?: string | null;
+  root_cause?: string | null;
+  impact_assessment?: string | null;
+  remediation_guidance?: string | null;
+  tags?: string[];
+  assigned_owner?: string | null;
+  related_finding_id?: string | null;
+  related_tool_id?: string | null;
+}
+
+export interface IssueUpdatePayload {
+  title?: string;
+  category?: IssueCategory;
+  subtype?: string;
+  severity?: IssueSeverity;
+  status?: IssueStatus;
+  verification_status?: IssueVerificationStatus;
+  affected_component?: string;
+  description?: string;
+  reproduction_steps?: string | null;
+  expected_behavior?: string | null;
+  actual_behavior?: string | null;
+  error_details?: string | null;
+  evidence?: string | null;
+  root_cause?: string | null;
+  impact_assessment?: string | null;
+  remediation_guidance?: string | null;
+  tags?: string[];
+  assigned_owner?: string | null;
+  resolution_summary?: string | null;
+}
+
+export interface ReportGenerateParams {
+  title: string;
+  template: string;
+  target_id?: string | null;
+  issue_ids?: string[] | null;
+  include_executive_summary: boolean;
+  include_evidence: boolean;
+  include_remediation: boolean;
+  include_history: boolean;
+  format: "markdown" | "json" | "html";
+}
+
+export interface GeneratedReport {
+  id: string;
+  title: string;
+  template: string;
+  generated_at: string;
+  scope: string;
+  total_issues: number;
+  metrics_json: string;
+  content: string;
+  format: string;
+}
+
+// -------------------------------------------------------------
+// SCAN ACTIVITY TIMELINE, TRACEABILITY & METHODOLOGIES
+// -------------------------------------------------------------
+export interface ScanEvent {
+  id: string;
+  scan_id: string;
+  job_id?: string | null;
+  timestamp: string;
+  event_type: string;
+  severity: "info" | "warning" | "error" | "success" | string;
+  component_or_tool: string;
+  message: string;
+  metadata_json: string;
+  duration_ms: number;
+  status: "success" | "failure" | "skipped" | "warning" | string;
+  related_finding_id?: string | null;
+  error_details?: string | null;
+}
+
+export interface MethodologyDefinition {
+  id: string;
+  name: string;
+  category: string;
+  detection_objective: string;
+  applicable_vulnerability_classes: string[];
+  preconditions: string[];
+  input_or_artifact_examined: string;
+  detection_logic: string;
+  evidence_expected: string;
+  verification_strategy: string;
+  known_limitations: string[];
+  references: string[];
+  method_type: "passive" | "active" | "static" | "dynamic" | "manual";
+  safe_lab_exercise: string;
+}
+
+export interface FindingDetectionTrace {
+  finding_id: string;
+  scan_id?: string | null;
+  detection_timestamp: string;
+  target_url: string;
+  tool_name: string;
+  tool_version: string;
+  rule_id: string;
+  rule_description: string;
+  methodology_id: string;
+  methodology_name: string;
+  location_examined: string;
+  check_performed: string;
+  raw_observed_result: string;
+  evidence_summary: string;
+  human_explanation: string;
+  verification_status: string;
+  verification_record?: ValidationRecord | null;
+  limitations: string[];
+  scan_events: ScanEvent[];
+}
 

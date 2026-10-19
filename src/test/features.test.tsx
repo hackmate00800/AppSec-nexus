@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
-import App from "../App";
+import App, { sortAiModels } from "../App";
 import { CyberAcademy } from "../academy/CyberAcademy";
 import { MentorChat } from "../MentorChat";
 import { SecurityFlowchart } from "../Flowchart";
@@ -12,15 +12,15 @@ describe("Feature Automation Testing - APPSC NEXUS", () => {
     });
 
     // Check brand header
-    expect(screen.getByText("AppSec Nexus")).toBeInTheDocument();
+    expect(screen.getAllByText("AppSec Nexus")[0]).toBeInTheDocument();
     expect(screen.getByText("Desktop Platform")).toBeInTheDocument();
 
     // Verify navigation tabs exist
-    expect(screen.getByText("Security Analytics")).toBeInTheDocument();
-    expect(screen.getByText("Target & Scope")).toBeInTheDocument();
-    expect(screen.getByText("Scan Console")).toBeInTheDocument();
-    expect(screen.getByText("Cyber Academy")).toBeInTheDocument();
-    expect(screen.getByText("Local AI Mentor")).toBeInTheDocument();
+    expect(screen.getAllByText("Security Analytics")[0]).toBeInTheDocument();
+    expect(screen.getAllByText("Target & Scope")[0]).toBeInTheDocument();
+    expect(screen.getAllByText("Scan Console")[0]).toBeInTheDocument();
+    expect(screen.getAllByText("Cyber Academy")[0]).toBeInTheDocument();
+    expect(screen.getAllByText("Local AI Mentor")[0]).toBeInTheDocument();
   });
 
   it("navigates to Cyber Academy and renders core curriculum tracks", async () => {
@@ -103,4 +103,127 @@ describe("Feature Automation Testing - APPSC NEXUS", () => {
     expect(screen.getByText("1. Attacker Input")).toBeInTheDocument();
     expect(screen.getByText("2. Parameterized Query")).toBeInTheDocument();
   });
+
+  it("prioritizes appsec-teacher-8b:latest first in sortAiModels", () => {
+    const rawModels = [
+      "llama3.2:1b",
+      "llama3:8b",
+      "mistral:latest",
+      "appsec-teacher-1b:latest",
+      "appsec-teacher-8b:latest",
+    ];
+
+    const sorted = sortAiModels(rawModels);
+    expect(sorted[0]).toBe("appsec-teacher-8b:latest");
+    expect(sorted[1]).toBe("appsec-teacher-1b:latest");
+    expect(sorted[2]).toBe("llama3:8b");
+  });
+
+  it("renders interactive learning workflow stages in MentorChat", () => {
+    render(
+      <MentorChat
+        selectedFinding={null}
+        selectedModel="appsec-teacher-8b:latest"
+        aiMode="advanced"
+        aiAvailable={true}
+        onSelectFinding={() => {}}
+      />
+    );
+
+    expect(screen.getByText(/Interactive Learning Mode Workflow/i)).toBeInTheDocument();
+    expect(screen.getByText("📖 Concept & Mechanism")).toBeInTheDocument();
+    expect(screen.getByText("⚙️ Root Cause")).toBeInTheDocument();
+    expect(screen.getByText("🧪 Lab Reproduction")).toBeInTheDocument();
+    expect(screen.getByText("🛡️ Defense & Secure Code")).toBeInTheDocument();
+    expect(screen.getByText("📝 Pentest Report Finding")).toBeInTheDocument();
+  });
+
+  it("toggles Ollama models ON and OFF and persists preference", () => {
+    let toggledState = true;
+    render(
+      <MentorChat
+        selectedFinding={null}
+        selectedModel="appsec-teacher-8b:latest"
+        aiMode="advanced"
+        aiAvailable={true}
+        onSelectFinding={() => {}}
+        onToggleAiEnabled={(enabled) => {
+          toggledState = enabled;
+        }}
+      />
+    );
+
+    // Initial state is ONLINE
+    expect(screen.getByText("ONLINE")).toBeInTheDocument();
+
+    // Find and click the Ollama toggle button
+    const toggleBtn = screen.getByTitle(/Turn OFF Ollama models/i);
+    fireEvent.click(toggleBtn);
+
+    // Expect state to switch to OFF
+    expect(screen.getByText("OFF")).toBeInTheDocument();
+    expect(toggledState).toBe(false);
+  });
+
+  it("supports copying messages and code blocks to clipboard", () => {
+    // Mock clipboard
+    let clipboardText = "";
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: (t: string) => {
+          clipboardText = t;
+          return Promise.resolve();
+        },
+      },
+    });
+
+    render(
+      <MentorChat
+        selectedFinding={null}
+        selectedModel="appsec-teacher-8b:latest"
+        aiMode="advanced"
+        aiAvailable={true}
+        onSelectFinding={() => {}}
+      />
+    );
+
+    // Initial greeting is present
+    expect(screen.getByText(/Welcome to the/i)).toBeInTheDocument();
+
+    // Click Copy message button
+    const copyBtn = screen.getByTitle("Copy message to clipboard");
+    fireEvent.click(copyBtn);
+
+    expect(clipboardText).toContain("Welcome to the");
+  });
+
+  it("allows selecting study depth level and filtering bookmarked notes", () => {
+    render(
+      <MentorChat
+        selectedFinding={null}
+        selectedModel="appsec-teacher-8b:latest"
+        aiMode="advanced"
+        aiAvailable={true}
+        onSelectFinding={() => {}}
+      />
+    );
+
+    // Verify study depth selector
+    const depthSelect = screen.getByTitle("Select pedagogical depth for explanations") as HTMLSelectElement;
+    expect(depthSelect).toBeInTheDocument();
+    fireEvent.change(depthSelect, { target: { value: "professional" } });
+    expect(depthSelect.value).toBe("professional");
+
+    // Bookmark the initial message
+    const starBtn = screen.getByTitle(/Star as important study note/i);
+    fireEvent.click(starBtn);
+
+    // Click "Starred Notes" filter
+    const starredFilter = screen.getByText(/Starred Notes/i);
+    fireEvent.click(starredFilter);
+
+    // Starred note should still be visible
+    expect(screen.getByText(/Welcome to the/i)).toBeInTheDocument();
+  });
 });
+

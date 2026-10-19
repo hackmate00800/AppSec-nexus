@@ -1,24 +1,33 @@
 pub mod adapters;
 pub mod ai;
 pub mod android_audit;
+pub mod burp;
 pub mod crawler;
 pub mod db;
 pub mod extensions;
 pub mod feeds;
 pub mod importers;
+pub mod methodologies;
 pub mod models;
 pub mod orchestration;
 pub mod plugins;
 pub mod reports;
 pub mod scanners;
 pub mod scope;
+pub mod system_resources;
 pub mod tools;
+pub mod validator;
 pub mod windows_audit;
 
 use ai::AiMentor;
 use db::Database;
 use feeds::ThreatFeedManager;
-use models::{DiscoveredEndpoint, FeedUpdateResult, Finding, PluginInfo, ScopeConfig, Target, ToolInfo};
+use models::{
+    AuditLogRecord, DiscoveredEndpoint, FeedUpdateResult, Finding, FindingDetectionTrace,
+    FindingSeverity, FindingStatus, FindingUpdatePayload, GeneratedReport, IssueCreatePayload,
+    IssueRecord, IssueUpdatePayload, PluginInfo, ReportGenerateParams, ScanEvent, ScopeConfig,
+    Target, ToolInfo,
+};
 use plugins::PluginManager;
 use scanners::BaselineScanner;
 use scope::ScopeValidator;
@@ -34,7 +43,8 @@ pub struct AppState {
     tool_mgr: ToolManager,
     plugin_mgr: PluginManager,
     feed_mgr: ThreatFeedManager,
-    ai_mentor: AiMentor,
+    ai_mentor: Arc<AiMentor>,
+    ai_task_mgr: Arc<ai::AiTaskManager>,
     adapter_registry: Arc<adapters::AdapterRegistry>,
     extension_engine: Arc<extensions::ExtensionEngine>,
     job_manager: Arc<orchestration::JobManager>,
@@ -99,8 +109,10 @@ fn create_target(
     primary_url: String,
     allow_local_lab: bool,
 ) -> Result<Target, String> {
-    let mut scope = ScopeConfig::default();
-    scope.allow_local_lab = allow_local_lab;
+    let scope = ScopeConfig {
+        allow_local_lab,
+        ..Default::default()
+    };
 
     // Validate URL upfront
     let validated_url = ScopeValidator::validate_target(&primary_url, &scope)?;
@@ -114,7 +126,70 @@ fn create_target(
     };
 
     state.db.insert_target(&target).map_err(|e| e.to_string())?;
+    let _ = state.db.log_audit_event(
+        "target",
+        &target.id,
+        "CREATE",
+        &format!("Created target '{}' ({})", target.name, target.primary_url),
+    );
     Ok(target)
+}
+
+#[tauri::command]
+fn update_target(
+    state: State<'_, AppState>,
+    id: String,
+    name: String,
+    primary_url: String,
+    allow_local_lab: bool,
+) -> Result<Target, String> {
+    let targets = state.db.get_targets().map_err(|e| e.to_string())?;
+    let existing = targets
+        .into_iter()
+        .find(|t| t.id == id)
+        .ok_or_else(|| "Target not found".to_string())?;
+
+    let scope = ScopeConfig {
+        allow_local_lab,
+        ..existing.scope
+    };
+
+    let validated_url = ScopeValidator::validate_target(&primary_url, &scope)?;
+
+    let updated = Target {
+        id: id.clone(),
+        name: name.clone(),
+        primary_url: validated_url.clone(),
+        created_at: existing.created_at,
+        scope,
+    };
+
+    state.db.update_target(&updated).map_err(|e| e.to_string())?;
+    let _ = state.db.log_audit_event(
+        "target",
+        &id,
+        "UPDATE",
+        &format!("Updated target to '{}' ({})", name, validated_url),
+    );
+    Ok(updated)
+}
+
+#[tauri::command]
+fn delete_target(state: State<'_, AppState>, id: String) -> Result<usize, String> {
+    let targets = state.db.get_targets().map_err(|e| e.to_string())?;
+    let target = targets
+        .into_iter()
+        .find(|t| t.id == id)
+        .ok_or_else(|| "Target not found".to_string())?;
+
+    let deleted_findings = state.db.delete_target(&id).map_err(|e| e.to_string())?;
+    let _ = state.db.log_audit_event(
+        "target",
+        &id,
+        "DELETE",
+        &format!("Deleted target '{}' ({}) and {} dependent findings", target.name, target.primary_url, deleted_findings),
+    );
+    Ok(deleted_findings)
 }
 
 #[tauri::command]
@@ -129,16 +204,69 @@ async fn run_scan(
         .find(|t| t.id == target_id)
         .ok_or_else(|| "Target not found".to_string())?;
 
-    // Scope check before executing any scan
+    let scan_id = Uuid::new_v4().to_string();
+
+    // 1. Record Scan Created Event
+    let _ = state.db.insert_scan_event(&ScanEvent {
+        id: Uuid::new_v4().to_string(),
+        scan_id: scan_id.clone(),
+        job_id: None,
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        event_type: "scan_created".to_string(),
+        severity: "info".to_string(),
+        component_or_tool: tool.clone(),
+        message: format!("Scan initialized for target '{}' ({}) via {}", target.name, target.primary_url, tool),
+        metadata_json: serde_json::json!({ "target_id": target.id, "primary_url": target.primary_url }).to_string(),
+        duration_ms: 0,
+        status: "success".to_string(),
+        related_finding_id: None,
+        error_details: None,
+    });
+
+    // 2. Scope check & event
     ScopeValidator::validate_target(&target.primary_url, &target.scope)?;
 
-    let scan_res = match tool.as_str() {
+    let _ = state.db.insert_scan_event(&ScanEvent {
+        id: Uuid::new_v4().to_string(),
+        scan_id: scan_id.clone(),
+        job_id: None,
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        event_type: "scope_validated".to_string(),
+        severity: "info".to_string(),
+        component_or_tool: "ScopeValidator".to_string(),
+        message: format!("Target boundary validated: '{}' is authorized within active scope configuration", target.primary_url),
+        metadata_json: serde_json::json!({ "allowed_hosts": target.scope.allowed_hosts, "allowed_ports": target.scope.allowed_ports }).to_string(),
+        duration_ms: 2,
+        status: "success".to_string(),
+        related_finding_id: None,
+        error_details: None,
+    });
+
+    let mut scan_res = match tool.as_str() {
         "baseline" => {
             let start = std::time::Instant::now();
             let findings = BaselineScanner::scan_url(&target.id, &target.primary_url).await?;
 
             for finding in &findings {
                 let _ = state.db.insert_finding(finding);
+                let _ = state.db.insert_scan_event(&ScanEvent {
+                    id: Uuid::new_v4().to_string(),
+                    scan_id: scan_id.clone(),
+                    job_id: None,
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    event_type: "candidate_finding_created".to_string(),
+                    severity: match finding.severity {
+                        FindingSeverity::Critical | FindingSeverity::High => "warning".to_string(),
+                        _ => "info".to_string(),
+                    },
+                    component_or_tool: "BaselineScanner".to_string(),
+                    message: format!("Discovered finding: '{}' on {}", finding.title, finding.affected_asset),
+                    metadata_json: serde_json::json!({ "cwe": finding.cwe, "confidence": finding.confidence }).to_string(),
+                    duration_ms: 0,
+                    status: "success".to_string(),
+                    related_finding_id: Some(finding.id.clone()),
+                    error_details: None,
+                });
             }
 
             let log_lines = vec![
@@ -150,7 +278,7 @@ async fn run_scan(
             ];
 
             Ok(models::ScanResult {
-                scan_id: Uuid::new_v4().to_string(),
+                scan_id: scan_id.clone(),
                 target_url: target.primary_url,
                 tool: "BaselineScanner".to_string(),
                 status: "Completed".to_string(),
@@ -163,45 +291,109 @@ async fn run_scan(
             state.tool_mgr.run_httpx(&target.primary_url).await
         }
         "nuclei" => {
-            let (scan_res, findings) = state
+            let (mut s_res, findings) = state
                 .tool_mgr
                 .run_nuclei(&target.id, &target.primary_url)
                 .await?;
 
             for finding in &findings {
                 let _ = state.db.insert_finding(finding);
+                let _ = state.db.insert_scan_event(&ScanEvent {
+                    id: Uuid::new_v4().to_string(),
+                    scan_id: scan_id.clone(),
+                    job_id: None,
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    event_type: "candidate_finding_created".to_string(),
+                    severity: "warning".to_string(),
+                    component_or_tool: "Nuclei".to_string(),
+                    message: format!("Nuclei template match: '{}' on {}", finding.title, finding.affected_asset),
+                    metadata_json: serde_json::json!({ "cwe": finding.cwe, "confidence": finding.confidence }).to_string(),
+                    duration_ms: 0,
+                    status: "success".to_string(),
+                    related_finding_id: Some(finding.id.clone()),
+                    error_details: None,
+                });
             }
-
-            Ok(scan_res)
+            s_res.scan_id = scan_id.clone();
+            Ok(s_res)
         }
         "nmap" => {
-            let (scan_res, findings) = state
+            let (mut s_res, findings) = state
                 .tool_mgr
                 .run_nmap(&target.id, &target.primary_url)
                 .await?;
 
             for finding in &findings {
                 let _ = state.db.insert_finding(finding);
+                let _ = state.db.insert_scan_event(&ScanEvent {
+                    id: Uuid::new_v4().to_string(),
+                    scan_id: scan_id.clone(),
+                    job_id: None,
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    event_type: "candidate_finding_created".to_string(),
+                    severity: "info".to_string(),
+                    component_or_tool: "Nmap".to_string(),
+                    message: format!("Nmap service discovery finding: '{}' on {}", finding.title, finding.affected_asset),
+                    metadata_json: serde_json::json!({ "cwe": finding.cwe, "confidence": finding.confidence }).to_string(),
+                    duration_ms: 0,
+                    status: "success".to_string(),
+                    related_finding_id: Some(finding.id.clone()),
+                    error_details: None,
+                });
             }
-
-            Ok(scan_res)
+            s_res.scan_id = scan_id.clone();
+            Ok(s_res)
         }
         other => {
             let plugin_id = other.strip_prefix("plugin:").unwrap_or(other);
-            let (scan_res, findings) = state
+            let (mut s_res, findings) = state
                 .plugin_mgr
                 .run_plugin(plugin_id, &target.id, &target.primary_url)
                 .await?;
 
             for finding in &findings {
                 let _ = state.db.insert_finding(finding);
+                let _ = state.db.insert_scan_event(&ScanEvent {
+                    id: Uuid::new_v4().to_string(),
+                    scan_id: scan_id.clone(),
+                    job_id: None,
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    event_type: "candidate_finding_created".to_string(),
+                    severity: "info".to_string(),
+                    component_or_tool: other.to_string(),
+                    message: format!("Plugin finding: '{}' on {}", finding.title, finding.affected_asset),
+                    metadata_json: serde_json::json!({ "cwe": finding.cwe }).to_string(),
+                    duration_ms: 0,
+                    status: "success".to_string(),
+                    related_finding_id: Some(finding.id.clone()),
+                    error_details: None,
+                });
             }
-
-            Ok(scan_res)
+            s_res.scan_id = scan_id.clone();
+            Ok(s_res)
         }
     }?;
 
+    scan_res.scan_id = scan_id.clone();
     let _ = state.db.record_scan(&scan_res);
+
+    // Scan completed event
+    let _ = state.db.insert_scan_event(&ScanEvent {
+        id: Uuid::new_v4().to_string(),
+        scan_id,
+        job_id: None,
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        event_type: "scan_completed".to_string(),
+        severity: "success".to_string(),
+        component_or_tool: scan_res.tool.clone(),
+        message: format!("Scan '{}' completed in {}ms. {} findings recorded.", scan_res.tool, scan_res.duration_ms, scan_res.findings_count),
+        metadata_json: serde_json::json!({ "findings_count": scan_res.findings_count, "duration_ms": scan_res.duration_ms }).to_string(),
+        duration_ms: scan_res.duration_ms,
+        status: "success".to_string(),
+        related_finding_id: None,
+        error_details: None,
+    });
+
     Ok(scan_res)
 }
 
@@ -248,31 +440,106 @@ async fn get_ai_status(state: State<'_, AppState>) -> Result<(bool, Vec<String>)
 }
 
 #[tauri::command]
-async fn explain_finding(
+async fn get_ollama_system_info(state: State<'_, AppState>) -> Result<crate::ai::OllamaSystemInfo, String> {
+    Ok(state.ai_mentor.get_system_info().await)
+}
+
+#[tauri::command]
+async fn start_ollama_service(state: State<'_, AppState>) -> Result<String, String> {
+    state.ai_mentor.start_service().await
+}
+
+#[tauri::command]
+async fn stop_ollama_service(state: State<'_, AppState>) -> Result<String, String> {
+    state.ai_mentor.stop_service().await
+}
+
+
+
+
+#[tauri::command]
+async fn validate_finding(
     state: State<'_, AppState>,
-    model: String,
-    mode: String,
     finding_id: String,
-) -> Result<String, String> {
+) -> Result<validator::ValidationRecord, String> {
     let findings = state.db.get_findings().map_err(|e| e.to_string())?;
     let finding = findings
         .into_iter()
         .find(|f| f.id == finding_id)
         .ok_or_else(|| "Finding not found".to_string())?;
 
-    let sev_str = format!("{:?}", finding.severity);
-    state
-        .ai_mentor
-        .explain_finding(
-            &model,
-            &mode,
-            &finding.title,
-            &sev_str,
-            &finding.evidence,
-            &finding.affected_asset,
-            finding.cwe.as_deref(),
-        )
-        .await
+    let targets = state.db.get_targets().map_err(|e| e.to_string())?;
+    let target = targets
+        .into_iter()
+        .find(|t| t.id == finding.target_id)
+        .unwrap_or_else(|| Target {
+            id: finding.target_id.clone(),
+            name: "Default Target".to_string(),
+            primary_url: finding.affected_asset.clone(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            scope: ScopeConfig {
+                allow_local_lab: true,
+                ..Default::default()
+            },
+        });
+
+    let record = validator::VulnerabilityValidator::validate_finding(&target, &finding).await?;
+
+    // Save validation record to database
+    let _ = state.db.insert_validation_record(&record);
+
+    // Update finding validation status and confidence in findings table
+    let _ = state.db.update_finding_validation(&finding.id, &record.status, record.confidence_score);
+
+    Ok(record)
+}
+
+#[tauri::command]
+async fn validate_all_findings(
+    state: State<'_, AppState>,
+    target_id: String,
+) -> Result<Vec<validator::ValidationRecord>, String> {
+    let findings = state.db.get_findings().map_err(|e| e.to_string())?;
+    let target_findings: Vec<_> = findings
+        .into_iter()
+        .filter(|f| f.target_id == target_id || target_id == "all" || target_id.is_empty())
+        .collect();
+
+    let targets = state.db.get_targets().map_err(|e| e.to_string())?;
+
+    let mut records = Vec::new();
+    for finding in target_findings {
+        let target = targets
+            .iter()
+            .find(|t| t.id == finding.target_id)
+            .cloned()
+            .unwrap_or_else(|| Target {
+                id: finding.target_id.clone(),
+                name: "Default Target".to_string(),
+                primary_url: finding.affected_asset.clone(),
+                created_at: chrono::Utc::now().to_rfc3339(),
+                scope: ScopeConfig {
+                    allow_local_lab: true,
+                    ..Default::default()
+                },
+            });
+
+        if let Ok(rec) = validator::VulnerabilityValidator::validate_finding(&target, &finding).await {
+            let _ = state.db.insert_validation_record(&rec);
+            let _ = state.db.update_finding_validation(&finding.id, &rec.status, rec.confidence_score);
+            records.push(rec);
+        }
+    }
+
+    Ok(records)
+}
+
+#[tauri::command]
+fn get_validation_history(
+    state: State<'_, AppState>,
+    finding_id: String,
+) -> Result<Vec<validator::ValidationRecord>, String> {
+    state.db.get_validation_history(&finding_id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -283,6 +550,96 @@ async fn chat_with_mentor(
     messages: Vec<ai::ChatMessage>,
 ) -> Result<String, String> {
     state.ai_mentor.chat(&model, system.as_deref(), messages).await
+}
+
+#[tauri::command]
+async fn submit_ai_task(
+    state: State<'_, AppState>,
+    app_handle: tauri::AppHandle,
+    conversation_id: String,
+    model: String,
+    system: Option<String>,
+    messages: Vec<ai::ChatMessage>,
+) -> Result<models::AiTask, String> {
+    state
+        .ai_task_mgr
+        .submit_task(Some(app_handle), conversation_id, model, system, messages)
+        .await
+}
+
+#[tauri::command]
+fn get_ai_tasks(
+    state: State<'_, AppState>,
+    limit: Option<usize>,
+) -> Result<Vec<models::AiTask>, String> {
+    state.ai_task_mgr.get_tasks(limit)
+}
+
+#[tauri::command]
+fn get_ai_task_status(
+    state: State<'_, AppState>,
+    task_id: String,
+) -> Result<Option<models::AiTask>, String> {
+    state.ai_task_mgr.get_task_status(&task_id)
+}
+
+#[tauri::command]
+async fn cancel_ai_task(
+    state: State<'_, AppState>,
+    app_handle: tauri::AppHandle,
+    task_id: String,
+) -> Result<bool, String> {
+    state.ai_task_mgr.cancel_task(Some(app_handle), &task_id).await
+}
+
+#[tauri::command]
+fn clear_ai_tasks(state: State<'_, AppState>) -> Result<(), String> {
+    state.ai_task_mgr.clear_tasks()
+}
+
+#[tauri::command]
+fn get_conversation_messages(
+    state: State<'_, AppState>,
+    conversation_id: String,
+) -> Result<Vec<models::AiChatMessageRecord>, String> {
+    state
+        .db
+        .get_conversation_messages(&conversation_id)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn save_conversation_message(
+    state: State<'_, AppState>,
+    conversation_id: String,
+    role: String,
+    content: String,
+    task_id: Option<String>,
+) -> Result<models::AiChatMessageRecord, String> {
+    let msg = models::AiChatMessageRecord {
+        id: Uuid::new_v4().to_string(),
+        conversation_id,
+        role,
+        content,
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        task_id,
+    };
+    state
+        .db
+        .insert_chat_message(&msg)
+        .map_err(|e| e.to_string())?;
+    Ok(msg)
+}
+
+#[tauri::command]
+fn clear_conversation_messages(
+    state: State<'_, AppState>,
+    conversation_id: String,
+) -> Result<(), String> {
+    state
+        .db
+        .clear_conversation_messages(&conversation_id)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -317,6 +674,268 @@ fn update_finding_status(
     status: String,
 ) -> Result<(), String> {
     state.db.update_finding_status(&finding_id, &status).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn create_finding(
+    state: State<'_, AppState>,
+    target_id: String,
+    title: String,
+    severity: String,
+    confidence: u8,
+    affected_asset: String,
+    evidence: String,
+    source_tool: String,
+    cwe: Option<String>,
+    remediation: String,
+    status: Option<String>,
+) -> Result<Finding, String> {
+    let sev = match severity.as_str() {
+        "Critical" => FindingSeverity::Critical,
+        "High" => FindingSeverity::High,
+        "Medium" => FindingSeverity::Medium,
+        "Low" => FindingSeverity::Low,
+        _ => FindingSeverity::Info,
+    };
+    let stat = match status.as_deref().unwrap_or("NeedsReview") {
+        "Confirmed" => FindingStatus::Confirmed,
+        "Fixed" => FindingStatus::Fixed,
+        "AcceptedRisk" => FindingStatus::AcceptedRisk,
+        "LikelyFalsePositive" => FindingStatus::LikelyFalsePositive,
+        "NeedsValidation" => FindingStatus::NeedsValidation,
+        _ => FindingStatus::NeedsReview,
+    };
+
+    let mut finding = Finding::new(
+        target_id.clone(),
+        title.clone(),
+        sev,
+        confidence,
+        affected_asset.clone(),
+        evidence,
+        source_tool,
+        "manual-1.0".to_string(),
+        cwe,
+        remediation,
+    );
+    finding.status = stat;
+
+    state.db.insert_finding(&finding).map_err(|e| e.to_string())?;
+    let _ = state.db.log_audit_event(
+        "finding",
+        &finding.id,
+        "CREATE",
+        &format!("Created finding '{}' ({:?}) on {}", title, finding.severity, affected_asset),
+    );
+    Ok(finding)
+}
+
+#[tauri::command]
+fn update_finding(
+    state: State<'_, AppState>,
+    finding_id: String,
+    payload: FindingUpdatePayload,
+) -> Result<Finding, String> {
+    let updated = state
+        .db
+        .update_finding(&finding_id, &payload)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Finding not found".to_string())?;
+
+    let _ = state.db.log_audit_event(
+        "finding",
+        &finding_id,
+        "UPDATE",
+        &format!("Updated finding '{}' ({:?}, {:?})", payload.title, payload.severity, payload.status),
+    );
+    Ok(updated)
+}
+
+#[tauri::command]
+fn delete_finding(state: State<'_, AppState>, finding_id: String) -> Result<bool, String> {
+    let deleted = state.db.delete_finding(&finding_id).map_err(|e| e.to_string())?;
+    if deleted {
+        let _ = state.db.log_audit_event("finding", &finding_id, "DELETE", "Deleted finding and validation history");
+    }
+    Ok(deleted)
+}
+
+#[tauri::command]
+fn bulk_update_finding_status(
+    state: State<'_, AppState>,
+    finding_ids: Vec<String>,
+    status: String,
+) -> Result<usize, String> {
+    let count = state
+        .db
+        .bulk_update_finding_status(&finding_ids, &status)
+        .map_err(|e| e.to_string())?;
+    let _ = state.db.log_audit_event(
+        "finding",
+        "bulk",
+        "BULK_UPDATE",
+        &format!("Updated {} findings to status '{}'", count, status),
+    );
+    Ok(count)
+}
+
+#[tauri::command]
+fn bulk_delete_findings(state: State<'_, AppState>, finding_ids: Vec<String>) -> Result<usize, String> {
+    let count = state
+        .db
+        .bulk_delete_findings(&finding_ids)
+        .map_err(|e| e.to_string())?;
+    let _ = state.db.log_audit_event(
+        "finding",
+        "bulk",
+        "BULK_DELETE",
+        &format!("Bulk deleted {} findings", count),
+    );
+    Ok(count)
+}
+
+#[tauri::command]
+fn create_endpoint(
+    state: State<'_, AppState>,
+    target_id: String,
+    url: String,
+    method: String,
+    status_code: u16,
+    content_type: Option<String>,
+    source: String,
+) -> Result<DiscoveredEndpoint, String> {
+    let ep = DiscoveredEndpoint {
+        id: Uuid::new_v4().to_string(),
+        target_id: target_id.clone(),
+        url: url.clone(),
+        method: method.to_uppercase(),
+        status_code,
+        content_type,
+        source,
+        discovered_at: chrono::Utc::now().to_rfc3339(),
+    };
+    state.db.insert_endpoint(&ep).map_err(|e| e.to_string())?;
+    let _ = state.db.log_audit_event("endpoint", &ep.id, "CREATE", &format!("Added endpoint {} {}", ep.method, ep.url));
+    Ok(ep)
+}
+
+#[tauri::command]
+fn delete_endpoint(state: State<'_, AppState>, endpoint_id: String) -> Result<bool, String> {
+    let deleted = state.db.delete_endpoint(&endpoint_id).map_err(|e| e.to_string())?;
+    if deleted {
+        let _ = state.db.log_audit_event("endpoint", &endpoint_id, "DELETE", "Deleted endpoint");
+    }
+    Ok(deleted)
+}
+
+#[tauri::command]
+fn clear_endpoints(state: State<'_, AppState>, target_id: String) -> Result<usize, String> {
+    let count = state.db.clear_endpoints(&target_id).map_err(|e| e.to_string())?;
+    let _ = state.db.log_audit_event("endpoint", &target_id, "CLEAR", &format!("Cleared {} endpoints for target", count));
+    Ok(count)
+}
+
+#[tauri::command]
+fn delete_scan_history(state: State<'_, AppState>, scan_id: String) -> Result<bool, String> {
+    let deleted = state.db.delete_scan_history(&scan_id).map_err(|e| e.to_string())?;
+    if deleted {
+        let _ = state.db.log_audit_event("scan", &scan_id, "DELETE", "Deleted scan history record");
+    }
+    Ok(deleted)
+}
+
+#[tauri::command]
+fn clear_scan_history(state: State<'_, AppState>) -> Result<(), String> {
+    state.db.clear_scan_history().map_err(|e| e.to_string())?;
+    let _ = state.db.log_audit_event("scan", "all", "CLEAR", "Cleared all scan execution records");
+    Ok(())
+}
+
+#[tauri::command]
+fn get_audit_logs(state: State<'_, AppState>, limit: Option<usize>) -> Result<Vec<AuditLogRecord>, String> {
+    state.db.get_audit_logs(limit).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn clear_audit_logs(state: State<'_, AppState>) -> Result<(), String> {
+    state.db.clear_audit_logs().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn record_issue(state: State<'_, AppState>, payload: IssueCreatePayload) -> Result<IssueRecord, String> {
+    state.db.record_issue(&payload).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_issues(
+    state: State<'_, AppState>,
+    target_id: Option<String>,
+    category: Option<String>,
+    severity: Option<String>,
+    status: Option<String>,
+    search: Option<String>,
+) -> Result<Vec<IssueRecord>, String> {
+    state
+        .db
+        .get_issues(
+            target_id.as_deref(),
+            category.as_deref(),
+            severity.as_deref(),
+            status.as_deref(),
+            search.as_deref(),
+        )
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_issue_by_id(state: State<'_, AppState>, id: String) -> Result<Option<IssueRecord>, String> {
+    state.db.get_issue_by_id(&id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn update_issue(
+    state: State<'_, AppState>,
+    id: String,
+    payload: IssueUpdatePayload,
+) -> Result<IssueRecord, String> {
+    state.db.update_issue(&id, &payload).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_issue(state: State<'_, AppState>, id: String) -> Result<bool, String> {
+    state.db.delete_issue(&id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn bulk_update_issue_status(
+    state: State<'_, AppState>,
+    ids: Vec<String>,
+    status: String,
+) -> Result<usize, String> {
+    state.db.bulk_update_issue_status(&ids, &status).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn bulk_delete_issues(state: State<'_, AppState>, ids: Vec<String>) -> Result<usize, String> {
+    state.db.bulk_delete_issues(&ids).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn add_issue_note(
+    state: State<'_, AppState>,
+    id: String,
+    author: String,
+    text: String,
+) -> Result<IssueRecord, String> {
+    state.db.add_issue_note(&id, &author, &text).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn generate_issue_report(
+    state: State<'_, AppState>,
+    params: ReportGenerateParams,
+) -> Result<GeneratedReport, String> {
+    state.db.generate_issue_report(&params).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -441,6 +1060,22 @@ fn set_tool_path_override(
 }
 
 #[tauri::command]
+fn get_system_resource_status() -> system_resources::SystemResourceStatus {
+    system_resources::query_system_resources()
+}
+
+#[tauri::command]
+fn toggle_tool_adapter_enabled(
+    state: State<'_, AppState>,
+    tool_id: String,
+    enabled: bool,
+) -> Result<(), String> {
+    let _ = state.db.save_tool_enabled_state(&tool_id, enabled);
+    state.adapter_registry.set_enabled(tool_id, enabled);
+    Ok(())
+}
+
+#[tauri::command]
 async fn run_tool_health_check(
     state: State<'_, AppState>,
     tool_id: String,
@@ -464,6 +1099,24 @@ async fn execute_tool_adapter(
 
     ScopeValidator::validate_target(&target_url, &target.scope)?;
 
+    let scan_id = Uuid::new_v4().to_string();
+
+    let _ = state.db.insert_scan_event(&ScanEvent {
+        id: Uuid::new_v4().to_string(),
+        scan_id: scan_id.clone(),
+        job_id: None,
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        event_type: "tool_executed".to_string(),
+        severity: "info".to_string(),
+        component_or_tool: tool_id.clone(),
+        message: format!("Executing tool adapter '{}' against target '{}'", tool_id, target_url),
+        metadata_json: serde_json::json!({ "target_id": target_id, "target_url": target_url }).to_string(),
+        duration_ms: 0,
+        status: "running".to_string(),
+        related_finding_id: None,
+        error_details: None,
+    });
+
     let input = adapters::AdapterInput {
         target_id: target_id.clone(),
         target_url: target_url.clone(),
@@ -475,12 +1128,137 @@ async fn execute_tool_adapter(
 
     for finding in &output.findings {
         let _ = state.db.insert_finding(finding);
+        let _ = state.db.insert_scan_event(&ScanEvent {
+            id: Uuid::new_v4().to_string(),
+            scan_id: scan_id.clone(),
+            job_id: None,
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            event_type: "candidate_finding_created".to_string(),
+            severity: match finding.severity {
+                FindingSeverity::Critical | FindingSeverity::High => "warning".to_string(),
+                _ => "info".to_string(),
+            },
+            component_or_tool: tool_id.clone(),
+            message: format!("Tool adapter {} produced finding: '{}'", tool_id, finding.title),
+            metadata_json: serde_json::json!({ "cwe": finding.cwe, "confidence": finding.confidence }).to_string(),
+            duration_ms: 0,
+            status: "success".to_string(),
+            related_finding_id: Some(finding.id.clone()),
+            error_details: None,
+        });
     }
     for ep in &output.endpoints {
         let _ = state.db.insert_endpoint(ep);
     }
 
+    let _ = state.db.insert_scan_event(&ScanEvent {
+        id: Uuid::new_v4().to_string(),
+        scan_id,
+        job_id: None,
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        event_type: "scan_completed".to_string(),
+        severity: "success".to_string(),
+        component_or_tool: tool_id.clone(),
+        message: format!("Tool adapter {} completed in {}ms. Found {} findings and {} endpoints.", tool_id, output.duration_ms, output.findings.len(), output.endpoints.len()),
+        metadata_json: serde_json::json!({ "findings_count": output.findings.len(), "duration_ms": output.duration_ms }).to_string(),
+        duration_ms: output.duration_ms,
+        status: "success".to_string(),
+        related_finding_id: None,
+        error_details: None,
+    });
+
     Ok(output)
+}
+
+#[tauri::command]
+fn get_methodologies() -> Vec<methodologies::MethodologyDefinition> {
+    methodologies::MethodologyRegistry::get_all()
+}
+
+#[tauri::command]
+fn get_methodology_by_id(id: String) -> Option<methodologies::MethodologyDefinition> {
+    methodologies::MethodologyRegistry::find_by_id(&id)
+}
+
+#[tauri::command]
+fn get_scan_events(
+    state: State<'_, AppState>,
+    scan_id: Option<String>,
+    finding_id: Option<String>,
+    limit: Option<usize>,
+) -> Result<Vec<ScanEvent>, String> {
+    state.db.get_scan_events(scan_id.as_deref(), finding_id.as_deref(), limit).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_finding_trace(
+    state: State<'_, AppState>,
+    finding_id: String,
+) -> Result<FindingDetectionTrace, String> {
+    let finding = state
+        .db
+        .get_finding_by_id(&finding_id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Finding not found".to_string())?;
+
+    let targets = state.db.get_targets().map_err(|e| e.to_string())?;
+    let target_url = targets
+        .iter()
+        .find(|t| t.id == finding.target_id)
+        .map(|t| t.primary_url.clone())
+        .unwrap_or_else(|| finding.affected_asset.clone());
+
+    let methodology = methodologies::MethodologyRegistry::find_for_finding(
+        &finding.title,
+        &finding.source_tool,
+        finding.cwe.as_deref(),
+    );
+
+    let val_records = state.db.get_validation_history(&finding_id).unwrap_or_default();
+    let latest_val = val_records.into_iter().next();
+
+    let scan_events = state.db.get_scan_events(None, Some(&finding_id), Some(50)).unwrap_or_default();
+
+    let sanitized_evidence = validator::VulnerabilityValidator::sanitize_evidence(&finding.evidence);
+
+    let human_explanation = if !sanitized_evidence.is_empty() {
+        format!(
+            "AppSec discovered '{}' because {} (rule '{}') inspected '{}' under the {} methodology and observed: {}",
+            finding.title,
+            finding.source_tool,
+            finding.cwe.as_deref().unwrap_or(&methodology.id),
+            finding.affected_asset,
+            methodology.name,
+            sanitized_evidence
+        )
+    } else {
+        format!(
+            "AppSec flagged this finding via {} under methodology {}. The tool reported a candidate issue for '{}'.",
+            finding.source_tool, methodology.name, finding.affected_asset
+        )
+    };
+
+    Ok(FindingDetectionTrace {
+        finding_id: finding.id.clone(),
+        scan_id: scan_events.first().map(|e| e.scan_id.clone()),
+        detection_timestamp: finding.created_at.clone(),
+        target_url,
+        tool_name: finding.source_tool.clone(),
+        tool_version: finding.tool_version.clone(),
+        rule_id: finding.cwe.clone().unwrap_or_else(|| format!("{}-RULE", methodology.id)),
+        rule_description: format!("Deterministic check for {} under {}", finding.title, methodology.name),
+        methodology_id: methodology.id.clone(),
+        methodology_name: methodology.name.clone(),
+        location_examined: finding.affected_asset.clone(),
+        check_performed: methodology.detection_logic.clone(),
+        raw_observed_result: sanitized_evidence.clone(),
+        evidence_summary: sanitized_evidence,
+        human_explanation,
+        verification_status: finding.validation_status.clone(),
+        verification_record: latest_val,
+        limitations: methodology.known_limitations.clone(),
+        scan_events,
+    })
 }
 
 // -------------------------------------------------------------
@@ -584,6 +1362,103 @@ fn approve_workflow_step(
 #[tauri::command]
 fn cancel_workflow_job(state: State<'_, AppState>, job_id: String) -> Result<bool, String> {
     state.job_manager.cancel_job(&job_id)
+}
+
+#[tauri::command]
+async fn test_burp_proxy_connection(host: String, port: u16) -> burp::BurpConnectionStatus {
+    burp::BurpService::test_connection(&host, port).await
+}
+
+#[tauri::command]
+async fn send_burp_repeater_request(
+    request: burp::BurpRepeaterRequest,
+) -> Result<burp::BurpRepeaterResponse, String> {
+    burp::BurpService::send_repeater_request(request).await
+}
+
+#[tauri::command]
+fn parse_burp_xml_findings(
+    target_id: String,
+    xml_content: String,
+) -> Result<Vec<Finding>, String> {
+    burp::BurpService::parse_burp_xml(&target_id, &xml_content)
+}
+
+#[tauri::command]
+fn import_burp_findings(
+    state: State<'_, AppState>,
+    target_id: String,
+    xml_content: String,
+) -> Result<usize, String> {
+    let findings = burp::BurpService::parse_burp_xml(&target_id, &xml_content)?;
+    let count = findings.len();
+    for f in &findings {
+        let _ = state.db.insert_finding(f);
+    }
+    Ok(count)
+}
+
+#[tauri::command]
+fn get_burp_connector_status() -> burp::BurpConnectorStatus {
+    burp::get_connector_status()
+}
+
+#[tauri::command]
+fn regenerate_burp_connector_token(state: State<'_, AppState>) -> Result<String, String> {
+    let token = state.db.regenerate_burp_token().map_err(|e| e.to_string())?;
+    burp::update_connector_token(&token);
+    Ok(token)
+}
+
+#[tauri::command]
+fn get_burp_traffic(
+    state: State<'_, AppState>,
+    limit: Option<usize>,
+    offset: Option<usize>,
+    search: Option<String>,
+    method: Option<String>,
+) -> Result<Vec<burp::BurpTrafficItem>, String> {
+    state
+        .db
+        .get_burp_traffic(limit, offset, search.as_deref(), method.as_deref())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn clear_burp_traffic(state: State<'_, AppState>) -> Result<usize, String> {
+    state.db.clear_burp_traffic().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_burp_traffic_item(state: State<'_, AppState>, id: String) -> Result<bool, String> {
+    state.db.delete_burp_traffic_item(&id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn import_burp_traffic_json(state: State<'_, AppState>, content: String) -> Result<usize, String> {
+    let items = burp::BurpService::parse_burp_json_traffic(&content)?;
+    let mut imported = 0;
+    for item in &items {
+        let hash = burp::BurpService::compute_traffic_hash(item);
+        if state.db.insert_burp_traffic(item, &hash).unwrap_or(false) {
+            imported += 1;
+        }
+    }
+    Ok(imported)
+}
+
+#[tauri::command]
+fn import_burp_findings_json(
+    state: State<'_, AppState>,
+    target_id: String,
+    content: String,
+) -> Result<usize, String> {
+    let findings = burp::BurpService::parse_burp_json_findings(&target_id, &content)?;
+    let count = findings.len();
+    for f in &findings {
+        let _ = state.db.insert_finding(f);
+    }
+    Ok(count)
 }
 
 fn find_base_dir() -> PathBuf {
@@ -707,7 +1582,7 @@ pub fn run() {
 
                 let current_pid = std::process::id();
                 let _ = std::process::Command::new("taskkill")
-                    .args(&["/F", "/FI", &format!("PID ne {}", current_pid), "/IM", "AppSec-Nexus.exe"])
+                    .args(["/F", "/FI", &format!("PID ne {}", current_pid), "/IM", "AppSec-Nexus.exe"])
                     .creation_flags(0x08000000) // CREATE_NO_WINDOW
                     .output();
 
@@ -749,14 +1624,19 @@ pub fn run() {
         }
     };
     let arc_db = Arc::new(db);
+    let connector_db = arc_db.clone();
     let tool_mgr = ToolManager::new(tools_bin.clone());
     let plugin_mgr = PluginManager::new(plugins_dir);
     let feed_mgr = ThreatFeedManager::new(tools_bin.clone());
-    let ai_mentor = AiMentor::new();
+    let ai_mentor = Arc::new(AiMentor::new());
+    let ai_task_mgr = Arc::new(ai::AiTaskManager::new(ai_mentor.clone(), arc_db.clone()));
 
     let adapter_registry = Arc::new(adapters::AdapterRegistry::new(tools_bin.clone()));
     if let Ok(overrides) = arc_db.get_tool_path_overrides() {
         adapter_registry.load_custom_paths(overrides);
+    }
+    if let Ok(states) = arc_db.get_tool_enabled_states() {
+        adapter_registry.load_enabled_states(states);
     }
 
     let extension_engine = Arc::new(extensions::ExtensionEngine::new(extensions_dir));
@@ -772,6 +1652,7 @@ pub fn run() {
         plugin_mgr,
         feed_mgr,
         ai_mentor,
+        ai_task_mgr,
         adapter_registry,
         extension_engine,
         job_manager,
@@ -812,6 +1693,13 @@ pub fn run() {
                 let _ = w.show();
                 let _ = w.set_focus();
             }
+
+            let conn_db = connector_db.clone();
+            let conn_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                burp::start_burp_connector_server(conn_db, Some(conn_handle)).await;
+            });
+
             Ok(())
         })
         .manage(state)
@@ -826,7 +1714,9 @@ pub fn run() {
             run_scan,
             get_findings,
             get_ai_status,
-            explain_finding,
+            get_ollama_system_info,
+            start_ollama_service,
+            stop_ollama_service,
             export_report,
             get_scan_history,
             update_finding_status,
@@ -836,9 +1726,19 @@ pub fn run() {
             get_endpoints,
             import_external_report,
             chat_with_mentor,
+            submit_ai_task,
+            get_ai_tasks,
+            get_ai_task_status,
+            cancel_ai_task,
+            clear_ai_tasks,
+            get_conversation_messages,
+            save_conversation_message,
+            clear_conversation_messages,
             run_windows_audit,
             run_android_audit,
+            get_system_resource_status,
             get_tool_adapters,
+            toggle_tool_adapter_enabled,
             set_tool_path_override,
             run_tool_health_check,
             execute_tool_adapter,
@@ -852,7 +1752,48 @@ pub fn run() {
             get_workflow_jobs,
             get_workflow_job,
             approve_workflow_step,
-            cancel_workflow_job
+            cancel_workflow_job,
+            validate_finding,
+            validate_all_findings,
+            get_validation_history,
+            update_target,
+            delete_target,
+            create_finding,
+            update_finding,
+            delete_finding,
+            bulk_update_finding_status,
+            bulk_delete_findings,
+            create_endpoint,
+            delete_endpoint,
+            clear_endpoints,
+            delete_scan_history,
+            clear_scan_history,
+            get_audit_logs,
+            clear_audit_logs,
+            record_issue,
+            get_issues,
+            get_issue_by_id,
+            update_issue,
+            delete_issue,
+            bulk_update_issue_status,
+            bulk_delete_issues,
+            add_issue_note,
+            generate_issue_report,
+            test_burp_proxy_connection,
+            send_burp_repeater_request,
+            parse_burp_xml_findings,
+            import_burp_findings,
+            get_burp_connector_status,
+            regenerate_burp_connector_token,
+            get_burp_traffic,
+            clear_burp_traffic,
+            delete_burp_traffic_item,
+            import_burp_traffic_json,
+            import_burp_findings_json,
+            get_methodologies,
+            get_methodology_by_id,
+            get_scan_events,
+            get_finding_trace
         ]);
 
     let app = match builder.build(tauri::generate_context!()) {
@@ -870,13 +1811,11 @@ pub fn run() {
 
     app.run(move |_app_handle, event| {
         match &event {
-            tauri::RunEvent::WindowEvent { label: _, event, .. } => {
-                match event {
-                    tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed => {
-                        std::process::exit(0);
-                    }
-                    _ => {}
-                }
+            tauri::RunEvent::WindowEvent {
+                event: tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed,
+                ..
+            } => {
+                std::process::exit(0);
             }
             tauri::RunEvent::ExitRequested { code: _, .. } => {
                 let msg = "RUN EVENT ExitRequested - terminating process cleanly\n";

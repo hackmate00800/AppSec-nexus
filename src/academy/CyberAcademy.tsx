@@ -19,7 +19,12 @@ import {
   GitBranch,
   Filter,
   Check,
-  Copy
+  Copy,
+  Layers,
+  Users,
+  FileCode,
+  Compass,
+  FolderTree,
 } from "lucide-react";
 import {
   Lesson,
@@ -29,6 +34,7 @@ import {
   UserAcademyState,
   ConceptEntry
 } from "./types";
+import { Finding } from "../types";
 import { LEARNING_PATHS } from "./data/curriculumData";
 import { VULNERABILITY_ENCYCLOPEDIA } from "./data/vulnerabilityEncyclopediaData";
 import { TOOLS_KNOWLEDGE_BASE } from "./data/toolsData";
@@ -38,21 +44,49 @@ import { CERTIFICATIONS_DIRECTORY, CAREER_ROADMAPS } from "./data/certifications
 import { CONCEPT_LIBRARY } from "./data/conceptLibraryData";
 import { ConceptLibraryView } from "./components/ConceptLibraryView";
 import { WorkflowsView } from "./components/WorkflowsView";
+import { VisualLearningEngine } from "./components/VisualLearningEngine";
+import { CommandAcademyView } from "./components/CommandAcademyView";
+import { ResourceHubView } from "./components/ResourceHubView";
+import { CommunityDirectoryView } from "./components/CommunityDirectoryView";
+import { ProjectsAndCapstoneView } from "./components/ProjectsAndCapstoneView";
+import { SkillMapView } from "./components/SkillMapView";
+import { TaxonomyKnowledgeTreeView } from "./components/TaxonomyKnowledgeTreeView";
 import { evaluateLessonPrerequisites, getRecommendedNextLessons } from "./prerequisites";
 import { SecurityFlowchart } from "../Flowchart";
+
+export type AcademyTab =
+  | "dashboard"
+  | "taxonomy"
+  | "paths"
+  | "lesson"
+  | "visuals"
+  | "commands"
+  | "projects"
+  | "resources"
+  | "communities"
+  | "skills"
+  | "concepts"
+  | "workflows"
+  | "encyclopedia"
+  | "tools"
+  | "methodologies"
+  | "labs"
+  | "certifications"
+  | "notes";
 
 interface CyberAcademyProps {
   onNavigateScanner?: (toolId: string) => void;
   onOpenAiMentor?: (query: string) => void;
+  findings?: Finding[];
+  initialSelectedVulnId?: string;
+  initialTab?: AcademyTab;
 }
 
 const STORAGE_KEY = "appsec_nexus_cyber_academy_state_v1";
 
-export function CyberAcademy({ onNavigateScanner, onOpenAiMentor }: CyberAcademyProps) {
+export function CyberAcademy({ onNavigateScanner, onOpenAiMentor, findings, initialSelectedVulnId, initialTab }: CyberAcademyProps) {
   // Navigation State
-  const [activeTab, setActiveTab] = useState<
-    "dashboard" | "paths" | "lesson" | "concepts" | "workflows" | "encyclopedia" | "tools" | "methodologies" | "labs" | "certifications" | "notes"
-  >("dashboard");
+  const [activeTab, setActiveTab] = useState<AcademyTab>(initialTab || "dashboard");
 
   // Selection State
   const [selectedPath, setSelectedPath] = useState<LearningPath>(LEARNING_PATHS[0]);
@@ -111,6 +145,30 @@ export function CyberAcademy({ onNavigateScanner, onOpenAiMentor }: CyberAcademy
       setShowDiagram(false);
     }
   }, [selectedLesson]);
+
+  // Handle external navigation tab
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
+
+  // Handle external vulnerability linking from scanner findings
+  useEffect(() => {
+    if (initialSelectedVulnId) {
+      const match = VULNERABILITY_ENCYCLOPEDIA.find(
+        (v) =>
+          v.id === initialSelectedVulnId ||
+          v.name.toLowerCase().includes(initialSelectedVulnId.toLowerCase()) ||
+          v.aliases.some((a) => a.toLowerCase().includes(initialSelectedVulnId.toLowerCase())) ||
+          (v.cwe && initialSelectedVulnId.toLowerCase().includes(v.cwe.toLowerCase()))
+      );
+      if (match) {
+        setSelectedVulnerability(match);
+        setActiveTab("encyclopedia");
+      }
+    }
+  }, [initialSelectedVulnId]);
 
   function handleCompleteLesson(lessonId: string) {
     setUserState((prev) => {
@@ -180,8 +238,9 @@ export function CyberAcademy({ onNavigateScanner, onOpenAiMentor }: CyberAcademy
           alignItems: "center",
           flexWrap: "wrap",
           gap: "16px",
-          background: "linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(20, 30, 51, 0.85) 100%)",
-          border: "1px solid rgba(6, 182, 212, 0.25)"
+          background: "var(--bg-card)",
+          border: "1px solid var(--border-color)",
+          boxShadow: "var(--shadow-md)",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
@@ -229,7 +288,7 @@ export function CyberAcademy({ onNavigateScanner, onOpenAiMentor }: CyberAcademy
               <span style={{ color: "var(--text-dim)" }}>Curriculum Progress:</span>
               <span style={{ fontWeight: 700, color: "var(--accent-cyan)" }}>{progressPercentage}%</span>
             </div>
-            <div style={{ width: "100%", height: "6px", backgroundColor: "rgba(255,255,255,0.1)", borderRadius: "3px", overflow: "hidden" }}>
+            <div style={{ width: "100%", height: "6px", backgroundColor: "var(--border-color)", borderRadius: "3px", overflow: "hidden" }}>
               <div
                 style={{
                   width: `${progressPercentage}%`,
@@ -268,8 +327,15 @@ export function CyberAcademy({ onNavigateScanner, onOpenAiMentor }: CyberAcademy
       >
         {[
           { id: "dashboard", label: "Dashboard & Progress", icon: Award },
+          { id: "taxonomy", label: "Knowledge Taxonomy", icon: FolderTree },
+          { id: "visuals", label: "Visual Learning Engine", icon: Layers },
+          { id: "commands", label: "OS & Terminal Academy", icon: Terminal },
+          { id: "projects", label: "Projects & Capstone", icon: Award },
           { id: "paths", label: "Learning Paths", icon: BookOpen },
-          { id: "lesson", label: "Interactive Lesson", icon: Terminal },
+          { id: "lesson", label: "Interactive Lesson", icon: FileCode },
+          { id: "skills", label: "Skill Map", icon: Compass },
+          { id: "resources", label: "Documentation Hub", icon: BookOpen },
+          { id: "communities", label: "Community Directory", icon: Users },
           { id: "concepts", label: "Concept Library", icon: Sparkles },
           { id: "workflows", label: "Security Workflows", icon: ChevronRight },
           { id: "encyclopedia", label: "Vulnerability Encyclopedia", icon: ShieldAlert },
@@ -348,12 +414,167 @@ export function CyberAcademy({ onNavigateScanner, onOpenAiMentor }: CyberAcademy
             </div>
           </div>
 
+          {/* Master Cybersecurity Knowledge Taxonomy Hero Callout */}
+          <div
+            className="card"
+            style={{
+              margin: 0,
+              padding: "16px 20px",
+              background: "linear-gradient(135deg, rgba(6, 182, 212, 0.12) 0%, rgba(99, 102, 241, 0.08) 100%)",
+              border: "1px solid rgba(6, 182, 212, 0.35)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: "14px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+              <div
+                style={{
+                  width: "42px",
+                  height: "42px",
+                  borderRadius: "10px",
+                  backgroundColor: "rgba(6, 182, 212, 0.2)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "var(--accent-cyan)",
+                }}
+              >
+                <FolderTree size={22} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: "1.05rem", fontWeight: 700, margin: 0, color: "var(--text-main)" }}>
+                  Comprehensive Cybersecurity Taxonomy & Learning Tree
+                </h3>
+                <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", margin: "3px 0 0 0" }}>
+                  Explore 7 core domains, 20+ disciplines, structured phases, sub-phases, safe testing procedures, and interactive assessments.
+                </p>
+              </div>
+            </div>
+
+            <button
+              className="btn btn-primary"
+              style={{ fontSize: "0.8rem", padding: "7px 16px" }}
+              onClick={() => setActiveTab("taxonomy")}
+            >
+              Open Knowledge Taxonomy <ChevronRight size={14} />
+            </button>
+          </div>
+
+          {/* Active Scanner Findings Linkage */}
+          {findings && findings.length > 0 && (
+            <div
+              className="card"
+              style={{
+                margin: 0,
+                padding: "18px 20px",
+                background: "linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(245, 158, 11, 0.05) 100%)",
+                border: "1px solid rgba(239, 68, 68, 0.25)"
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
+                <div>
+                  <h3 style={{ fontSize: "1.05rem", fontWeight: 700, margin: 0, color: "var(--accent-rose)", display: "flex", alignItems: "center", gap: "8px" }}>
+                    <ShieldAlert size={18} /> Active Project Findings Linked to Academy Curriculum
+                  </h3>
+                  <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: "2px 0 0 0" }}>
+                    Your project scanner has identified vulnerabilities in tested assets. Click to study the underlying root causes, attack flows, and remediation code:
+                  </p>
+                </div>
+                <span className="badge badge-critical" style={{ fontSize: "0.72rem" }}>
+                  {findings.length} Active Findings Detected
+                </span>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "12px" }}>
+                {findings.slice(0, 4).map((f) => {
+                  const matchedVuln = VULNERABILITY_ENCYCLOPEDIA.find(
+                    (v) =>
+                      f.title.toLowerCase().includes(v.name.toLowerCase()) ||
+                      v.aliases.some((a) => f.title.toLowerCase().includes(a.toLowerCase())) ||
+                      (v.cwe && f.evidence && f.evidence.toLowerCase().includes(v.cwe.toLowerCase())) ||
+                      (f.cwe && v.cwe && v.cwe.toLowerCase().includes(f.cwe.toLowerCase()))
+                  ) || VULNERABILITY_ENCYCLOPEDIA[0];
+
+                  return (
+                    <div
+                      key={f.id}
+                      style={{
+                        background: "var(--bg-secondary)",
+                        border: "1px solid var(--border-color)",
+                        borderRadius: "8px",
+                        padding: "14px",
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "space-between",
+                        gap: "10px"
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "6px", marginBottom: "6px" }}>
+                          <span
+                            className={`badge ${
+                              f.severity === "Critical"
+                                ? "badge-critical"
+                                : f.severity === "High"
+                                ? "badge-high"
+                                : f.severity === "Medium"
+                                ? "badge-medium"
+                                : "badge-low"
+                            }`}
+                            style={{ fontSize: "0.68rem" }}
+                          >
+                            {f.severity.toUpperCase()}
+                          </span>
+                          <span style={{ fontSize: "0.72rem", color: "var(--text-dim)", fontFamily: "monospace" }}>
+                            {f.affected_asset}
+                          </span>
+                        </div>
+
+                        <div style={{ fontWeight: 700, fontSize: "0.88rem", marginBottom: "4px" }}>
+                          {f.title}
+                        </div>
+                        <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                          Matched Topic: <strong style={{ color: "var(--accent-cyan)" }}>{matchedVuln.name}</strong> ({matchedVuln.cwe || "CWE"})
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", gap: "6px" }}>
+                        <button
+                          className="btn btn-primary"
+                          style={{ flex: 1, padding: "5px 10px", fontSize: "0.75rem", justifyContent: "center" }}
+                          onClick={() => {
+                            setSelectedVulnerability(matchedVuln);
+                            setActiveTab("encyclopedia");
+                          }}
+                        >
+                          <BookOpen size={13} /> Study Root Cause
+                        </button>
+                        {onOpenAiMentor && (
+                          <button
+                            className="btn btn-secondary"
+                            style={{ padding: "5px 10px", fontSize: "0.75rem", justifyContent: "center" }}
+                            onClick={() => onOpenAiMentor(`How do I remediate the "${f.title}" finding identified on ${f.affected_asset}? Show exact code fixes.`)}
+                          >
+                            <Sparkles size={13} /> Consult AI
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Recommended Next Lessons (Prerequisites Met) */}
           {(() => {
             const recommended = getRecommendedNextLessons(userState.completedLessonIds, allLessons, 3);
             if (recommended.length === 0) return null;
             return (
-              <div className="card" style={{ margin: 0, padding: "18px 20px", background: "linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(20, 30, 51, 0.8) 100%)", border: "1px solid rgba(6, 182, 212, 0.3)" }}>
+              <div className="card" style={{ margin: 0, padding: "18px 20px", background: "var(--bg-card)", border: "1px solid var(--border-color)", boxShadow: "var(--shadow-sm)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
                   <div>
                     <h3 style={{ fontSize: "1.05rem", fontWeight: 700, margin: 0, color: "var(--accent-cyan)", display: "flex", alignItems: "center", gap: "8px" }}>
@@ -427,7 +648,7 @@ export function CyberAcademy({ onNavigateScanner, onOpenAiMentor }: CyberAcademy
               <BookOpen size={18} color="var(--accent-cyan)" /> Structured Learning Roadmap
             </h3>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "14px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))", gap: "14px" }}>
               {LEARNING_PATHS.map((path) => {
                 const pathLessons = path.modules.flatMap((m) => m.lessons);
                 const pathCompleted = pathLessons.filter((l) => userState.completedLessonIds.includes(l.id)).length;
@@ -501,6 +722,42 @@ export function CyberAcademy({ onNavigateScanner, onOpenAiMentor }: CyberAcademy
         </div>
       )}
 
+      {/* TAB: COMPREHENSIVE CYBERSECURITY KNOWLEDGE TAXONOMY */}
+      {activeTab === "taxonomy" && (
+        <TaxonomyKnowledgeTreeView
+          onOpenAiMentor={onOpenAiMentor}
+          onNavigateScanner={onNavigateScanner}
+        />
+      )}
+
+      {/* TAB: VISUAL LEARNING ENGINE */}
+      {activeTab === "visuals" && <VisualLearningEngine />}
+
+      {/* TAB: OS & TERMINAL ACADEMY */}
+      {activeTab === "commands" && <CommandAcademyView />}
+
+      {/* TAB: PRACTICAL PROJECTS & CAPSTONE PENTEST */}
+      {activeTab === "projects" && <ProjectsAndCapstoneView />}
+
+      {/* TAB: AUTHORITATIVE DOCUMENTATION HUB */}
+      {activeTab === "resources" && <ResourceHubView />}
+
+      {/* TAB: ETHICAL COMMUNITIES DIRECTORY */}
+      {activeTab === "communities" && <CommunityDirectoryView />}
+
+      {/* TAB: SKILL MAP & COMPETENCY MATRIX */}
+      {activeTab === "skills" && (
+        <SkillMapView
+          userState={userState}
+          onNavigatePath={(pathId) => {
+            const p = LEARNING_PATHS.find((lp) => lp.id === pathId);
+            if (p) setSelectedPath(p);
+            setActiveTab("paths");
+          }}
+          onOpenAiMentor={onOpenAiMentor}
+        />
+      )}
+
       {/* TAB 2: LEARNING PATHS EXPLORER */}
       {activeTab === "paths" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -549,10 +806,10 @@ export function CyberAcademy({ onNavigateScanner, onOpenAiMentor }: CyberAcademy
                               display: "flex",
                               justifyContent: "space-between",
                               alignItems: "center",
-                              background: "rgba(15, 23, 42, 0.6)",
+                              background: "var(--bg-card)",
                               padding: "8px 12px",
                               borderRadius: "6px",
-                              border: "1px solid rgba(255,255,255,0.04)"
+                              border: "1px solid var(--border-color)",
                             }}
                           >
                             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -561,7 +818,8 @@ export function CyberAcademy({ onNavigateScanner, onOpenAiMentor }: CyberAcademy
                                   width: "18px",
                                   height: "18px",
                                   borderRadius: "50%",
-                                  backgroundColor: isDone ? "rgba(16, 185, 129, 0.2)" : "rgba(255,255,255,0.05)",
+                                  backgroundColor: isDone ? "rgba(16, 185, 129, 0.2)" : "var(--bg-secondary)",
+                                  border: isDone ? "1px solid var(--accent-emerald)" : "1px solid var(--border-color)",
                                   display: "flex",
                                   alignItems: "center",
                                   justifyContent: "center",
@@ -821,14 +1079,14 @@ export function CyberAcademy({ onNavigateScanner, onOpenAiMentor }: CyberAcademy
                       const isCorrect = selectedOpt === q.correctIndex;
 
                       return (
-                        <div key={q.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", paddingBottom: "12px" }}>
+                        <div key={q.id} style={{ borderBottom: "1px solid var(--border-color)", paddingBottom: "12px" }}>
                           <div style={{ fontSize: "0.86rem", fontWeight: 600, marginBottom: "8px" }}>
                             {q.question}
                           </div>
 
                           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                             {q.options.map((opt, optIdx) => {
-                              let bg = "rgba(15, 23, 42, 0.8)";
+                              let bg = "var(--bg-secondary)";
                               let border = "var(--border-color)";
                               if (quizSubmitted) {
                                 if (optIdx === q.correctIndex) {
@@ -1110,7 +1368,7 @@ export function CyberAcademy({ onNavigateScanner, onOpenAiMentor }: CyberAcademy
                         borderRadius: "4px",
                         fontSize: "0.72rem",
                         fontWeight: 700,
-                        background: "rgba(15, 23, 42, 0.8)",
+                        background: "var(--bg-secondary)",
                         border: "1px solid var(--border-color)",
                         color: "var(--accent-cyan)",
                         whiteSpace: "nowrap"
@@ -1122,7 +1380,7 @@ export function CyberAcademy({ onNavigateScanner, onOpenAiMentor }: CyberAcademy
                 </div>
 
                 {/* STEP 1: LEARN (Definition & Aliases) */}
-                <div style={{ background: "rgba(15, 23, 42, 0.8)", border: "1px solid var(--border-color)", borderRadius: "8px", padding: "14px", marginBottom: "16px" }}>
+                <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "8px", padding: "14px", marginBottom: "16px", boxShadow: "var(--shadow-sm)" }}>
                   <div style={{ fontWeight: 700, fontSize: "0.84rem", color: "var(--accent-cyan)", marginBottom: "4px" }}>
                     Step 1: Learn — Authoritative Definition & Aliases:
                   </div>
@@ -1243,7 +1501,7 @@ export function CyberAcademy({ onNavigateScanner, onOpenAiMentor }: CyberAcademy
                       {selectedVulnerability.severity} ({selectedVulnerability.cvssBaseScore})
                     </span>
                     {selectedVulnerability.cvssVector && (
-                      <code style={{ fontSize: "0.74rem", color: "var(--accent-cyan)", background: "rgba(0,0,0,0.4)", padding: "2px 6px", borderRadius: "4px" }}>
+                      <code style={{ fontSize: "0.74rem", color: "var(--accent-cyan)", background: "var(--bg-secondary)", border: "1px solid var(--border-color)", padding: "2px 6px", borderRadius: "4px" }}>
                         {selectedVulnerability.cvssVector}
                       </code>
                     )}
@@ -1259,7 +1517,7 @@ export function CyberAcademy({ onNavigateScanner, onOpenAiMentor }: CyberAcademy
                     Step 6: Fix — Secure Remediation & Defense-in-Depth:
                   </h4>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))", gap: "12px", marginBottom: "12px" }}>
                     <div>
                       <div style={{ fontWeight: 600, fontSize: "0.8rem", color: "var(--accent-rose)", marginBottom: "4px" }}>
                         ❌ Vulnerable Pattern:
@@ -1539,7 +1797,7 @@ export function CyberAcademy({ onNavigateScanner, onOpenAiMentor }: CyberAcademy
             <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "12px" }}>
               Career Pathways & Industry Role Roadmaps
             </h3>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "14px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))", gap: "14px" }}>
               {CAREER_ROADMAPS.map((role) => (
                 <div
                   key={role.id}
@@ -1585,7 +1843,7 @@ export function CyberAcademy({ onNavigateScanner, onOpenAiMentor }: CyberAcademy
             <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "12px" }}>
               Verified Certification Directory
             </h3>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))", gap: "12px" }}>
               {CERTIFICATIONS_DIRECTORY.map((cert) => (
                 <div
                   key={cert.id}
