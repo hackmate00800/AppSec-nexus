@@ -115,6 +115,9 @@ import { SecurityCategory } from "./categories/types";
 import { CategorySelector } from "./categories/CategorySelector";
 import { FindingInlineDetailsAccordion } from "./components/findings/FindingInlineDetailsAccordion";
 import { ContextMenu } from "./components/ui/ContextMenu";
+import { useScanProgress } from "./context/ScanProgressContext";
+import { ScanProgressIndicatorBanner } from "./components/scanners/ScanProgressIndicatorBanner";
+import { FindingsTableSkeleton, ScanHistorySkeleton } from "./components/ui/SkeletonLoaders";
 
 // High-Performance Code-Splitting for Low-Spec PCs:
 // Defer loading heavy components until the user switches to their respective tabs
@@ -439,6 +442,11 @@ export default function App() {
   const [allowLocalLab, setAllowLocalLab] = useState(false);
   const [targetError, setTargetError] = useState("");
 
+  // Scan progress and background task integration
+  const { startScan } = useScanProgress();
+  const [isFindingsLoading, setIsFindingsLoading] = useState(false);
+  const [isScanHistoryLoading, setIsScanHistoryLoading] = useState(false);
+
   // Scan execution
   const [isScanning, setIsScanning] = useState(false);
   const [scanLogs, setScanLogs] = useState<string[]>([]);
@@ -521,6 +529,16 @@ export default function App() {
     x: number;
     y: number;
     finding: Finding;
+  } | null>(null);
+  const [targetContextMenu, setTargetContextMenu] = useState<{
+    x: number;
+    y: number;
+    target: Target;
+  } | null>(null);
+  const [scanHistoryContextMenu, setScanHistoryContextMenu] = useState<{
+    x: number;
+    y: number;
+    scan: ScanResult;
   } | null>(null);
 
   const toggleExpandFinding = (id: string) => {
@@ -630,15 +648,19 @@ export default function App() {
         setSelectedTarget(targetsList[0]);
       }
 
+      setIsFindingsLoading(true);
+      setIsScanHistoryLoading(true);
       const findingsList = await invoke<Finding[]>("get_findings");
       const dedup = new FindingDeduplicator();
       const dedupedFindings = findingsList.filter(
         (f) => !dedup.isDuplicate(f.affected_asset, f.cwe, f.source_tool, f.title)
       );
       setFindings(dedupedFindings);
+      setIsFindingsLoading(false);
 
       const historyList = await invoke<ScanResult[]>("get_scan_history");
       setScanHistory(historyList);
+      setIsScanHistoryLoading(false);
 
       let isOnline = false;
       let installedList: string[] = [];
@@ -880,37 +902,36 @@ export default function App() {
     setActiveTool(toolId);
     setScanLogs([`Starting ${toolId} scan against ${selectedTarget.primary_url}...`]);
 
+    const toolObj = tools.find((t) => t.id === toolId);
+    const toolLabel = toolObj ? toolObj.name : toolId.toUpperCase();
+
     try {
-      const result = await invoke<ScanResult>("run_scan", {
-        targetId: selectedTarget.id,
-        tool: toolId,
-      });
-
-      setScanLogs((prev) => [...prev, ...result.logs, `Completed in ${result.duration_ms} ms.`]);
-
-      const updatedFindings = await invoke<Finding[]>("get_findings");
-      setFindings(updatedFindings);
-
-      const updatedHistory = await invoke<ScanResult[]>("get_scan_history");
-      setScanHistory(updatedHistory);
+      await startScan(
+        selectedTarget.id,
+        selectedTarget.primary_url,
+        toolId,
+        toolLabel,
+        (result, updatedFindings, updatedHistory) => {
+          setFindings(updatedFindings);
+          setScanHistory(updatedHistory);
+          setScanLogs((prev) => [...prev, ...result.logs, `Completed in ${result.duration_ms} ms.`]);
+          addToast({
+            type: "success",
+            title: "Security Audit Complete",
+            description: `${toolLabel} finished. Discovered ${result.findings_count} observation(s).`,
+          });
+        },
+        (errMsg) => {
+          setScanLogs((prev) => [...prev, `[ERROR] Scan aborted: ${errMsg}`]);
+          addToast({
+            type: "error",
+            title: "Scan Failed",
+            description: errMsg,
+          });
+        }
+      );
     } catch (err: any) {
       setScanLogs((prev) => [...prev, `[ERROR] Scan aborted: ${err.toString()}`]);
-      if (isTauriApp) {
-        invoke("record_issue", {
-          payload: {
-            title: `Scan Failure: ${toolId} execution failed`,
-            category: "ToolExecutionFailure",
-            subtype: "ScanExecutionError",
-            severity: "High",
-            affected_component: toolId,
-            affected_target_id: selectedTarget?.id,
-            affected_target_name: selectedTarget?.name,
-            source: "ToolExecution",
-            description: `Automated scan job using ${toolId} aborted against target ${selectedTarget?.primary_url}`,
-            error_details: err?.toString() || "Unknown tool execution failure",
-          },
-        }).catch((e) => console.error("Auto issue recording error:", e));
-      }
     } finally {
       setIsScanning(false);
     }
@@ -1398,7 +1419,12 @@ export default function App() {
 
   function handleSelectAiRole(role: SecurityAiRole) {
     setActiveAiRole(role);
-    const targetModel = role === "quick" ? quickModel : deepModel;
+    let targetModel = quickModel;
+    if (role === "deep") {
+      targetModel = deepModel;
+    } else if (role === "deepseek") {
+      targetModel = "deepseek-chat";
+    }
     setSelectedModel(targetModel);
     persistAiWorkspaceConfig({
       quick_model: quickModel,
@@ -2215,6 +2241,7 @@ export default function App() {
             <span className="hide-mobile">Audit Log</span>
           </button>
 
+
           {/* Keyboard Shortcuts Trigger Button */}
           <button
             className="btn btn-secondary"
@@ -2294,8 +2321,8 @@ export default function App() {
               transition: "background-color 0.15s ease",
             }}
           />
-          {/* Group 1: Operations */}
-          <div className="sidebar-section-title">Operations</div>
+          {/* Group 1: Operations & Scope */}
+          <div className="sidebar-section-title">Operations & Scope</div>
           <div
             className={`nav-item ${activeTab === "analytics" ? "active" : ""}`}
             onClick={() => setActiveTab("analytics")}
@@ -2314,6 +2341,8 @@ export default function App() {
             <span className="sidebar-label">Target & Scope</span>
           </div>
 
+          {/* Group 2: Assessments & Execution */}
+          <div className="sidebar-section-title">Assessments & Scans</div>
           <div
             className={`nav-item ${activeTab === "scanner" ? "active" : ""}`}
             onClick={() => setActiveTab("scanner")}
@@ -2321,15 +2350,6 @@ export default function App() {
           >
             <Terminal size={18} />
             <span className="sidebar-label">Scan Console</span>
-          </div>
-
-          <div
-            className={`nav-item ${activeTab === "terminal" ? "active" : ""}`}
-            onClick={() => setActiveTab("terminal")}
-            title="Multi-Terminal Orchestration & Tool Execution"
-          >
-            <Terminal size={18} color={activeTab === "terminal" ? "var(--accent-cyan)" : undefined} />
-            <span className="sidebar-label">Multi-Terminal</span>
           </div>
 
           <div
@@ -2341,8 +2361,6 @@ export default function App() {
             <span className="sidebar-label">Universal Orchestration</span>
           </div>
 
-          {/* Group 2: Discovery & Audit */}
-          <div className="sidebar-section-title">Discovery & Audit</div>
           <div
             className={`nav-item ${activeTab === "crawler" ? "active" : ""}`}
             onClick={() => setActiveTab("crawler")}
@@ -2357,41 +2375,37 @@ export default function App() {
             )}
           </div>
 
+          {/* Group 3: Taxonomy & Methodology */}
+          <div className="sidebar-section-title">Taxonomy & Playbooks</div>
           <div
-            className={`nav-item ${activeTab === "tools" ? "active" : ""}`}
-            onClick={() => setActiveTab("tools")}
-            title="Tools & Universal Plugins"
+            className={`nav-item ${activeTab === "categoryWorkflow" ? "active" : ""}`}
+            onClick={() => setActiveTab("categoryWorkflow")}
+            title="Category Intelligence & Assessment Engine"
           >
-            <Layers size={18} />
-            <span className="sidebar-label" style={{ flex: 1 }}>Tools & Plugins</span>
-            <span className="sidebar-badge" style={{ fontSize: "0.68rem", color: "var(--accent-emerald)", padding: "1px 6px", borderRadius: "10px", background: "rgba(16, 185, 129, 0.12)" }}>
-              {readyToolsCount}
-            </span>
+            <Layers size={18} color={activeTab === "categoryWorkflow" ? "var(--accent-cyan)" : undefined} />
+            <span className="sidebar-label" style={{ flex: 1 }}>Category Intel</span>
           </div>
 
           <div
-            className={`nav-item ${activeTab === "burp" ? "active" : ""}`}
-            onClick={() => setActiveTab("burp")}
-            title="Burp Suite Local Integration"
+            className={`nav-item ${activeTab === "playbooks" ? "active" : ""}`}
+            onClick={() => setActiveTab("playbooks")}
+            title="Security Checklists & Assessment Playbooks"
           >
-            <Radio size={18} color={activeTab === "burp" ? "var(--accent-orange, #f97316)" : undefined} />
-            <span className="sidebar-label" style={{ flex: 1 }}>Burp Suite</span>
-            <span className="sidebar-badge" style={{ fontSize: "0.68rem", color: "var(--accent-orange, #f97316)", padding: "1px 6px", borderRadius: "10px", background: "rgba(249, 115, 22, 0.12)", fontWeight: 700 }}>
-              Proxy
-            </span>
+            <FileCheck size={18} color={activeTab === "playbooks" ? "var(--accent-cyan)" : undefined} />
+            <span className="sidebar-label" style={{ flex: 1 }}>Playbooks</span>
           </div>
 
           <div
-            className={`nav-item ${activeTab === "hostmobile" ? "active" : ""}`}
-            onClick={() => setActiveTab("hostmobile")}
-            title="Host & Mobile Audit"
+            className={`nav-item ${activeTab === "methodologies" ? "active" : ""}`}
+            onClick={() => setActiveTab("methodologies")}
+            title="Detection Methodologies & Transparency Rules"
           >
-            <Monitor size={18} color={activeTab === "hostmobile" ? "var(--accent-blue)" : undefined} />
-            <span className="sidebar-label">Host & Mobile</span>
+            <BookOpen size={18} color={activeTab === "methodologies" ? "var(--accent-cyan)" : undefined} />
+            <span className="sidebar-label" style={{ flex: 1 }}>Methodologies</span>
           </div>
 
-          {/* Group 3: Findings & Intelligence */}
-          <div className="sidebar-section-title">Findings & Intel</div>
+          {/* Group 4: Findings & Documentation */}
+          <div className="sidebar-section-title">Findings & Reports</div>
           <div
             className={`nav-item ${activeTab === "findings" ? "active" : ""}`}
             onClick={() => setActiveTab("findings")}
@@ -2424,24 +2438,8 @@ export default function App() {
             <span className="sidebar-label">Import Reports</span>
           </div>
 
-          <div
-            className={`nav-item ${activeTab === "categoryWorkflow" ? "active" : ""}`}
-            onClick={() => setActiveTab("categoryWorkflow")}
-            title="Category Intelligence & Workflows"
-          >
-            <Layers size={18} color={activeTab === "categoryWorkflow" ? "var(--accent-cyan)" : undefined} />
-            <span className="sidebar-label" style={{ flex: 1 }}>Category Intel</span>
-          </div>
-
-          <div
-            className={`nav-item ${activeTab === "playbooks" ? "active" : ""}`}
-            onClick={() => setActiveTab("playbooks")}
-            title="Security Checklists & Assessment Playbooks"
-          >
-            <FileCheck size={18} color={activeTab === "playbooks" ? "var(--accent-cyan)" : undefined} />
-            <span className="sidebar-label" style={{ flex: 1 }}>Playbooks</span>
-          </div>
-
+          {/* Group 5: Learning & Intelligence */}
+          <div className="sidebar-section-title">Learning & AI</div>
           <div
             className={`nav-item ${activeTab === "mentor" ? "active" : ""}`}
             onClick={() => setActiveTab("mentor")}
@@ -2460,15 +2458,52 @@ export default function App() {
             <span className="sidebar-label">Cyber Academy</span>
           </div>
 
+          {/* Group 6: Tools & Integrations */}
+          <div className="sidebar-section-title">Tools & Integrations</div>
           <div
-            className={`nav-item ${activeTab === "methodologies" ? "active" : ""}`}
-            onClick={() => setActiveTab("methodologies")}
-            title="Detection Methodologies & Transparency Rules"
+            className={`nav-item ${activeTab === "tools" ? "active" : ""}`}
+            onClick={() => setActiveTab("tools")}
+            title="Tools & Universal Plugins"
           >
-            <BookOpen size={18} color={activeTab === "methodologies" ? "var(--accent-cyan)" : undefined} />
-            <span className="sidebar-label" style={{ flex: 1 }}>Methodologies</span>
+            <Layers size={18} />
+            <span className="sidebar-label" style={{ flex: 1 }}>Tools & Plugins</span>
+            <span className="sidebar-badge" style={{ fontSize: "0.68rem", color: "var(--accent-emerald)", padding: "1px 6px", borderRadius: "10px", background: "rgba(16, 185, 129, 0.12)" }}>
+              {readyToolsCount}
+            </span>
           </div>
 
+          <div
+            className={`nav-item ${activeTab === "terminal" ? "active" : ""}`}
+            onClick={() => setActiveTab("terminal")}
+            title="Multi-Terminal Orchestration & Tool Execution"
+          >
+            <Terminal size={18} color={activeTab === "terminal" ? "var(--accent-cyan)" : undefined} />
+            <span className="sidebar-label">Multi-Terminal</span>
+          </div>
+
+          <div
+            className={`nav-item ${activeTab === "burp" ? "active" : ""}`}
+            onClick={() => setActiveTab("burp")}
+            title="Burp Suite Local Integration"
+          >
+            <Radio size={18} color={activeTab === "burp" ? "var(--accent-orange, #f97316)" : undefined} />
+            <span className="sidebar-label" style={{ flex: 1 }}>Burp Suite</span>
+            <span className="sidebar-badge" style={{ fontSize: "0.68rem", color: "var(--accent-orange, #f97316)", padding: "1px 6px", borderRadius: "10px", background: "rgba(249, 115, 22, 0.12)", fontWeight: 700 }}>
+              Proxy
+            </span>
+          </div>
+
+          <div
+            className={`nav-item ${activeTab === "hostmobile" ? "active" : ""}`}
+            onClick={() => setActiveTab("hostmobile")}
+            title="Host & Mobile Audit"
+          >
+            <Monitor size={18} color={activeTab === "hostmobile" ? "var(--accent-blue)" : undefined} />
+            <span className="sidebar-label">Host & Mobile</span>
+          </div>
+
+          {/* Group 7: System & Audit */}
+          <div className="sidebar-section-title">System & Audit</div>
           <div
             className={`nav-item ${activeTab === "history" ? "active" : ""}`}
             onClick={() => setActiveTab("history")}
@@ -2483,8 +2518,6 @@ export default function App() {
             )}
           </div>
 
-          {/* Group 4: Settings & Personalization */}
-          <div className="sidebar-section-title">System</div>
           <div
             className={`nav-item ${activeTab === "appearance" ? "active" : ""}`}
             onClick={() => setActiveTab("appearance")}
@@ -2529,6 +2562,9 @@ export default function App() {
               setSelectedFinding(null);
             }}
           />
+
+          {/* Global Scan Progress Banner (persists across all tabs) */}
+          <ScanProgressIndicatorBanner onNavigateToConsole={() => setActiveTab("scanner")} />
 
           {/* TAB 0: SECURITY ANALYTICS */}
           {activeTab === "analytics" && (
@@ -2635,6 +2671,14 @@ export default function App() {
                       <div
                         key={t.id}
                         onClick={() => setSelectedTarget(t)}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          setTargetContextMenu({
+                            x: e.clientX,
+                            y: e.clientY,
+                            target: t,
+                          });
+                        }}
                         style={{
                           padding: "12px 16px",
                           borderRadius: "8px",
@@ -2684,6 +2728,78 @@ export default function App() {
                       </div>
                     ))}
                   </div>
+                )}
+
+                {/* Right-click Context Menu for Targets */}
+                {targetContextMenu && (
+                  <ContextMenu
+                    x={targetContextMenu.x}
+                    y={targetContextMenu.y}
+                    role={currentUserRole}
+                    onClose={() => setTargetContextMenu(null)}
+                    items={[
+                      {
+                        label: "Select as Active Target",
+                        icon: <TargetIcon size={12} color="var(--accent-cyan)" />,
+                        action: () => {
+                          setSelectedTarget(targetContextMenu.target);
+                          addToast({
+                            type: "info",
+                            title: "Target Activated",
+                            description: `Selected ${targetContextMenu.target.name} as active target.`,
+                          });
+                        },
+                      },
+                      {
+                        label: "Copy Target URL",
+                        icon: <Globe size={12} />,
+                        action: () => {
+                          if (navigator.clipboard) {
+                            navigator.clipboard.writeText(targetContextMenu.target.primary_url);
+                          }
+                          addToast({
+                            type: "info",
+                            title: "URL Copied",
+                            description: `Copied ${targetContextMenu.target.primary_url} to clipboard.`,
+                          });
+                        },
+                      },
+                      {
+                        label: "Run Baseline Scan",
+                        icon: <Play size={12} color="var(--accent-cyan)" />,
+                        action: () => {
+                          setSelectedTarget(targetContextMenu.target);
+                          setActiveTab("scanner");
+                          handleRunScan("baseline");
+                        },
+                      },
+                      {
+                        label: "Crawl Endpoints",
+                        icon: <Compass size={12} color="var(--accent-cyan)" />,
+                        action: () => {
+                          setSelectedTarget(targetContextMenu.target);
+                          setActiveTab("crawler");
+                        },
+                      },
+                      {
+                        label: "Edit Target",
+                        icon: <Edit2 size={12} />,
+                        requiresAdmin: true,
+                        action: () => {
+                          setEditingTarget(targetContextMenu.target);
+                        },
+                      },
+                      {
+                        label: "Delete Target",
+                        icon: <Trash2 size={12} />,
+                        requiresAdmin: true,
+                        danger: true,
+                        action: () => {
+                          setDeletingTarget(targetContextMenu.target);
+                        },
+                      },
+                    ]}
+                  />
                 )}
               </div>
             </div>
@@ -4057,7 +4173,9 @@ export default function App() {
                   </div>
                 )}
 
-                {findings.length === 0 ? (
+                {isFindingsLoading ? (
+                  <FindingsTableSkeleton rows={6} />
+                ) : findings.length === 0 ? (
                   <p style={{ color: "var(--text-dim)", fontSize: "0.85rem" }}>
                     No findings yet. Run a baseline or tool scan to discover security insights.
                   </p>
@@ -4243,6 +4361,14 @@ export default function App() {
                                   onClick={() => {
                                     setActiveFindingDetail(f);
                                     setSelectedFinding(f);
+                                  }}
+                                  onContextMenu={(e) => {
+                                    e.preventDefault();
+                                    setFindingContextMenu({
+                                      x: e.clientX,
+                                      y: e.clientY,
+                                      finding: f,
+                                    });
                                   }}
                                   style={{ cursor: "pointer" }}
                                 >
@@ -5249,6 +5375,122 @@ export default function App() {
                     </div>
                   );
                 })()}
+
+                {/* CARD 3: DEEPSEEK CLOUD AI */}
+                {(() => {
+                  const isDeepSeekActive = activeAiRole === "deepseek";
+                  return (
+                    <div
+                      data-testid="deepseek-ai-card"
+                      onClick={() => handleSelectAiRole("deepseek")}
+                      style={{
+                        background: isDeepSeekActive ? "rgba(59, 130, 246, 0.08)" : "var(--bg-secondary)",
+                        border: `2px solid ${isDeepSeekActive ? "var(--accent-blue, #3b82f6)" : "var(--border-color)"}`,
+                        borderRadius: "10px",
+                        padding: "16px",
+                        cursor: "pointer",
+                        transition: "all 0.18s ease-in-out",
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "space-between",
+                        boxShadow: isDeepSeekActive ? "0 0 16px rgba(59, 130, 246, 0.15)" : "none",
+                      }}
+                      className="hover-card"
+                    >
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <div
+                              style={{
+                                width: "32px",
+                                height: "32px",
+                                borderRadius: "8px",
+                                background: "rgba(59, 130, 246, 0.15)",
+                                border: "1px solid rgba(59, 130, 246, 0.3)",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                color: "var(--accent-blue, #3b82f6)",
+                              }}
+                            >
+                              <Globe size={18} />
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--text-main)" }}>
+                                DeepSeek Cloud AI
+                              </div>
+                              <div style={{ fontSize: "0.72rem", color: "var(--accent-blue, #3b82f6)", fontWeight: 600 }}>
+                                Official Remote API Provider
+                              </div>
+                            </div>
+                          </div>
+
+                          {isDeepSeekActive ? (
+                            <span
+                              style={{
+                                backgroundColor: "var(--accent-blue, #3b82f6)",
+                                color: "#fff",
+                                fontSize: "0.68rem",
+                                fontWeight: 700,
+                                padding: "2px 8px",
+                                borderRadius: "12px",
+                              }}
+                            >
+                              Active Model
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              style={{ fontSize: "0.72rem", padding: "2px 8px" }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSelectAiRole("deepseek");
+                              }}
+                            >
+                              Activate
+                            </button>
+                          )}
+                        </div>
+
+                        <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", margin: "8px 0 12px 0", lineHeight: "1.4" }}>
+                          High-capacity cloud reasoning model for in-depth vulnerability research, code review, and threat modeling via official DeepSeek API.
+                        </p>
+                      </div>
+
+                      <div
+                        style={{
+                          borderTop: "1px solid var(--border-color)",
+                          paddingTop: "10px",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          fontSize: "0.75rem",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Endpoint:</span>
+                          <span style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--text-main)" }}>
+                            api.deepseek.com
+                          </span>
+                        </div>
+
+                        <span
+                          style={{
+                            fontSize: "0.7rem",
+                            fontWeight: 600,
+                            color: "var(--accent-blue, #3b82f6)",
+                            background: "rgba(59, 130, 246, 0.1)",
+                            padding: "1px 6px",
+                            borderRadius: "4px",
+                          }}
+                        >
+                          Cloud API
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Security Guidance Disclaimer */}
@@ -5671,7 +5913,9 @@ export default function App() {
                   </div>
                 </div>
 
-                {scanHistory.length === 0 ? (
+                {isScanHistoryLoading ? (
+                  <ScanHistorySkeleton rows={5} />
+                ) : scanHistory.length === 0 ? (
                   <p style={{ color: "var(--text-dim)", fontSize: "0.85rem" }}>
                     No scan executions recorded yet. Run a scan from the Tool Hub or Scan Console.
                   </p>
@@ -5690,7 +5934,18 @@ export default function App() {
                       </thead>
                       <tbody>
                         {scanHistory.map((s, idx) => (
-                          <tr key={s.scan_id || idx}>
+                          <tr
+                            key={s.scan_id || idx}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              setScanHistoryContextMenu({
+                                x: e.clientX,
+                                y: e.clientY,
+                                scan: s,
+                              });
+                            }}
+                            style={{ cursor: "context-menu" }}
+                          >
                             <td style={{ fontWeight: 600 }}>{s.target_url}</td>
                             <td>
                               <span style={{ color: "var(--accent-cyan)", fontWeight: 500 }}>
@@ -5720,6 +5975,67 @@ export default function App() {
                       </tbody>
                     </table>
                   </div>
+                )}
+
+                {/* Right-click Context Menu for Scan History Records */}
+                {scanHistoryContextMenu && (
+                  <ContextMenu
+                    x={scanHistoryContextMenu.x}
+                    y={scanHistoryContextMenu.y}
+                    role={currentUserRole}
+                    onClose={() => setScanHistoryContextMenu(null)}
+                    items={[
+                      {
+                        label: `Re-run ${scanHistoryContextMenu.scan.tool.toUpperCase()} Scan`,
+                        icon: <RotateCcw size={12} color="var(--accent-cyan)" />,
+                        action: () => {
+                          const target = targets.find((t) => t.primary_url === scanHistoryContextMenu.scan.target_url) || selectedTarget;
+                          if (target) {
+                            setSelectedTarget(target);
+                            setActiveTab("scanner");
+                            handleRunScan(scanHistoryContextMenu.scan.tool.toLowerCase());
+                          } else {
+                            addToast({
+                              type: "warning",
+                              title: "Target Not Selected",
+                              description: `Please select an authorized target matching ${scanHistoryContextMenu.scan.target_url}`,
+                            });
+                          }
+                        },
+                      },
+                      {
+                        label: "Copy Target URL",
+                        icon: <Globe size={12} />,
+                        action: () => {
+                          if (navigator.clipboard) {
+                            navigator.clipboard.writeText(scanHistoryContextMenu.scan.target_url);
+                          }
+                          addToast({
+                            type: "info",
+                            title: "URL Copied",
+                            description: `Copied ${scanHistoryContextMenu.scan.target_url} to clipboard.`,
+                          });
+                        },
+                      },
+                      {
+                        label: "View in Unified Findings",
+                        icon: <Search size={12} color="var(--accent-cyan)" />,
+                        action: () => {
+                          setFindingSearchQuery(scanHistoryContextMenu.scan.tool);
+                          setActiveTab("findings");
+                        },
+                      },
+                      {
+                        label: "Delete Record",
+                        icon: <Trash2 size={12} />,
+                        requiresAdmin: true,
+                        danger: true,
+                        action: () => {
+                          handleDeleteScanHistory(scanHistoryContextMenu.scan);
+                        },
+                      },
+                    ]}
+                  />
                 )}
               </div>
             </div>

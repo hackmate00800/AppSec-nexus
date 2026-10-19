@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { Target, Finding, ScanResult, DiscoveredEndpoint, FindingSeverity } from "./types";
 import { DraggableDashboard, DashboardWidget } from "./components/ui/DraggableDashboard";
+import { DashboardCardsSkeleton } from "./components/ui/SkeletonLoaders";
 
 interface AnalyticsProps {
   targets: Target[];
@@ -42,6 +43,7 @@ interface AnalyticsProps {
   ) => void;
   onQuickScan: (toolId: string) => void;
   isScanning: boolean;
+  isLoading?: boolean;
 }
 
 export function AnalyticsDashboard({
@@ -54,6 +56,7 @@ export function AnalyticsDashboard({
   onNavigateTab,
   onQuickScan,
   isScanning,
+  isLoading = false,
 }: AnalyticsProps) {
   // Scope and Filter States
   const [filterMode, setFilterMode] = useState<"current" | "all">(selectedTarget ? "current" : "all");
@@ -472,7 +475,9 @@ export function AnalyticsDashboard({
       id: "hero_kpis",
       title: "Security Posture KPIs",
       description: "Resilience Score, Vulnerability Counts, Mapped Endpoints & Remediation",
-      render: () => (
+      render: () => isLoading ? (
+        <DashboardCardsSkeleton count={4} />
+      ) : (
         <div
           style={{
             display: "grid",

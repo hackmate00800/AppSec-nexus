@@ -91,6 +91,16 @@ vi.mock("@tauri-apps/api/core", () => ({
         ];
       case "get_scan_history":
         return [];
+      case "run_scan":
+        return {
+          scan_id: "scan-mock-123",
+          target_url: "https://target.local",
+          tool: args?.tool || "nuclei",
+          status: "Completed",
+          findings_count: 2,
+          duration_ms: 120,
+          logs: ["Scan started", "Vulnerabilities discovered", "Scan completed"],
+        };
       case "get_tools":
         return [
           {
@@ -134,6 +144,14 @@ vi.mock("@tauri-apps/api/core", () => ({
         return [];
       case "get_extensions_v1":
         return [];
+      case "get_deepseek_status":
+        return {
+          is_configured: true,
+          endpoint: "https://api.deepseek.com",
+          model: "deepseek-chat",
+          status: "available",
+          error_message: null,
+        };
       case "get_ai_tasks":
         return [];
       case "submit_ai_task":

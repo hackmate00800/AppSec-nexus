@@ -453,7 +453,15 @@ export interface WorkspaceLayoutConfig {
   panels: Record<string, PanelState>;
 }
 
-export type SecurityAiRole = "quick" | "deep";
+export type SecurityAiRole = "quick" | "deep" | "deepseek";
+
+export interface DeepSeekProviderStatus {
+  is_configured: boolean;
+  endpoint: string;
+  model: string;
+  status: string; // "configured" | "not_configured" | "available" | "auth_failed" | "rate_limited" | "quota_exceeded" | "temporarily_unavailable" | "disabled"
+  error_message: string | null;
+}
 
 export interface OllamaSystemInfo {
   is_online: boolean;
@@ -467,6 +475,7 @@ export interface OllamaSystemInfo {
 export interface SecurityAiWorkspaceConfig {
   quick_model: string;
   deep_model: string;
+  deepseek_model?: string;
   active_model_role: SecurityAiRole;
 }
 

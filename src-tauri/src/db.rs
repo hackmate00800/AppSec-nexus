@@ -1,8 +1,9 @@
 use crate::models::{
-    AiChatMessageRecord, AiTask, AiTaskStatus, AuditLogRecord, DiscoveredEndpoint, Finding,
-    FindingSeverity, FindingStatus, FindingUpdatePayload, GeneratedReport, IssueCreatePayload,
-    IssueHistoryItem, IssueNote, IssueRecord, IssueUpdatePayload, ReportGenerateParams,
-    ScanEvent, ScanResult, Target,
+    AiChatMessageRecord, AiTask, AiTaskStatus, AssessmentRunRecord, AssessmentTemplateRecord,
+    AuditLogRecord, DiscoveredEndpoint, Finding, FindingSeverity, FindingStatus,
+    FindingUpdatePayload, GeneratedReport, IssueCreatePayload, IssueHistoryItem, IssueNote,
+    IssueRecord, IssueUpdatePayload, ReportGenerateParams, ScanEvent, ScanResult, Target,
+    TaxonomyCategoryRecord, TaxonomyDomainRecord, TestCaseDefinition, TestCaseExecutionRecord,
 };
 use rusqlite::{params, Connection, Result};
 use std::sync::Mutex;
@@ -397,6 +398,145 @@ impl Database {
             [],
         )?;
 
+        // -------------------------------------------------------------
+        // Persistent Security Taxonomy & Assessment Engine Tables
+        // -------------------------------------------------------------
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS taxonomy_domains (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL,
+                version TEXT NOT NULL,
+                order_index INTEGER NOT NULL,
+                icon_name TEXT NOT NULL
+            )",
+            [],
+        )?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS taxonomy_categories (
+                id TEXT PRIMARY KEY,
+                domain_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL,
+                applicable_technologies_json TEXT NOT NULL DEFAULT '[]',
+                order_index INTEGER NOT NULL
+            )",
+            [],
+        )?;
+        let _ = conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_tax_cat_domain ON taxonomy_categories(domain_id, order_index ASC)",
+            [],
+        );
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS test_case_definitions (
+                id TEXT PRIMARY KEY,
+                category_id TEXT NOT NULL,
+                domain_id TEXT NOT NULL,
+                phase TEXT NOT NULL,
+                subphase TEXT NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL,
+                objective TEXT NOT NULL,
+                cwe TEXT,
+                owasp_id TEXT,
+                severity_guidance TEXT NOT NULL,
+                safety_level TEXT NOT NULL,
+                manual_procedure TEXT NOT NULL,
+                automated_tool_adapter TEXT,
+                command_example TEXT,
+                expected_secure_behavior TEXT NOT NULL,
+                failure_indicators TEXT NOT NULL,
+                pass_criteria TEXT NOT NULL,
+                fail_criteria TEXT NOT NULL,
+                inconclusive_criteria TEXT NOT NULL,
+                not_applicable_criteria TEXT NOT NULL,
+                evidence_requirements TEXT NOT NULL,
+                remediation_guidance TEXT NOT NULL,
+                safe_retest_procedure TEXT NOT NULL,
+                references_json TEXT NOT NULL DEFAULT '[]',
+                applicable_tech_json TEXT NOT NULL DEFAULT '[]',
+                version TEXT NOT NULL
+            )",
+            [],
+        )?;
+        let _ = conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_tests_category_phase ON test_case_definitions(category_id, phase)",
+            [],
+        );
+        let _ = conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_tests_domain ON test_case_definitions(domain_id)",
+            [],
+        );
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS assessment_templates (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                domain_id TEXT NOT NULL,
+                category_id TEXT NOT NULL,
+                description TEXT NOT NULL,
+                version TEXT NOT NULL,
+                is_builtin INTEGER NOT NULL DEFAULT 1,
+                test_case_ids_json TEXT NOT NULL DEFAULT '[]',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+            [],
+        )?;
+        let _ = conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_templates_category ON assessment_templates(category_id, version)",
+            [],
+        );
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS assessment_runs (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                target_url TEXT NOT NULL,
+                domain_id TEXT NOT NULL,
+                category_id TEXT NOT NULL,
+                template_id TEXT NOT NULL,
+                template_version TEXT NOT NULL,
+                status TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                completed_at TEXT,
+                total_tests INTEGER NOT NULL DEFAULT 0,
+                passed_tests INTEGER NOT NULL DEFAULT 0,
+                failed_tests INTEGER NOT NULL DEFAULT 0,
+                inconclusive_tests INTEGER NOT NULL DEFAULT 0,
+                not_applicable_tests INTEGER NOT NULL DEFAULT 0,
+                notes TEXT NOT NULL DEFAULT ''
+            )",
+            [],
+        )?;
+        let _ = conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_assessment_target ON assessment_runs(target_id, started_at DESC)",
+            [],
+        );
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS test_case_executions (
+                id TEXT PRIMARY KEY,
+                assessment_run_id TEXT NOT NULL,
+                test_case_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                execution_mode TEXT NOT NULL,
+                observed_evidence TEXT,
+                operator_notes TEXT,
+                related_finding_id TEXT,
+                executed_at TEXT,
+                duration_ms INTEGER NOT NULL DEFAULT 0
+            )",
+            [],
+        )?;
+        let _ = conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_executions_run ON test_case_executions(assessment_run_id)",
+            [],
+        );
+
         // Auto-seed findings into issues table if empty
         let issue_count: i64 = conn
             .query_row("SELECT COUNT(*) FROM issues", [], |r| r.get(0))
@@ -465,6 +605,101 @@ impl Database {
                     }
                 }
             }
+        }
+
+        // Auto-seed Taxonomy & Assessment Engine if empty
+        let tax_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM taxonomy_domains", [], |r| r.get(0))
+            .unwrap_or(0);
+        if tax_count == 0 {
+            // 1. Domains
+            let _ = conn.execute(
+                "INSERT INTO taxonomy_domains (id, title, description, version, order_index, icon_name) VALUES
+                 ('DOMAIN-WEB', 'Web Application Security', 'Assessment criteria covering client-side, server-side, and business logic security for web apps.', '1.0.0', 1, 'Globe'),
+                 ('DOMAIN-API', 'API Security', 'Security controls tailored for REST, GraphQL, gRPC, and WebSocket APIs.', '1.0.0', 2, 'Cpu'),
+                 ('DOMAIN-NET', 'Network & Infrastructure', 'Network architecture, firewalling, routing, protocol, and transport layer security.', '1.0.0', 3, 'Server'),
+                 ('DOMAIN-CLOUD', 'Cloud & Container Security', 'Cloud posture (AWS/Azure/GCP), IAM, Kubernetes, Docker, and secrets management.', '1.0.0', 4, 'Cloud')",
+                [],
+            );
+
+            // 2. Categories
+            let _ = conn.execute(
+                "INSERT INTO taxonomy_categories (id, domain_id, title, description, applicable_technologies_json, order_index) VALUES
+                 ('CAT-WEB-APP', 'DOMAIN-WEB', 'Core Web Application Assessment', 'Standard 16-phase comprehensive web vulnerability methodology (A1-A16)', '[\"HTML5\",\"Single Page Apps\",\"Multi Page Apps\",\"REST\"]', 1),
+                 ('CAT-API-SEC', 'DOMAIN-API', 'OWASP API Security Top 10 Assessment', 'API-specific vulnerability testing covering authentication, BOLA, BFLA, and mass assignment (B1-B10)', '[\"REST\",\"GraphQL\",\"JSON-RPC\",\"gRPC\"]', 2)",
+                [],
+            );
+
+            // 3. Test Cases (A1-A16 for Web, B1-B10 for API)
+            let test_cases = vec![
+                // A1 - Recon & Info Gathering
+                ("TC-WEB-A1-01", "CAT-WEB-APP", "DOMAIN-WEB", "A1: Information Gathering", "A1.1 Passive Fingerprinting", "Identify Server Technologies and Frameworks via Headers", "Determine web server daemon, reverse proxy, and backend framework via passive response header inspection.", Some("CWE-200"), Some("OWASP-WSTG-INFO-02"), "Low", "Safe", "1. Send a standard GET request to root.\n2. Inspect Server, X-Powered-By, and X-AspNet-Version response headers.", Some("nikto"), Some("nikto -h {TARGET_URL}"), "Server banner must not disclose minor/patch version or stack internals.", "Detailed versions or debug banners revealed (e.g. Apache/2.4.41 Ubuntu, Express).", "Remove technology headers via reverse proxy configuration or application middleware.", "[]"),
+                // A2 - Configuration & Deployment
+                ("TC-WEB-A2-01", "CAT-WEB-APP", "DOMAIN-WEB", "A2: Configuration & Deployment", "A2.1 Security Headers", "Enforce Strict-Transport-Security & Content-Security-Policy", "Verify the presence of mandatory HTTP security defense headers.", Some("CWE-693"), Some("OWASP-WSTG-CONF-07"), "Medium", "Safe", "1. Request HTTPS endpoints.\n2. Verify presence of HSTS with max-age >= 31536000 and CSP headers.", Some("curl"), Some("curl -I {TARGET_URL}"), "Strict-Transport-Security and Content-Security-Policy must be present and restrictive.", "Missing HSTS, missing CSP, or CSP with unsafe-inline/unsafe-eval.", "Configure HTTP response headers at the edge reverse proxy.", "[]"),
+                // A3 - Identity & Auth
+                ("TC-WEB-A3-01", "CAT-WEB-APP", "DOMAIN-WEB", "A3: Identity & Authentication", "A3.1 Brute Force Protection", "Authentication Rate Limiting and Lockout", "Verify account lockout or rate limiting on credential verification endpoints.", Some("CWE-307"), Some("OWASP-WSTG-ATHN-03"), "High", "Caution", "1. Attempt 10 failed login attempts in 30 seconds with invalid credentials.\n2. Observe response code, response body, and timing.", Some("ffuf"), Some("ffuf -w wordlist.txt -u {TARGET_URL}/login -X POST"), "HTTP 429 Too Many Requests or Captcha challenge returned after 5 failed attempts.", "Infinite failed login attempts permitted without throttling or captcha.", "Implement IP and account based rate limiting on authentication routes.", "[]"),
+                // A4 - Authorization
+                ("TC-WEB-A4-01", "CAT-WEB-APP", "DOMAIN-WEB", "A4: Authorization & Access Control", "A4.1 BOLA / IDOR", "Insecure Direct Object Reference on User Profile", "Verify that User A cannot view or edit User B profile by altering ID parameter.", Some("CWE-639"), Some("OWASP-WSTG-ATHZ-04"), "High", "Caution", "1. Authenticate as User A and request /api/users/101.\n2. Change identifier to /api/users/102 (User B).\n3. Check response payload.", None, None, "Server returns HTTP 403 Forbidden or 404 Not Found.", "HTTP 200 with User B confidential record returned.", "Enforce contextual authorization check validating object ownership on every data lookup.", "[]"),
+                // A5 - Cryptography
+                ("TC-WEB-A5-01", "CAT-WEB-APP", "DOMAIN-WEB", "A5: Cryptography", "A5.1 TLS Ciphers & Protocols", "Enforce Modern TLS Protocol and Robust Cipher Suites", "Ensure legacy SSLv3, TLS 1.0, and TLS 1.1 are disabled and weak ciphers rejected.", Some("CWE-326"), Some("OWASP-WSTG-CRYP-01"), "Medium", "Safe", "1. Probe TLS handshake using testssl or openssl.\n2. Ensure only TLS 1.2 and TLS 1.3 are negotiated.", Some("testssl"), Some("testssl.sh {TARGET_HOST}"), "Only modern TLS versions (>=1.2) supported with forward secrecy ciphers.", "Acceptance of RC4, DES, 3DES, or TLS 1.0/1.1 handshakes.", "Update TLS configuration in Nginx/Apache/Cloudflare to disable obsolete cipher suites.", "[]"),
+                // A6 - Input Validation & Injection
+                ("TC-WEB-A6-01", "CAT-WEB-APP", "DOMAIN-WEB", "A6: Input Validation & Injection", "A6.1 SQL Injection", "SQL Injection in Search and Filter Parameters", "Test input parameters for SQL syntax manipulation and union-based extraction.", Some("CWE-89"), Some("OWASP-WSTG-INPV-05"), "Critical", "Danger", "1. Inject test single quote ' and boolean payloads (' OR '1'='1).\n2. Inspect response for database errors or logic divergence.", Some("sqlmap"), Some("sqlmap -u \"{TARGET_URL}/search?q=test\" --batch"), "Parameter treated strictly as data in parameterized queries; no SQL errors.", "SQL syntax error messages or unfiltered boolean extraction.", "Use parameterized queries / prepared statements with ORM or database driver.", "[]"),
+                // A7 - Error Handling
+                ("TC-WEB-A7-01", "CAT-WEB-APP", "DOMAIN-WEB", "A7: Error Handling & Logging", "A7.1 Stack Trace Exposure", "Verbose Error Handling and Stack Trace Disclosure", "Ensure unhandled exceptions do not reveal server stack traces or source paths.", Some("CWE-209"), Some("OWASP-WSTG-ERRH-01"), "Low", "Safe", "1. Send malformed JSON or illegal character parameters.\n2. Verify that error response contains only generic message.", None, None, "Generic HTTP 400/500 error returned with error ID; no stack trace.", "Full stack trace, database query string, or internal file paths visible.", "Disable debug mode in production; implement global error handler.", "[]"),
+                // A8 - Session Management
+                ("TC-WEB-A8-01", "CAT-WEB-APP", "DOMAIN-WEB", "A8: Session Management", "A8.1 Cookie Security Attributes", "HttpOnly, Secure, and SameSite Flags on Session Cookies", "Verify session cookies possess all defense flags preventing XSS theft and CSRF.", Some("CWE-1004"), Some("OWASP-WSTG-SESS-02"), "Medium", "Safe", "1. Perform login.\n2. Inspect Set-Cookie header for session token.", None, None, "Cookie header has HttpOnly; Secure; SameSite=Lax (or Strict).", "Cookie lacks HttpOnly or Secure attribute.", "Set session cookie options with httpOnly: true, secure: true, sameSite: 'lax'.", "[]"),
+                // A9 - Business Logic
+                ("TC-WEB-A9-01", "CAT-WEB-APP", "DOMAIN-WEB", "A9: Business Logic Testing", "A9.1 Price / Quantity Manipulation", "Negative Quantity or Price Alteration in Checkout", "Verify that numeric parameters in shopping cart or payment flows cannot be manipulated.", Some("CWE-840"), Some("OWASP-WSTG-BUSL-01"), "High", "Caution", "1. Intercept checkout POST request.\n2. Modify quantity to -1 or price to 0.01.", None, None, "Server validates positive non-zero quantity and recomputes total from DB catalog.", "Negative total accepted or items checked out below catalog price.", "Recompute order totals strictly server-side using authoritative database values.", "[]"),
+                // A10 - Client-Side Security
+                ("TC-WEB-A10-01", "CAT-WEB-APP", "DOMAIN-WEB", "A10: Client-Side Security", "A10.1 DOM XSS", "DOM-Based Cross-Site Scripting via Location Hash", "Identify unsafe usage of innerHTML, document.write, or eval on URL fragments.", Some("CWE-79"), Some("OWASP-WSTG-CLNT-01"), "High", "Safe", "1. Navigate to target with hash payload #<img src=x onerror=alert(1)>.\n2. Verify browser execution and sink inspect.", None, None, "Input safely handled using textContent or sanitized with DOMPurify.", "Arbitrary JavaScript executes in client DOM context.", "Use safe DOM APIs (textContent) and apply DOMPurify to rich HTML sinks.", "[]"),
+                // B1 - API BOLA
+                ("TC-API-B1-01", "CAT-API-SEC", "DOMAIN-API", "B1: Broken Object Level Auth", "B1.1 Resource ID Manipulation", "Validate Tenant and Object Ownership across REST Resources", "Ensure API endpoints validate user ownership before returning entity payloads.", Some("CWE-639"), Some("API1:2023"), "High", "Caution", "1. Call GET /api/v1/orders/{order_id} using tokens for two different tenants.\n2. Verify cross-tenant access is rejected.", None, None, "HTTP 403 or 404 returned for objects not belonging to requesting user/tenant.", "Cross-tenant data returned in JSON response.", "Filter queries by authenticated user/tenant ID at the database query layer.", "[]"),
+                // B2 - API Broken Auth
+                ("TC-API-B2-01", "CAT-API-SEC", "DOMAIN-API", "B2: Broken Authentication", "B2.1 Token Validation & Expiry", "Validate JWT Signature Verification and Algorithm None Attack", "Verify JWT signature is strictly checked against known keys and algorithm 'none' is rejected.", Some("CWE-287"), Some("API2:2023"), "Critical", "Safe", "1. Submit request with JWT header modified to 'alg': 'none' and signature stripped.\n2. Submit request with expired token.", None, None, "API returns HTTP 401 Unauthorized for unsigned or expired tokens.", "API accepts alg:none or ignores expiration timestamp.", "Enforce strict algorithm allowlist in JWT verification library.", "[]"),
+                // B3 - API Object Property Level Auth
+                ("TC-API-B3-01", "CAT-API-SEC", "DOMAIN-API", "B3: Broken Object Property Auth", "B3.1 Mass Assignment", "Mass Assignment / Excessive Data Exposure in Profile Updates", "Test if administrative or sensitive fields (is_admin, role, balance) can be updated via JSON.", Some("CWE-915"), Some("API3:2023"), "High", "Caution", "1. Send PATCH /api/v1/users/me with payload {\"is_admin\": true, \"role\": \"superadmin\"}.\n2. Inspect response and subsequent permissions.", None, None, "Privileged fields ignored; only whitelisted fields updated.", "User account elevated to admin privileges.", "Use Data Transfer Objects (DTOs) with strict property binding allowlists.", "[]"),
+                // B4 - API Rate Limiting / Resource Consumption
+                ("TC-API-B4-01", "CAT-API-SEC", "DOMAIN-API", "B4: Unrestricted Resource Consumption", "B4.1 Pagination Limit Abuse", "Excessive Pagination Limits and Query Exhaustion", "Test if page limit parameters like ?limit=1000000 exhaust memory or trigger CPU spikes.", Some("CWE-770"), Some("API4:2023"), "Medium", "Safe", "1. Send request with limit=9999999.\n2. Observe response size and latency.", None, None, "API caps limit parameter to max threshold (e.g. max 100) and returns 400 if exceeded.", "Server attempts to serialize entire database table causing slowdown or OOM.", "Set hard upper bound on pagination page sizes (e.g. Math.min(limit, 100)).", "[]"),
+                // B5 - API BFLA
+                ("TC-API-B5-01", "CAT-API-SEC", "DOMAIN-API", "B5: Broken Function Level Auth", "B5.1 Administrative Endpoint Access", "Non-Privileged Access to Administrative API Operations", "Ensure standard users cannot invoke administrative API routes like DELETE /api/v1/users.", Some("CWE-285"), Some("API5:2023"), "High", "Caution", "1. Call administrative endpoints with regular user bearer token.", None, None, "HTTP 403 Forbidden returned.", "HTTP 200 OK returned and administrative action executed.", "Enforce role-based access control middleware on all administrative route prefixes.", "[]")
+            ];
+
+            for tc in test_cases {
+                let _ = conn.execute(
+                    "INSERT INTO test_case_definitions (
+                        id, category_id, domain_id, phase, subphase, title, description,
+                        cwe, owasp_id, severity_guidance, safety_level,
+                        manual_procedure, automated_tool_adapter, command_example,
+                        expected_secure_behavior, failure_indicators, remediation_guidance,
+                        references_json
+                    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+                    params![
+                        tc.0, tc.1, tc.2, tc.3, tc.4, tc.5, tc.6,
+                        tc.7, tc.8, tc.9, tc.10,
+                        tc.11, tc.12, tc.13,
+                        tc.14, tc.15, tc.16, tc.17
+                    ],
+                );
+            }
+
+            // 4. Default Assessment Templates
+            let now = chrono::Utc::now().to_rfc3339();
+            let web_tc_ids = serde_json::to_string(&vec![
+                "TC-WEB-A1-01", "TC-WEB-A2-01", "TC-WEB-A3-01", "TC-WEB-A4-01",
+                "TC-WEB-A5-01", "TC-WEB-A6-01", "TC-WEB-A7-01", "TC-WEB-A8-01",
+                "TC-WEB-A9-01", "TC-WEB-A10-01"
+            ]).unwrap_or_else(|_| "[]".into());
+
+            let api_tc_ids = serde_json::to_string(&vec![
+                "TC-API-B1-01", "TC-API-B2-01", "TC-API-B3-01", "TC-API-B4-01", "TC-API-B5-01"
+            ]).unwrap_or_else(|_| "[]".into());
+
+            let _ = conn.execute(
+                "INSERT INTO assessment_templates (id, category_id, name, description, version, is_builtin, test_case_ids_json, created_at, updated_at) VALUES
+                 ('tpl-web-baseline-v1', 'CAT-WEB-APP', 'Web Application Security Baseline', '10-point standard baseline testing covering headers, auth, injection, and session management.', '1.0.0', 1, ?1, ?2, ?2),
+                 ('tpl-api-owasp-v1', 'CAT-API-SEC', 'OWASP API Security Top 10 Core Test', 'Focused test suite verifying authorization, tokens, rate limits, and object security for APIs.', '1.0.0', 1, ?3, ?2, ?2)",
+                params![web_tc_ids, now, api_tc_ids],
+            );
         }
 
         Ok(Self {
@@ -2184,6 +2419,317 @@ impl Database {
             params![new_token, now],
         )?;
         Ok(new_token)
+    }
+
+    // =========================================================================
+    // Taxonomy & Assessment Engine Database Methods
+    // =========================================================================
+
+    pub fn get_taxonomy_domains(&self) -> Result<Vec<TaxonomyDomainRecord>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare("SELECT id, title, description, version, order_index, icon_name FROM taxonomy_domains ORDER BY order_index ASC")?;
+        let rows = stmt.query_map([], |row| {
+            Ok(TaxonomyDomainRecord {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                description: row.get(2)?,
+                version: row.get(3)?,
+                order_index: row.get(4)?,
+                icon_name: row.get(5)?,
+            })
+        })?;
+        let mut list = Vec::new();
+        for r in rows {
+            list.push(r?);
+        }
+        Ok(list)
+    }
+
+    pub fn insert_taxonomy_domain(&self, domain: &TaxonomyDomainRecord) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO taxonomy_domains (id, title, description, version, order_index, icon_name)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![domain.id, domain.title, domain.description, domain.version, domain.order_index, domain.icon_name],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_taxonomy_categories(&self, domain_id: Option<String>) -> Result<Vec<TaxonomyCategoryRecord>> {
+        let conn = self.conn.lock().unwrap();
+        let mut list = Vec::new();
+        if let Some(did) = domain_id {
+            let mut stmt = conn.prepare("SELECT id, domain_id, title, description, applicable_technologies_json, order_index FROM taxonomy_categories WHERE domain_id = ?1 ORDER BY order_index ASC")?;
+            let rows = stmt.query_map(params![did], |row| {
+                Ok(TaxonomyCategoryRecord {
+                    id: row.get(0)?,
+                    domain_id: row.get(1)?,
+                    title: row.get(2)?,
+                    description: row.get(3)?,
+                    applicable_technologies_json: row.get(4)?,
+                    order_index: row.get(5)?,
+                })
+            })?;
+            for r in rows {
+                list.push(r?);
+            }
+        } else {
+            let mut stmt = conn.prepare("SELECT id, domain_id, title, description, applicable_technologies_json, order_index FROM taxonomy_categories ORDER BY domain_id ASC, order_index ASC")?;
+            let rows = stmt.query_map([], |row| {
+                Ok(TaxonomyCategoryRecord {
+                    id: row.get(0)?,
+                    domain_id: row.get(1)?,
+                    title: row.get(2)?,
+                    description: row.get(3)?,
+                    applicable_technologies_json: row.get(4)?,
+                    order_index: row.get(5)?,
+                })
+            })?;
+            for r in rows {
+                list.push(r?);
+            }
+        }
+        Ok(list)
+    }
+
+    pub fn insert_taxonomy_category(&self, cat: &TaxonomyCategoryRecord) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO taxonomy_categories (id, domain_id, title, description, applicable_technologies_json, order_index)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![cat.id, cat.domain_id, cat.title, cat.description, cat.applicable_technologies_json, cat.order_index],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_test_cases(&self, category_id: Option<String>, domain_id: Option<String>) -> Result<Vec<TestCaseDefinition>> {
+        let conn = self.conn.lock().unwrap();
+        let mut list = Vec::new();
+        match (category_id, domain_id) {
+            (Some(cid), _) => {
+                let mut stmt = conn.prepare("SELECT id, category_id, domain_id, phase, subphase, title, description, objective, cwe, owasp_id, severity_guidance, safety_level, manual_procedure, automated_tool_adapter, command_example, expected_secure_behavior, failure_indicators, pass_criteria, fail_criteria, inconclusive_criteria, not_applicable_criteria, evidence_requirements, remediation_guidance, safe_retest_procedure, references_json, applicable_tech_json, version FROM test_case_definitions WHERE category_id = ?1 ORDER BY phase ASC, id ASC")?;
+                let rows = stmt.query_map(params![cid], |r| Self::map_test_case(r))?;
+                for r in rows { list.push(r?); }
+            }
+            (None, Some(did)) => {
+                let mut stmt = conn.prepare("SELECT id, category_id, domain_id, phase, subphase, title, description, objective, cwe, owasp_id, severity_guidance, safety_level, manual_procedure, automated_tool_adapter, command_example, expected_secure_behavior, failure_indicators, pass_criteria, fail_criteria, inconclusive_criteria, not_applicable_criteria, evidence_requirements, remediation_guidance, safe_retest_procedure, references_json, applicable_tech_json, version FROM test_case_definitions WHERE domain_id = ?1 ORDER BY category_id ASC, phase ASC, id ASC")?;
+                let rows = stmt.query_map(params![did], |r| Self::map_test_case(r))?;
+                for r in rows { list.push(r?); }
+            }
+            (None, None) => {
+                let mut stmt = conn.prepare("SELECT id, category_id, domain_id, phase, subphase, title, description, objective, cwe, owasp_id, severity_guidance, safety_level, manual_procedure, automated_tool_adapter, command_example, expected_secure_behavior, failure_indicators, pass_criteria, fail_criteria, inconclusive_criteria, not_applicable_criteria, evidence_requirements, remediation_guidance, safe_retest_procedure, references_json, applicable_tech_json, version FROM test_case_definitions ORDER BY domain_id ASC, category_id ASC, phase ASC, id ASC")?;
+                let rows = stmt.query_map([], |r| Self::map_test_case(r))?;
+                for r in rows { list.push(r?); }
+            }
+        };
+        Ok(list)
+    }
+
+    fn map_test_case(r: &rusqlite::Row<'_>) -> Result<TestCaseDefinition> {
+        Ok(TestCaseDefinition {
+            id: r.get(0)?,
+            category_id: r.get(1)?,
+            domain_id: r.get(2)?,
+            phase: r.get(3)?,
+            subphase: r.get(4)?,
+            title: r.get(5)?,
+            description: r.get(6)?,
+            objective: r.get(7)?,
+            cwe: r.get(8)?,
+            owasp_id: r.get(9)?,
+            severity_guidance: r.get(10)?,
+            safety_level: r.get(11)?,
+            manual_procedure: r.get(12)?,
+            automated_tool_adapter: r.get(13)?,
+            command_example: r.get(14)?,
+            expected_secure_behavior: r.get(15)?,
+            failure_indicators: r.get(16)?,
+            pass_criteria: r.get(17)?,
+            fail_criteria: r.get(18)?,
+            inconclusive_criteria: r.get(19)?,
+            not_applicable_criteria: r.get(20)?,
+            evidence_requirements: r.get(21)?,
+            remediation_guidance: r.get(22)?,
+            safe_retest_procedure: r.get(23)?,
+            references_json: r.get(24)?,
+            applicable_tech_json: r.get(25)?,
+            version: r.get(26)?,
+        })
+    }
+
+    pub fn insert_test_case(&self, tc: &TestCaseDefinition) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO test_case_definitions (
+                id, category_id, domain_id, phase, subphase, title, description, objective,
+                cwe, owasp_id, severity_guidance, safety_level, manual_procedure,
+                automated_tool_adapter, command_example, expected_secure_behavior, failure_indicators,
+                pass_criteria, fail_criteria, inconclusive_criteria, not_applicable_criteria,
+                evidence_requirements, remediation_guidance, safe_retest_procedure,
+                references_json, applicable_tech_json, version
+             ) VALUES (
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8,
+                ?9, ?10, ?11, ?12, ?13,
+                ?14, ?15, ?16, ?17,
+                ?18, ?19, ?20, ?21,
+                ?22, ?23, ?24,
+                ?25, ?26, ?27
+             )",
+            params![
+                tc.id, tc.category_id, tc.domain_id, tc.phase, tc.subphase, tc.title, tc.description, tc.objective,
+                tc.cwe, tc.owasp_id, tc.severity_guidance, tc.safety_level, tc.manual_procedure,
+                tc.automated_tool_adapter, tc.command_example, tc.expected_secure_behavior, tc.failure_indicators,
+                tc.pass_criteria, tc.fail_criteria, tc.inconclusive_criteria, tc.not_applicable_criteria,
+                tc.evidence_requirements, tc.remediation_guidance, tc.safe_retest_procedure,
+                tc.references_json, tc.applicable_tech_json, tc.version
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_assessment_templates(&self, category_id: Option<String>) -> Result<Vec<AssessmentTemplateRecord>> {
+        let conn = self.conn.lock().unwrap();
+        let mut list = Vec::new();
+        if let Some(cid) = category_id {
+            let mut stmt = conn.prepare("SELECT id, name, domain_id, category_id, description, version, is_builtin, test_case_ids_json, created_at, updated_at FROM assessment_templates WHERE category_id = ?1 ORDER BY name ASC")?;
+            let rows = stmt.query_map(params![cid], |r| {
+                Ok(AssessmentTemplateRecord {
+                    id: r.get(0)?,
+                    name: r.get(1)?,
+                    domain_id: r.get(2)?,
+                    category_id: r.get(3)?,
+                    description: r.get(4)?,
+                    version: r.get(5)?,
+                    is_builtin: r.get::<_, i64>(6)? != 0,
+                    test_case_ids_json: r.get(7)?,
+                    created_at: r.get(8)?,
+                    updated_at: r.get(9)?,
+                })
+            })?;
+            for r in rows { list.push(r?); }
+        } else {
+            let mut stmt = conn.prepare("SELECT id, name, domain_id, category_id, description, version, is_builtin, test_case_ids_json, created_at, updated_at FROM assessment_templates ORDER BY category_id ASC, name ASC")?;
+            let rows = stmt.query_map([], |r| {
+                Ok(AssessmentTemplateRecord {
+                    id: r.get(0)?,
+                    name: r.get(1)?,
+                    domain_id: r.get(2)?,
+                    category_id: r.get(3)?,
+                    description: r.get(4)?,
+                    version: r.get(5)?,
+                    is_builtin: r.get::<_, i64>(6)? != 0,
+                    test_case_ids_json: r.get(7)?,
+                    created_at: r.get(8)?,
+                    updated_at: r.get(9)?,
+                })
+            })?;
+            for r in rows { list.push(r?); }
+        }
+        Ok(list)
+    }
+
+    pub fn insert_assessment_template(&self, tpl: &AssessmentTemplateRecord) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO assessment_templates (
+                id, name, domain_id, category_id, description, version, is_builtin, test_case_ids_json, created_at, updated_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                tpl.id, tpl.name, tpl.domain_id, tpl.category_id, tpl.description, tpl.version,
+                if tpl.is_builtin { 1 } else { 0 }, tpl.test_case_ids_json, tpl.created_at, tpl.updated_at
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_assessment_runs(&self, target_id: Option<String>) -> Result<Vec<AssessmentRunRecord>> {
+        let conn = self.conn.lock().unwrap();
+        let mut list = Vec::new();
+        if let Some(tid) = target_id {
+            let mut stmt = conn.prepare("SELECT id, title, target_id, target_url, domain_id, category_id, template_id, template_version, status, started_at, completed_at, total_tests, passed_tests, failed_tests, inconclusive_tests, not_applicable_tests, notes FROM assessment_runs WHERE target_id = ?1 ORDER BY started_at DESC")?;
+            let rows = stmt.query_map(params![tid], |r| Self::map_assessment_run(r))?;
+            for r in rows { list.push(r?); }
+        } else {
+            let mut stmt = conn.prepare("SELECT id, title, target_id, target_url, domain_id, category_id, template_id, template_version, status, started_at, completed_at, total_tests, passed_tests, failed_tests, inconclusive_tests, not_applicable_tests, notes FROM assessment_runs ORDER BY started_at DESC")?;
+            let rows = stmt.query_map([], |r| Self::map_assessment_run(r))?;
+            for r in rows { list.push(r?); }
+        }
+        Ok(list)
+    }
+
+    fn map_assessment_run(r: &rusqlite::Row<'_>) -> Result<AssessmentRunRecord> {
+        Ok(AssessmentRunRecord {
+            id: r.get(0)?,
+            title: r.get(1)?,
+            target_id: r.get(2)?,
+            target_url: r.get(3)?,
+            domain_id: r.get(4)?,
+            category_id: r.get(5)?,
+            template_id: r.get(6)?,
+            template_version: r.get(7)?,
+            status: r.get(8)?,
+            started_at: r.get(9)?,
+            completed_at: r.get(10)?,
+            total_tests: r.get::<_, i64>(11)? as usize,
+            passed_tests: r.get::<_, i64>(12)? as usize,
+            failed_tests: r.get::<_, i64>(13)? as usize,
+            inconclusive_tests: r.get::<_, i64>(14)? as usize,
+            not_applicable_tests: r.get::<_, i64>(15)? as usize,
+            notes: r.get(16)?,
+        })
+    }
+
+    pub fn insert_assessment_run(&self, run: &AssessmentRunRecord) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO assessment_runs (
+                id, title, target_id, target_url, domain_id, category_id, template_id, template_version,
+                status, started_at, completed_at, total_tests, passed_tests, failed_tests, inconclusive_tests, not_applicable_tests, notes
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+            params![
+                run.id, run.title, run.target_id, run.target_url, run.domain_id, run.category_id,
+                run.template_id, run.template_version, run.status, run.started_at, run.completed_at,
+                run.total_tests as i64, run.passed_tests as i64, run.failed_tests as i64,
+                run.inconclusive_tests as i64, run.not_applicable_tests as i64, run.notes
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_test_executions(&self, assessment_run_id: &str) -> Result<Vec<TestCaseExecutionRecord>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare("SELECT id, assessment_run_id, test_case_id, status, execution_mode, observed_evidence, operator_notes, related_finding_id, executed_at, duration_ms FROM test_case_executions WHERE assessment_run_id = ?1 ORDER BY id ASC")?;
+        let rows = stmt.query_map(params![assessment_run_id], |r| {
+            Ok(TestCaseExecutionRecord {
+                id: r.get(0)?,
+                assessment_run_id: r.get(1)?,
+                test_case_id: r.get(2)?,
+                status: r.get(3)?,
+                execution_mode: r.get(4)?,
+                observed_evidence: r.get(5)?,
+                operator_notes: r.get(6)?,
+                related_finding_id: r.get(7)?,
+                executed_at: r.get(8)?,
+                duration_ms: r.get::<_, i64>(9)? as u64,
+            })
+        })?;
+        let mut list = Vec::new();
+        for r in rows { list.push(r?); }
+        Ok(list)
+    }
+
+    pub fn update_test_execution(&self, exec: &TestCaseExecutionRecord) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO test_case_executions (
+                id, assessment_run_id, test_case_id, status, execution_mode, observed_evidence, operator_notes, related_finding_id, executed_at, duration_ms
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                exec.id, exec.assessment_run_id, exec.test_case_id, exec.status, exec.execution_mode,
+                exec.observed_evidence, exec.operator_notes, exec.related_finding_id, exec.executed_at, exec.duration_ms as i64
+            ],
+        )?;
+        Ok(())
     }
 }
 

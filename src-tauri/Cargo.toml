@@ -1,6 +1,6 @@
 [package]
 name = "appsec-nexus"
-version = "0.1.0"
+version = "0.2.0"
 description = "AppSec Nexus - Cybersecurity & Web Pentesting Platform"
 authors = ["AppSec Team"]
 edition = "2024"

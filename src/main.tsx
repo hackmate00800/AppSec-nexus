@@ -5,6 +5,7 @@ import { ThemeProvider } from "./theme/ThemeProvider";
 import { ToastProvider } from "./components/ui/Toast";
 import { AiTaskProvider } from "./context/AiTaskContext";
 import { WorkspaceProvider } from "./context/WorkspaceContext";
+import { ScanProgressProvider } from "./context/ScanProgressContext";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
@@ -12,7 +13,9 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       <ToastProvider>
         <AiTaskProvider>
           <WorkspaceProvider>
-            <App />
+            <ScanProgressProvider>
+              <App />
+            </ScanProgressProvider>
           </WorkspaceProvider>
         </AiTaskProvider>
       </ToastProvider>

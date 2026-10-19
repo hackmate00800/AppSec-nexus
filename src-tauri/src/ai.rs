@@ -1,5 +1,5 @@
 use crate::db::Database;
-use crate::models::{AiChatMessageRecord, AiTask, AiTaskStatus};
+use crate::models::{AiChatMessageRecord, AiTask, AiTaskStatus, DeepSeekProviderStatus};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -8,8 +8,331 @@ use tauri::Emitter;
 use tokio::sync::{watch, RwLock, Semaphore};
 use uuid::Uuid;
 
+pub struct DeepSeekClient {
+    client: reqwest::Client,
+}
+
+impl DeepSeekClient {
+    pub fn new() -> Self {
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(Self::timeout_seconds()))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
+        Self { client }
+    }
+
+    fn read_env_val(key: &str) -> Option<String> {
+        if let Ok(val) = std::env::var(key) {
+            let trimmed = val.trim().to_string();
+            if !trimmed.is_empty() {
+                return Some(trimmed);
+            }
+        }
+
+        // Fallback: search for .env in current directory or parent directory
+        for path in &[".env", "../.env", "src-tauri/.env"] {
+            if let Ok(content) = std::fs::read_to_string(path) {
+                for line in content.lines() {
+                    let line = line.trim();
+                    if line.starts_with('#') || line.is_empty() {
+                        continue;
+                    }
+                    if let Some((k, v)) = line.split_once('=') {
+                        if k.trim() == key {
+                            let mut v = v.trim().to_string();
+                            if (v.starts_with('"') && v.ends_with('"')) || (v.starts_with('\'') && v.ends_with('\'')) {
+                                v = v[1..v.len() - 1].to_string();
+                            }
+                            if !v.is_empty() {
+                                return Some(v);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    pub fn is_enabled() -> bool {
+        match Self::read_env_val("DEEPSEEK_ENABLED") {
+            Some(val) => {
+                let v = val.trim().to_lowercase();
+                v != "0" && v != "false" && v != "no"
+            }
+            None => true,
+        }
+    }
+
+    pub fn get_api_key() -> Option<String> {
+        Self::read_env_val("DEEPSEEK_API_KEY")
+    }
+
+    pub fn get_base_url() -> String {
+        Self::read_env_val("DEEPSEEK_BASE_URL")
+            .unwrap_or_else(|| "https://api.deepseek.com".to_string())
+    }
+
+    pub fn get_configured_model() -> String {
+        Self::read_env_val("DEEPSEEK_MODEL")
+            .unwrap_or_else(|| "deepseek-chat".to_string())
+    }
+
+    pub fn timeout_seconds() -> u64 {
+        Self::read_env_val("DEEPSEEK_TIMEOUT_SECONDS")
+            .and_then(|t| t.trim().parse::<u64>().ok())
+            .filter(|&t| t >= 5 && t <= 600)
+            .unwrap_or(120)
+    }
+
+    pub fn max_retries() -> u32 {
+        Self::read_env_val("DEEPSEEK_MAX_RETRIES")
+            .and_then(|r| r.trim().parse::<u32>().ok())
+            .filter(|&r| r <= 5)
+            .unwrap_or(2)
+    }
+
+    pub async fn check_status(&self) -> DeepSeekProviderStatus {
+        let api_key = match Self::get_api_key() {
+            Some(k) => k,
+            None => {
+                return DeepSeekProviderStatus {
+                    is_configured: false,
+                    endpoint: Self::get_base_url(),
+                    model: Self::get_configured_model(),
+                    status: "not_configured".to_string(),
+                    error_message: Some("DEEPSEEK_API_KEY environment variable is not configured.".to_string()),
+                };
+            }
+        };
+
+        if !Self::is_enabled() {
+            return DeepSeekProviderStatus {
+                is_configured: false,
+                endpoint: Self::get_base_url(),
+                model: Self::get_configured_model(),
+                status: "disabled".to_string(),
+                error_message: Some("DeepSeek provider is disabled by DEEPSEEK_ENABLED configuration.".to_string()),
+            };
+        }
+
+        let base_url = Self::get_base_url();
+        let model = Self::get_configured_model();
+
+        // Lightweight connection probe using GET /models
+        let models_url = format!("{}/models", base_url.trim_end_matches('/'));
+        let res = self
+            .client
+            .get(&models_url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .header("Accept", "application/json")
+            .send()
+            .await;
+
+        match res {
+            Ok(resp) => {
+                let status = resp.status();
+                if status.is_success() {
+                    DeepSeekProviderStatus {
+                        is_configured: true,
+                        endpoint: base_url,
+                        model,
+                        status: "available".to_string(),
+                        error_message: None,
+                    }
+                } else if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
+                    DeepSeekProviderStatus {
+                        is_configured: true,
+                        endpoint: base_url,
+                        model,
+                        status: "auth_failed".to_string(),
+                        error_message: Some("Authentication failed. Please verify that DEEPSEEK_API_KEY is valid and active.".to_string()),
+                    }
+                } else if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                    DeepSeekProviderStatus {
+                        is_configured: true,
+                        endpoint: base_url,
+                        model,
+                        status: "rate_limited".to_string(),
+                        error_message: Some("DeepSeek API rate limit reached. Please wait before retrying.".to_string()),
+                    }
+                } else if status == reqwest::StatusCode::PAYMENT_REQUIRED {
+                    DeepSeekProviderStatus {
+                        is_configured: true,
+                        endpoint: base_url,
+                        model,
+                        status: "quota_exceeded".to_string(),
+                        error_message: Some("DeepSeek account balance or quota exceeded. Please check billing in DeepSeek console.".to_string()),
+                    }
+                } else {
+                    DeepSeekProviderStatus {
+                        is_configured: true,
+                        endpoint: base_url,
+                        model,
+                        status: "configured".to_string(),
+                        error_message: Some(format!("DeepSeek API returned HTTP {}", status)),
+                    }
+                }
+            }
+            Err(e) => {
+                DeepSeekProviderStatus {
+                    is_configured: true,
+                    endpoint: base_url,
+                    model,
+                    status: "temporarily_unavailable".to_string(),
+                    error_message: Some(format!("Could not connect to DeepSeek API endpoint: {}", e)),
+                }
+            }
+        }
+    }
+
+    pub async fn chat(
+        &self,
+        model: &str,
+        system_instruction: Option<&str>,
+        history: Vec<ChatMessage>,
+    ) -> Result<String, String> {
+        let api_key = Self::get_api_key().ok_or_else(|| {
+            "DeepSeek API key is not configured. Set DEEPSEEK_API_KEY in your environment or .env file.".to_string()
+        })?;
+
+        if !Self::is_enabled() {
+            return Err("DeepSeek provider is currently disabled via DEEPSEEK_ENABLED.".to_string());
+        }
+
+        let base_url = Self::get_base_url();
+        let target_model = if model.is_empty() || model == "deepseek" || model == "deepseek-api" || model == "cloud" {
+            Self::get_configured_model()
+        } else {
+            model.to_string()
+        };
+
+        // Construct standard messages array
+        let mut messages = Vec::new();
+        let system_content = AIMentorPolicy::build_system_instruction(system_instruction, None);
+        messages.push(serde_json::json!({
+            "role": "system",
+            "content": system_content
+        }));
+
+        let filtered_history: Vec<ChatMessage> = history
+            .into_iter()
+            .filter(|msg| {
+                let trimmed = msg.content.trim();
+                !trimmed.is_empty()
+                    && !trimmed.starts_with("⚠️ **Local AI Engine Offline")
+                    && !trimmed.starts_with("Could not reach Ollama")
+                    && !trimmed.starts_with("⚠️ **DeepSeek API")
+                    && !trimmed.starts_with("ℹ️ **Ollama AI Engine is currently turned OFF")
+            })
+            .collect();
+
+        for msg in filtered_history {
+            let role = if msg.role == "assistant" || msg.role == "system" {
+                msg.role
+            } else {
+                "user".to_string()
+            };
+            messages.push(serde_json::json!({
+                "role": role,
+                "content": msg.content
+            }));
+        }
+
+        if messages.len() <= 1 {
+            return Ok("Hello! How can I assist you with cybersecurity, vulnerability analysis, or defensive remediation today?".to_string());
+        }
+
+        let endpoint = format!("{}/chat/completions", base_url.trim_end_matches('/'));
+        let req_body = serde_json::json!({
+            "model": target_model,
+            "messages": messages,
+            "stream": false,
+            "temperature": 0.3
+        });
+
+        let max_retries = Self::max_retries();
+        let mut attempt = 0;
+
+        loop {
+            attempt += 1;
+            let res = self
+                .client
+                .post(&endpoint)
+                .header("Authorization", format!("Bearer {}", api_key))
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .json(&req_body)
+                .send()
+                .await;
+
+            match res {
+                Ok(resp) => {
+                    let status = resp.status();
+                    if status.is_success() {
+                        let body_json: serde_json::Value = resp
+                            .json()
+                            .await
+                            .map_err(|e| format!("Failed to parse DeepSeek completion response JSON: {}", e))?;
+
+                        let content = body_json["choices"][0]["message"]["content"]
+                            .as_str()
+                            .ok_or_else(|| "DeepSeek response did not contain valid text content in choices[0].message.content".to_string())?;
+
+                        return Ok(content.to_string());
+                    }
+
+                    // Handle specific HTTP error categories accurately
+                    if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
+                        return Err("DeepSeek Authentication Failed (HTTP 401/403): Invalid or revoked DEEPSEEK_API_KEY. Please verify your API key in environment variables.".to_string());
+                    }
+
+                    if status == reqwest::StatusCode::PAYMENT_REQUIRED {
+                        return Err("DeepSeek Quota Exceeded (HTTP 402): Your DeepSeek account has insufficient balance or reached its billing quota. Please check your account on platform.deepseek.com.".to_string());
+                    }
+
+                    if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                        if attempt <= max_retries {
+                            tokio::time::sleep(Duration::from_millis(1500 * attempt as u64)).await;
+                            continue;
+                        }
+                        return Err("DeepSeek Rate Limited (HTTP 429): You have exceeded the API request rate limit. Please wait a moment before trying again.".to_string());
+                    }
+
+                    if status == reqwest::StatusCode::NOT_FOUND {
+                        return Err(format!(
+                            "DeepSeek Model Not Found (HTTP 404): The requested model '{}' is not available or invalid. Check DEEPSEEK_MODEL configuration.",
+                            target_model
+                        ));
+                    }
+
+                    // Transient server errors (500, 502, 503, 504) can be retried
+                    if status.is_server_error() && attempt <= max_retries {
+                        tokio::time::sleep(Duration::from_millis(1000 * attempt as u64)).await;
+                        continue;
+                    }
+
+                    let err_text = resp.text().await.unwrap_or_default();
+                    return Err(format!("DeepSeek API returned HTTP error {}: {}", status, err_text));
+                }
+                Err(err) => {
+                    if (err.is_timeout() || err.is_connect()) && attempt <= max_retries {
+                        tokio::time::sleep(Duration::from_millis(1000 * attempt as u64)).await;
+                        continue;
+                    }
+                    if err.is_timeout() {
+                        return Err("DeepSeek Request Timeout: The remote API did not respond within the configured timeout window. You can adjust DEEPSEEK_TIMEOUT_SECONDS.".to_string());
+                    }
+                    return Err(format!("DeepSeek Connection Error: Unable to reach {}: {}", endpoint, err));
+                }
+            }
+        }
+    }
+}
+
 pub struct AiMentor {
     base_url: String,
+    deepseek: DeepSeekClient,
 }
 
 
@@ -151,7 +474,21 @@ impl AiMentor {
     pub fn new() -> Self {
         Self {
             base_url: "http://127.0.0.1:11434".to_string(),
+            deepseek: DeepSeekClient::new(),
         }
+    }
+
+    pub async fn check_deepseek_status(&self) -> DeepSeekProviderStatus {
+        self.deepseek.check_status().await
+    }
+
+    pub fn is_deepseek_model(model: &str) -> bool {
+        let m = model.trim().to_lowercase();
+        m == "deepseek"
+            || m == "deepseek-api"
+            || m == "deepseek-cloud"
+            || m.starts_with("deepseek-")
+            || m == "cloud"
     }
 
     pub async fn check_status(&self) -> (bool, Vec<String>) {
@@ -445,6 +782,11 @@ impl AiMentor {
         system_instruction: Option<&str>,
         history: Vec<ChatMessage>,
     ) -> Result<String, String> {
+        // Explicit provider routing: if DeepSeek model is requested, route to DeepSeek API client
+        if Self::is_deepseek_model(model) {
+            return self.deepseek.chat(model, system_instruction, history).await;
+        }
+
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(300))
             .build()

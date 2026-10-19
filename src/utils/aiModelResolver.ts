@@ -42,6 +42,7 @@ export function isQuickCandidate(modelName: string): boolean {
     lower.includes("1.5b") ||
     lower.includes("2b") ||
     lower.includes("3b") ||
+    lower.includes("4b") ||
     lower.includes("small") ||
     lower.includes("fast") ||
     lower.includes("tiny")
@@ -55,6 +56,7 @@ export function isDeepCandidate(modelName: string): boolean {
     lower.includes("7b") ||
     lower.includes("14b") ||
     lower.includes("appsec-teacher-8b") ||
+    lower.includes("cyberqwen") ||
     lower.includes("deep") ||
     lower.includes("large")
   );
@@ -83,7 +85,7 @@ export function resolveModelSlots(installedModels: string[]): {
     storedQuick = localStorage.getItem(QUICK_STORAGE_KEY) || "";
     storedDeep = localStorage.getItem(DEEP_STORAGE_KEY) || "";
     const r = localStorage.getItem(ACTIVE_ROLE_STORAGE_KEY);
-    if (r === "quick" || r === "deep") {
+    if (r === "quick" || r === "deep" || r === "deepseek") {
       storedRole = r;
     }
   } catch {

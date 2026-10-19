@@ -218,6 +218,15 @@ pub struct FeedUpdateResult {
     pub message: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeepSeekProviderStatus {
+    pub is_configured: bool,
+    pub endpoint: String,
+    pub model: String,
+    pub status: String, // "configured", "not_configured", "available", "auth_failed", "rate_limited", "quota_exceeded", "temporarily_unavailable"
+    pub error_message: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum AiTaskStatus {
     Queued,
@@ -482,3 +491,108 @@ pub struct FindingDetectionTrace {
     pub limitations: Vec<String>,
     pub scan_events: Vec<ScanEvent>,
 }
+
+// =========================================================================
+// Category-Specific Taxonomy Engine & Assessment Execution Models
+// =========================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaxonomyDomainRecord {
+    pub id: String,
+    pub title: String,
+    pub description: String,
+    pub version: String,
+    pub order_index: u32,
+    pub icon_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaxonomyCategoryRecord {
+    pub id: String,
+    pub domain_id: String,
+    pub title: String,
+    pub description: String,
+    pub applicable_technologies_json: String,
+    pub order_index: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TestCaseDefinition {
+    pub id: String,
+    pub category_id: String,
+    pub domain_id: String,
+    pub phase: String,
+    pub subphase: String,
+    pub title: String,
+    pub description: String,
+    pub objective: String,
+    pub cwe: Option<String>,
+    pub owasp_id: Option<String>,
+    pub severity_guidance: String, // "Critical", "High", "Medium", "Low", "Info"
+    pub safety_level: String, // "NonDestructive", "ActiveSafe", "IntrusiveRequiresApproval"
+    pub manual_procedure: String,
+    pub automated_tool_adapter: Option<String>,
+    pub command_example: Option<String>,
+    pub expected_secure_behavior: String,
+    pub failure_indicators: String,
+    pub pass_criteria: String,
+    pub fail_criteria: String,
+    pub inconclusive_criteria: String,
+    pub not_applicable_criteria: String,
+    pub evidence_requirements: String,
+    pub remediation_guidance: String,
+    pub safe_retest_procedure: String,
+    pub references_json: String,
+    pub applicable_tech_json: String,
+    pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AssessmentTemplateRecord {
+    pub id: String,
+    pub name: String,
+    pub domain_id: String,
+    pub category_id: String,
+    pub description: String,
+    pub version: String,
+    pub is_builtin: bool,
+    pub test_case_ids_json: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AssessmentRunRecord {
+    pub id: String,
+    pub title: String,
+    pub target_id: String,
+    pub target_url: String,
+    pub domain_id: String,
+    pub category_id: String,
+    pub template_id: String,
+    pub template_version: String,
+    pub status: String, // "Pending", "Running", "Completed", "Cancelled"
+    pub started_at: String,
+    pub completed_at: Option<String>,
+    pub total_tests: usize,
+    pub passed_tests: usize,
+    pub failed_tests: usize,
+    pub inconclusive_tests: usize,
+    pub not_applicable_tests: usize,
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TestCaseExecutionRecord {
+    pub id: String,
+    pub assessment_run_id: String,
+    pub test_case_id: String,
+    pub status: String, // "NotStarted", "Passed", "Failed", "Inconclusive", "NotApplicable", "Skipped"
+    pub execution_mode: String, // "Manual", "Automated", "ToolAssisted"
+    pub observed_evidence: Option<String>,
+    pub operator_notes: Option<String>,
+    pub related_finding_id: Option<String>,
+    pub executed_at: Option<String>,
+    pub duration_ms: u64,
+}
+

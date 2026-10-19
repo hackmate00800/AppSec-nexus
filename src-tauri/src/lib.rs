@@ -23,10 +23,11 @@ use ai::AiMentor;
 use db::Database;
 use feeds::ThreatFeedManager;
 use models::{
-    AuditLogRecord, DiscoveredEndpoint, FeedUpdateResult, Finding, FindingDetectionTrace,
-    FindingSeverity, FindingStatus, FindingUpdatePayload, GeneratedReport, IssueCreatePayload,
-    IssueRecord, IssueUpdatePayload, PluginInfo, ReportGenerateParams, ScanEvent, ScopeConfig,
-    Target, ToolInfo, UserRole,
+    AssessmentRunRecord, AssessmentTemplateRecord, AuditLogRecord, DiscoveredEndpoint,
+    FeedUpdateResult, Finding, FindingDetectionTrace, FindingSeverity, FindingStatus,
+    FindingUpdatePayload, GeneratedReport, IssueCreatePayload, IssueRecord, IssueUpdatePayload,
+    PluginInfo, ReportGenerateParams, ScanEvent, ScopeConfig, Target, TaxonomyCategoryRecord,
+    TaxonomyDomainRecord, TestCaseDefinition, TestCaseExecutionRecord, ToolInfo, UserRole,
 };
 use plugins::PluginManager;
 use scanners::BaselineScanner;
@@ -438,6 +439,11 @@ fn get_findings(state: State<'_, AppState>) -> Result<Vec<Finding>, String> {
 #[tauri::command]
 async fn get_ai_status(state: State<'_, AppState>) -> Result<(bool, Vec<String>), String> {
     Ok(state.ai_mentor.check_status().await)
+}
+
+#[tauri::command]
+async fn get_deepseek_status(state: State<'_, AppState>) -> Result<models::DeepSeekProviderStatus, String> {
+    Ok(state.ai_mentor.check_deepseek_status().await)
 }
 
 #[tauri::command]
@@ -1479,6 +1485,195 @@ fn import_burp_findings_json(
     Ok(count)
 }
 
+// =========================================================================
+// Taxonomy Engine & Assessment Execution Tauri Commands
+// =========================================================================
+
+#[tauri::command]
+fn get_taxonomy_domains(state: State<'_, AppState>) -> Result<Vec<TaxonomyDomainRecord>, String> {
+    state.db.get_taxonomy_domains().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_taxonomy_categories(
+    state: State<'_, AppState>,
+    domain_id: Option<String>,
+) -> Result<Vec<TaxonomyCategoryRecord>, String> {
+    state.db.get_taxonomy_categories(domain_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_test_cases(
+    state: State<'_, AppState>,
+    category_id: Option<String>,
+    domain_id: Option<String>,
+) -> Result<Vec<TestCaseDefinition>, String> {
+    state.db.get_test_cases(category_id, domain_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_assessment_templates(
+    state: State<'_, AppState>,
+    category_id: Option<String>,
+) -> Result<Vec<AssessmentTemplateRecord>, String> {
+    state.db.get_assessment_templates(category_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_assessment_runs(
+    state: State<'_, AppState>,
+    target_id: Option<String>,
+) -> Result<Vec<AssessmentRunRecord>, String> {
+    state.db.get_assessment_runs(target_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_test_executions(
+    state: State<'_, AppState>,
+    assessment_run_id: String,
+) -> Result<Vec<TestCaseExecutionRecord>, String> {
+    state.db.get_test_executions(&assessment_run_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn create_assessment_run(
+    state: State<'_, AppState>,
+    title: String,
+    target_id: String,
+    domain_id: String,
+    category_id: String,
+    template_id: String,
+) -> Result<AssessmentRunRecord, String> {
+    if state.current_user_role != UserRole::Admin {
+        return Err("Permission denied: only admins may start an assessment run".into());
+    }
+
+    let targets = state.db.get_targets().map_err(|e| e.to_string())?;
+    let target = targets
+        .into_iter()
+        .find(|t| t.id == target_id)
+        .ok_or_else(|| "Target not found".to_string())?;
+
+    let templates = state.db.get_assessment_templates(Some(category_id.clone())).map_err(|e| e.to_string())?;
+    let template = templates
+        .into_iter()
+        .find(|tpl| tpl.id == template_id)
+        .ok_or_else(|| "Assessment template not found".to_string())?;
+
+    let run_id = format!("RUN-{}", &Uuid::new_v4().to_string()[..8].to_uppercase());
+    let now = chrono::Utc::now().to_rfc3339();
+
+    // Parse template test case IDs
+    let test_case_ids: Vec<String> = serde_json::from_str(&template.test_case_ids_json).unwrap_or_default();
+    let total_tests = test_case_ids.len();
+
+    let run = AssessmentRunRecord {
+        id: run_id.clone(),
+        title,
+        target_id: target.id,
+        target_url: target.primary_url,
+        domain_id,
+        category_id,
+        template_id: template.id,
+        template_version: template.version,
+        status: "Running".to_string(),
+        started_at: now.clone(),
+        completed_at: None,
+        total_tests,
+        passed_tests: 0,
+        failed_tests: 0,
+        inconclusive_tests: 0,
+        not_applicable_tests: 0,
+        notes: String::new(),
+    };
+
+    state.db.insert_assessment_run(&run).map_err(|e| e.to_string())?;
+
+    // Pre-populate individual test case execution rows in "NotStarted" status
+    for tc_id in test_case_ids {
+        let exec_id = format!("EXEC-{}", &Uuid::new_v4().to_string()[..8].to_uppercase());
+        let exec = TestCaseExecutionRecord {
+            id: exec_id,
+            assessment_run_id: run_id.clone(),
+            test_case_id: tc_id,
+            status: "NotStarted".to_string(),
+            execution_mode: "Manual".to_string(),
+            observed_evidence: None,
+            operator_notes: None,
+            related_finding_id: None,
+            executed_at: None,
+            duration_ms: 0,
+        };
+        let _ = state.db.update_test_execution(&exec);
+    }
+
+    let _ = state.db.log_audit_event(
+        "assessment_run",
+        &run_id,
+        "CREATE",
+        &format!("Initialized assessment run '{}' against {}", run.title, run.target_url),
+    );
+
+    Ok(run)
+}
+
+#[tauri::command]
+fn update_test_case_execution(
+    state: State<'_, AppState>,
+    assessment_run_id: String,
+    test_case_id: String,
+    status: String,
+    execution_mode: String,
+    observed_evidence: Option<String>,
+    operator_notes: Option<String>,
+) -> Result<TestCaseExecutionRecord, String> {
+    if state.current_user_role != UserRole::Admin {
+        return Err("Permission denied: only admins may record test execution results".into());
+    }
+
+    let executions = state.db.get_test_executions(&assessment_run_id).map_err(|e| e.to_string())?;
+    let existing = executions
+        .into_iter()
+        .find(|ex| ex.test_case_id == test_case_id);
+
+    let exec_id = existing
+        .as_ref()
+        .map(|e| e.id.clone())
+        .unwrap_or_else(|| format!("EXEC-{}", &Uuid::new_v4().to_string()[..8].to_uppercase()));
+
+    let updated = TestCaseExecutionRecord {
+        id: exec_id,
+        assessment_run_id: assessment_run_id.clone(),
+        test_case_id,
+        status,
+        execution_mode,
+        observed_evidence,
+        operator_notes,
+        related_finding_id: existing.and_then(|e| e.related_finding_id),
+        executed_at: Some(chrono::Utc::now().to_rfc3339()),
+        duration_ms: 0,
+    };
+
+    state.db.update_test_execution(&updated).map_err(|e| e.to_string())?;
+
+    // Recompute parent assessment_run stats
+    let all_execs = state.db.get_test_executions(&assessment_run_id).map_err(|e| e.to_string())?;
+    let runs = state.db.get_assessment_runs(None).map_err(|e| e.to_string())?;
+    if let Some(mut run) = runs.into_iter().find(|r| r.id == assessment_run_id) {
+        run.passed_tests = all_execs.iter().filter(|e| e.status == "Passed").count();
+        run.failed_tests = all_execs.iter().filter(|e| e.status == "Failed").count();
+        run.inconclusive_tests = all_execs.iter().filter(|e| e.status == "Inconclusive").count();
+        run.not_applicable_tests = all_execs.iter().filter(|e| e.status == "NotApplicable").count();
+        if all_execs.iter().all(|e| e.status != "NotStarted") {
+            run.status = "Completed".to_string();
+            run.completed_at = Some(chrono::Utc::now().to_rfc3339());
+        }
+        let _ = state.db.insert_assessment_run(&run);
+    }
+
+    Ok(updated)
+}
+
 fn find_base_dir() -> PathBuf {
     // 1. Check current directory and parents
     if let Ok(cwd) = std::env::current_dir() {
@@ -1733,6 +1928,7 @@ pub fn run() {
             run_scan,
             get_findings,
             get_ai_status,
+            get_deepseek_status,
             get_ollama_system_info,
             start_ollama_service,
             stop_ollama_service,
@@ -1813,7 +2009,15 @@ pub fn run() {
             get_methodology_by_id,
             get_scan_events,
             get_finding_trace,
-            get_current_user_role
+            get_current_user_role,
+            get_taxonomy_domains,
+            get_taxonomy_categories,
+            get_test_cases,
+            get_assessment_templates,
+            get_assessment_runs,
+            get_test_executions,
+            create_assessment_run,
+            update_test_case_execution
         ]);
 
     let app = match builder.build(tauri::generate_context!()) {

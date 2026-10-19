@@ -22,6 +22,7 @@ import {
   ArrowRight,
   Activity,
 } from "lucide-react";
+import { CategoryAssessmentWorkspace } from "../components/assessments/CategoryAssessmentWorkspace";
 import {
   SecurityCategory,
   CategoryVerificationStatus,
@@ -65,7 +66,7 @@ export const CategoryWorkflowView: React.FC<CategoryWorkflowViewProps> = ({
   onNavigateToFindings,
 }) => {
   const catDef = getCategoryDefinition(category);
-  const [activeTab, setActiveTab] = useState<"methodology" | "tools" | "validator" | "ai">("methodology");
+  const [activeTab, setActiveTab] = useState<"assessment" | "methodology" | "tools" | "validator" | "ai">("methodology");
 
   // Active target resolution
   const [currentTargetId, setCurrentTargetId] = useState<string>(
@@ -847,6 +848,27 @@ ${
         }}
       >
         <button
+          onClick={() => setActiveTab("assessment")}
+          style={{
+            background: activeTab === "assessment" ? "var(--bg-secondary)" : "transparent",
+            color: activeTab === "assessment" ? catDef.color : "var(--text-secondary)",
+            border: "none",
+            borderBottom: activeTab === "assessment" ? `2px solid ${catDef.color}` : "2px solid transparent",
+            padding: "6px 12px",
+            fontSize: "0.85rem",
+            fontWeight: 600,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+          data-testid="tab-assessment"
+        >
+          <ShieldCheck size={14} />
+          <span>Security Assessment Engine</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab("methodology")}
           style={{
             background: activeTab === "methodology" ? "var(--bg-secondary)" : "transparent",
@@ -930,6 +952,17 @@ ${
           <span>AI Persona Context</span>
         </button>
       </div>
+
+      {/* Tab 0: Category Assessment Engine */}
+      {activeTab === "assessment" && (
+        <div style={{ minHeight: "550px" }}>
+          <CategoryAssessmentWorkspace
+            currentTargetUrl={activeTargetObj?.primary_url}
+            currentTargetId={currentTargetId}
+            onNavigateToFindings={onNavigateToFindings}
+          />
+        </div>
+      )}
 
       {/* Tab 1: Methodology & Phases */}
       {activeTab === "methodology" && (

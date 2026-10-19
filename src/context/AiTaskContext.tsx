@@ -33,15 +33,20 @@ export const AiTaskProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Normalized O(1) task lookup map
   const tasksById = useMemo(() => {
     const map: Record<string, AiTask> = {};
-    for (const t of tasks) {
-      map[t.id] = t;
+    if (Array.isArray(tasks)) {
+      for (const t of tasks) {
+        if (t && t.id) {
+          map[t.id] = t;
+        }
+      }
     }
     return map;
   }, [tasks]);
 
   // Filter queued or running tasks
   const activeTasks = useMemo(() => {
-    return tasks.filter((t) => t.status === "Queued" || t.status === "Running");
+    if (!Array.isArray(tasks)) return [];
+    return tasks.filter((t) => t && (t.status === "Queued" || t.status === "Running"));
   }, [tasks]);
 
   const hasRunningTask = activeTasks.length > 0;
@@ -52,7 +57,9 @@ export const AiTaskProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!isTauri()) return;
     try {
       const fetched = await invoke<AiTask[]>("get_ai_tasks", { limit: 50 });
-      setTasks(fetched);
+      if (Array.isArray(fetched)) {
+        setTasks(fetched);
+      }
     } catch {
       // In web preview or non-Tauri environment, keep state as is
     }

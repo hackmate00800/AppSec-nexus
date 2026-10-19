@@ -21,8 +21,10 @@ import {
   Search,
   BookOpen,
   Cpu,
+  Globe,
+  AlertCircle,
 } from "lucide-react";
-import { Finding, ChatMessage, ValidationRecord, AiChatMessageRecord } from "./types";
+import { Finding, ChatMessage, ValidationRecord, AiChatMessageRecord, DeepSeekProviderStatus } from "./types";
 import { SecurityFlowchart } from "./Flowchart";
 import { ValidationBadge } from "./components/ui/Badge";
 import { MarkdownViewer } from "./components/ui/MarkdownViewer";
@@ -34,6 +36,7 @@ import { formatModelDisplayName, resolveModelSlots } from "./utils/aiModelResolv
 import { SecurityCategory } from "./categories/types";
 import { getCategoryAiPersona } from "./categories/aiPersonas";
 import { CategorySelector } from "./categories/CategorySelector";
+import { AiThinkingIndicator } from "./components/ai/AiThinkingIndicator";
 
 interface MentorChatProps {
   selectedFinding?: Finding | null;
@@ -95,6 +98,9 @@ export function MentorChat({
 
   const [internalRole, setInternalRole] = useState<SecurityAiRole>(() => {
     if (propActiveRole) return propActiveRole;
+    if (selectedModel && (selectedModel.toLowerCase().includes("deepseek") || selectedModel === "cloud")) {
+      return "deepseek";
+    }
     if (
       selectedModel &&
       (selectedModel.toLowerCase().includes("8b") ||
@@ -106,14 +112,47 @@ export function MentorChat({
     return "quick";
   });
 
-  const effectiveRole = propActiveRole || internalRole;
+  // If propActiveRole changes from parent, sync internalRole
+  useEffect(() => {
+    if (propActiveRole) {
+      setInternalRole(propActiveRole);
+    }
+  }, [propActiveRole]);
+
+  const effectiveRole = internalRole;
+
+  // DeepSeek Provider Status
+  const [deepseekStatus, setDeepseekStatus] = useState<DeepSeekProviderStatus | null>(null);
+  const [isCheckingDeepseek, setIsCheckingDeepseek] = useState<boolean>(false);
+
+  const fetchDeepseekStatus = useCallback(async () => {
+    if (!isTauri()) return;
+    setIsCheckingDeepseek(true);
+    try {
+      const status = await invoke<DeepSeekProviderStatus>("get_deepseek_status");
+      setDeepseekStatus(status);
+    } catch (err) {
+      console.warn("Could not check DeepSeek status:", err);
+    } finally {
+      setIsCheckingDeepseek(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDeepseekStatus();
+  }, [fetchDeepseekStatus]);
 
   const handleRoleSwitch = (newRole: SecurityAiRole) => {
     setInternalRole(newRole);
     if (onSelectRole) {
       onSelectRole(newRole);
     }
-    const targetModel = newRole === "quick" ? effectiveQuickModel : effectiveDeepModel;
+    let targetModel = effectiveQuickModel;
+    if (newRole === "deep") {
+      targetModel = effectiveDeepModel;
+    } else if (newRole === "deepseek") {
+      targetModel = deepseekStatus?.model || "deepseek-chat";
+    }
     if (onSelectModel && targetModel) {
       onSelectModel(targetModel);
     }
@@ -402,8 +441,8 @@ export function MentorChat({
     const textToSend = (promptText || inputPrompt).trim();
     if (!textToSend || isLoading) return;
 
-    // Check if AI is toggled OFF
-    if (!isAiEnabled) {
+    // Check if local AI is toggled OFF (DeepSeek cloud provider does not depend on local Ollama engine)
+    if (!isAiEnabled && effectiveRole !== "deepseek") {
       const userMsg: ChatMessage = { role: "user", content: textToSend };
       let newThread = [...messages];
       if (replaceAtIndex !== undefined) {
@@ -455,8 +494,16 @@ export function MentorChat({
     }
 
     try {
-      const roleModel = effectiveRole === "quick" ? effectiveQuickModel : effectiveDeepModel;
-      const model = roleModel || selectedModel || "llama3.2:1b";
+      let model = selectedModel;
+      if (effectiveRole === "quick") {
+        model = effectiveQuickModel;
+      } else if (effectiveRole === "deep") {
+        model = effectiveDeepModel;
+      } else if (effectiveRole === "deepseek") {
+        model = deepseekStatus?.model || "deepseek-chat";
+      }
+      model = model || "llama3.2:1b";
+
       let systemPrompt: string | undefined = undefined;
 
       const depthDirectives: Record<StudyDepth, string> = {
@@ -511,6 +558,7 @@ Provide technically deep, dual-perspective cybersecurity education, lab reproduc
         const c = m.content.trim();
         return !c.startsWith("👋") &&
           !c.startsWith("⚠️ **Local AI Engine Offline") &&
+          !c.startsWith("⚠️ **DeepSeek API") &&
           !c.startsWith("Could not reach Ollama") &&
           !c.startsWith("ℹ️ **Ollama AI Engine is currently turned OFF");
       });
@@ -522,7 +570,10 @@ Provide technically deep, dual-perspective cybersecurity education, lab reproduc
           system: systemPrompt,
           messages: cleanHistory.length > 0 ? cleanHistory : [userMsg],
         });
-      } catch {
+      } catch (invokeErr: any) {
+        if (effectiveRole === "deepseek" || (model && model.toLowerCase().includes("deepseek"))) {
+          throw invokeErr;
+        }
         const task = await submitTask(
           conversationId,
           model,
@@ -545,13 +596,23 @@ Provide technically deep, dual-perspective cybersecurity education, lab reproduc
       }
     } catch (err: any) {
       const errMsg = err?.toString() || "Unknown error";
-      const isConn = errMsg.toLowerCase().includes("connect") || errMsg.toLowerCase().includes("11434");
+      const isDeepSeekRequest = effectiveRole === "deepseek";
 
-      let fallbackText = `⚠️ **Local AI Engine Offline / Timeout**\n\n`;
-      if (isConn) {
-        fallbackText += `Could not reach Ollama at \`127.0.0.1:11434\`. Please ensure Ollama is running (\`ollama serve\`).\n\n`;
+      let fallbackText = "";
+      if (isDeepSeekRequest) {
+        fallbackText = `⚠️ **DeepSeek API Error**\n\n`;
+        fallbackText += `${errMsg}\n\n`;
+        if (errMsg.toLowerCase().includes("not configured") || errMsg.toLowerCase().includes("key")) {
+          fallbackText += `💡 **Configuration Guide**: Set \`DEEPSEEK_API_KEY\` in your environment or local \`.env\` file and restart AppSec. Example:\n\`\`\`bash\nDEEPSEEK_API_KEY="sk-..."\nDEEPSEEK_MODEL="deepseek-chat"\n\`\`\`\n`;
+        }
       } else {
-        fallbackText += `Error: ${errMsg}\n\n`;
+        const isConn = errMsg.toLowerCase().includes("connect") || errMsg.toLowerCase().includes("11434");
+        fallbackText = `⚠️ **Local AI Engine Offline / Timeout**\n\n`;
+        if (isConn) {
+          fallbackText += `Could not reach Ollama at \`127.0.0.1:11434\`. Please ensure Ollama is running (\`ollama serve\`).\n\n`;
+        } else {
+          fallbackText += `Error: ${errMsg}\n\n`;
+        }
       }
 
       if (selectedFinding) {
@@ -783,11 +844,81 @@ Provide technically deep, dual-perspective cybersecurity education, lab reproduc
                     ({formatModelDisplayName(effectiveDeepModel)})
                   </span>
                 </button>
+
+                <button
+                  type="button"
+                  data-testid="deepseek-role-button"
+                  className={`role-toggle-btn ${effectiveRole === "deepseek" ? "active" : ""}`}
+                  onClick={() => handleRoleSwitch("deepseek")}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    padding: "3px 9px",
+                    fontSize: "0.74rem",
+                    borderRadius: "4px",
+                    border: "none",
+                    cursor: "pointer",
+                    background: effectiveRole === "deepseek" ? "var(--accent-blue, #3b82f6)" : "transparent",
+                    color: effectiveRole === "deepseek" ? "#fff" : "var(--text-main)",
+                    fontWeight: effectiveRole === "deepseek" ? 700 : 500,
+                    transition: "all 0.15s ease",
+                  }}
+                  title={`DeepSeek Cloud API (${deepseekStatus?.model || "deepseek-chat"}) — Remote cloud reasoning provider`}
+                >
+                  <span>🌐</span>
+                  <span>DeepSeek</span>
+                  <span
+                    style={{
+                      fontSize: "0.68rem",
+                      opacity: 0.9,
+                      padding: "1px 5px",
+                      borderRadius: "4px",
+                      backgroundColor:
+                        deepseekStatus?.status === "available"
+                          ? "rgba(16, 185, 129, 0.25)"
+                          : deepseekStatus?.status === "not_configured"
+                          ? "rgba(245, 158, 11, 0.25)"
+                          : "rgba(239, 68, 68, 0.25)",
+                    }}
+                  >
+                    {isCheckingDeepseek
+                      ? "..."
+                      : deepseekStatus?.status === "available"
+                      ? "Online"
+                      : deepseekStatus?.status === "not_configured"
+                      ? "No Key"
+                      : "Cloud"}
+                  </span>
+                </button>
               </>
             ) : (
-              <span style={{ color: "var(--accent-cyan)", fontFamily: "monospace", fontSize: "0.76rem", padding: "2px 8px" }}>
-                {selectedModel || "Offline Fallback"}
-              </span>
+              <>
+                <button
+                  type="button"
+                  className={`role-toggle-btn ${effectiveRole === "deepseek" ? "active" : ""}`}
+                  onClick={() => handleRoleSwitch("deepseek")}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    padding: "3px 9px",
+                    fontSize: "0.74rem",
+                    borderRadius: "4px",
+                    border: "none",
+                    cursor: "pointer",
+                    background: effectiveRole === "deepseek" ? "var(--accent-blue, #3b82f6)" : "transparent",
+                    color: effectiveRole === "deepseek" ? "#fff" : "var(--text-main)",
+                    fontWeight: effectiveRole === "deepseek" ? 700 : 500,
+                  }}
+                >
+                  <span>🌐</span>
+                  <span>DeepSeek Cloud API</span>
+                </button>
+                <span style={{ color: "var(--accent-cyan)", fontFamily: "monospace", fontSize: "0.76rem", padding: "2px 8px" }}>
+                  {selectedModel || "Offline Fallback"}
+                </span>
+              </>
             )}
           </div>
 
@@ -961,6 +1092,62 @@ Provide technically deep, dual-perspective cybersecurity education, lab reproduc
           </button>
         </div>
       </div>
+
+      {/* DeepSeek Cloud Transmission & Privacy Advisory Banner */}
+      {effectiveRole === "deepseek" && (
+        <div
+          data-testid="deepseek-privacy-banner"
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: "10px",
+            backgroundColor: "rgba(59, 130, 246, 0.08)",
+            border: "1px solid rgba(59, 130, 246, 0.3)",
+            borderRadius: "8px",
+            padding: "10px 14px",
+            fontSize: "0.78rem",
+            color: "var(--text-main)",
+          }}
+        >
+          <Globe size={16} color="var(--accent-blue, #3b82f6)" style={{ flexShrink: 0, marginTop: "2px" }} />
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "4px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontWeight: 700, color: "var(--accent-blue, #3b82f6)" }}>
+                DeepSeek Cloud Provider Active (Model: {deepseekStatus?.model || "deepseek-chat"})
+              </span>
+              <span
+                style={{
+                  fontSize: "0.7rem",
+                  fontWeight: 600,
+                  color: deepseekStatus?.status === "available" ? "var(--accent-emerald)" : "var(--accent-amber)",
+                }}
+              >
+                Status: {deepseekStatus?.status || "Checking..."}
+              </span>
+            </div>
+            <p style={{ margin: 0, color: "var(--text-muted)", lineHeight: 1.4 }}>
+              Prompts and selected vulnerability context are transmitted securely over TLS to DeepSeek API ({deepseekStatus?.endpoint || "https://api.deepseek.com"}).
+              Credentials, internal cookies, and full database tables are never transmitted. Deterministic validation remains authoritatively handled by the local AppSec engine.
+            </p>
+            {deepseekStatus?.error_message && (
+              <div
+                style={{
+                  color: "var(--accent-amber)",
+                  fontSize: "0.74rem",
+                  fontWeight: 600,
+                  marginTop: "2px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                <AlertCircle size={13} />
+                <span>{deepseekStatus.error_message}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Selected Finding Validation Inspector Card */}
       {selectedFinding && showValidationCard && (
@@ -1199,11 +1386,11 @@ Provide technically deep, dual-perspective cybersecurity education, lab reproduc
                         "You (Pentester / Learner)"
                       ) : (
                         <>
-                          <span style={{ color: effectiveRole === "deep" ? "var(--accent-purple, #c084fc)" : "var(--accent-cyan)" }}>
-                            {effectiveRole === "deep" ? "🧠 Deep Security AI" : "⚡ Quick Security AI"}
+                          <span style={{ color: effectiveRole === "deepseek" ? "var(--accent-blue, #3b82f6)" : effectiveRole === "deep" ? "var(--accent-purple, #c084fc)" : "var(--accent-cyan)" }}>
+                            {effectiveRole === "deepseek" ? "🌐 DeepSeek Cloud AI" : effectiveRole === "deep" ? "🧠 Deep Security AI" : "⚡ Quick Security AI"}
                           </span>
                           <span style={{ opacity: 0.7, fontWeight: 400, fontFamily: "monospace", fontSize: "0.68rem" }}>
-                            ({formatModelDisplayName(selectedModel || (effectiveRole === "deep" ? effectiveDeepModel : effectiveQuickModel))})
+                            ({formatModelDisplayName(selectedModel || (effectiveRole === "deepseek" ? "deepseek-chat" : effectiveRole === "deep" ? effectiveDeepModel : effectiveQuickModel))})
                           </span>
                         </>
                       )}
@@ -1428,66 +1615,23 @@ Provide technically deep, dual-perspective cybersecurity education, lab reproduc
         )}
 
         {(isLoading || isTaskRunning) && (
-          <div
-            style={{
-              padding: "10px 14px",
-              borderRadius: "8px",
-              backgroundColor: "rgba(14, 165, 233, 0.08)",
-              border: "1px solid rgba(14, 165, 233, 0.3)",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: "12px",
-              marginTop: "8px",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <Bot size={18} className="pulse" color="var(--accent-cyan)" />
-              <div>
-                <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--accent-cyan)" }}>
-                  {activeTask?.status === "Queued"
-                    ? "Task queued in local resource limiter..."
-                    : `${effectiveRole === "deep" ? "🧠 Deep Security AI" : "⚡ Quick Security AI"} generating in background...`}
-                </span>
-                {activeTask?.prompt_preview && (
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: "0.75rem",
-                      color: "var(--text-dim)",
-                      maxWidth: "380px",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    "{activeTask.prompt_preview}"
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {activeTask && (
-              <button
-                type="button"
-                className="btn btn-secondary"
-                style={{
-                  fontSize: "0.72rem",
-                  padding: "4px 8px",
-                  borderColor: "rgba(239, 68, 68, 0.4)",
-                  color: "var(--accent-rose)",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                }}
-                onClick={() => cancelTask(activeTask.id)}
-                title="Cancel background generation"
-              >
-                <X size={12} />
-                <span>Cancel</span>
-              </button>
-            )}
-          </div>
+          <AiThinkingIndicator
+            role={effectiveRole}
+            modelName={effectiveRole === "deep" ? effectiveDeepModel || selectedModel : effectiveQuickModel || selectedModel}
+            promptPreview={activeTask?.prompt_preview}
+            statusText={
+              activeTask?.status === "Queued"
+                ? "Task queued in local resource limiter..."
+                : undefined
+            }
+            onCancel={
+              activeTask
+                ? () => cancelTask(activeTask.id)
+                : isLoading
+                ? () => setIsLoading(false)
+                : undefined
+            }
+          />
         )}
         <div ref={messagesEndRef} />
       </div>
