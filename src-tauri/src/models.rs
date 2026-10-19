@@ -1,5 +1,18 @@
 use serde::{Deserialize, Serialize};
 
+// User role enum for permission handling
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum UserRole {
+    Admin,
+    Viewer,
+}
+
+impl Default for UserRole {
+    fn default() -> Self {
+        UserRole::Viewer
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScopeConfig {
     pub allowed_hosts: Vec<String>,

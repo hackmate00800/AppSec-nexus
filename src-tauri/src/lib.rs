@@ -26,7 +26,7 @@ use models::{
     AuditLogRecord, DiscoveredEndpoint, FeedUpdateResult, Finding, FindingDetectionTrace,
     FindingSeverity, FindingStatus, FindingUpdatePayload, GeneratedReport, IssueCreatePayload,
     IssueRecord, IssueUpdatePayload, PluginInfo, ReportGenerateParams, ScanEvent, ScopeConfig,
-    Target, ToolInfo,
+    Target, ToolInfo, UserRole,
 };
 use plugins::PluginManager;
 use scanners::BaselineScanner;
@@ -48,6 +48,7 @@ pub struct AppState {
     adapter_registry: Arc<adapters::AdapterRegistry>,
     extension_engine: Arc<extensions::ExtensionEngine>,
     job_manager: Arc<orchestration::JobManager>,
+    pub current_user_role: UserRole,
 }
 
 #[tauri::command]
@@ -462,6 +463,9 @@ async fn validate_finding(
     state: State<'_, AppState>,
     finding_id: String,
 ) -> Result<validator::ValidationRecord, String> {
+    if state.current_user_role != UserRole::Admin {
+        return Err("Permission denied: only admins may validate findings".into());
+    }
     let findings = state.db.get_findings().map_err(|e| e.to_string())?;
     let finding = findings
         .into_iter()
@@ -668,11 +672,22 @@ fn run_android_audit(
 }
 
 #[tauri::command]
+fn get_current_user_role(state: State<'_, AppState>) -> String {
+    match state.current_user_role {
+        UserRole::Admin => "Admin".to_string(),
+        UserRole::Viewer => "Viewer".to_string(),
+    }
+}
+
+#[tauri::command]
 fn update_finding_status(
     state: State<'_, AppState>,
     finding_id: String,
     status: String,
 ) -> Result<(), String> {
+    if state.current_user_role != UserRole::Admin {
+        return Err("Permission denied: only admins may update finding status".into());
+    }
     state.db.update_finding_status(&finding_id, &status).map_err(|e| e.to_string())
 }
 
@@ -766,6 +781,9 @@ fn bulk_update_finding_status(
     finding_ids: Vec<String>,
     status: String,
 ) -> Result<usize, String> {
+    if state.current_user_role != UserRole::Admin {
+        return Err("Permission denied: only admins may bulk update findings".into());
+    }
     let count = state
         .db
         .bulk_update_finding_status(&finding_ids, &status)
@@ -1656,6 +1674,7 @@ pub fn run() {
         adapter_registry,
         extension_engine,
         job_manager,
+        current_user_role: UserRole::Admin,
     };
 
     let setup_log = log_file.clone();
@@ -1793,7 +1812,8 @@ pub fn run() {
             get_methodologies,
             get_methodology_by_id,
             get_scan_events,
-            get_finding_trace
+            get_finding_trace,
+            get_current_user_role
         ]);
 
     let app = match builder.build(tauri::generate_context!()) {

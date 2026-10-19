@@ -114,6 +114,7 @@ import { NavigationBreadcrumbs } from "./components/ui/NavigationBreadcrumbs";
 import { SecurityCategory } from "./categories/types";
 import { CategorySelector } from "./categories/CategorySelector";
 import { FindingInlineDetailsAccordion } from "./components/findings/FindingInlineDetailsAccordion";
+import { ContextMenu } from "./components/ui/ContextMenu";
 
 // High-Performance Code-Splitting for Low-Spec PCs:
 // Defer loading heavy components until the user switches to their respective tabs
@@ -514,6 +515,14 @@ export default function App() {
   const [expandedFindingIds, setExpandedFindingIds] = useState<Set<string>>(new Set());
   const [findingViewMode, setFindingViewMode] = useState<"table" | "cards">("table");
 
+  // User Role & Finding Context Menu State
+  const [currentUserRole, setCurrentUserRole] = useState<"Admin" | "Viewer">("Admin");
+  const [findingContextMenu, setFindingContextMenu] = useState<{
+    x: number;
+    y: number;
+    finding: Finding;
+  } | null>(null);
+
   const toggleExpandFinding = (id: string) => {
     setExpandedFindingIds((prev) => {
       const next = new Set(prev);
@@ -663,6 +672,15 @@ export default function App() {
       setPlugins(pluginsList);
       if (pluginsList.length > 0) {
         setSelectedPluginToRun(pluginsList[0].id);
+      }
+
+      try {
+        const role = await invoke<string>("get_current_user_role");
+        if (role === "Admin" || role === "Viewer") {
+          setCurrentUserRole(role);
+        }
+      } catch (roleErr) {
+        console.warn("Could not fetch current_user_role:", roleErr);
       }
     } catch (err) {
       console.error("Initialization error:", err);
@@ -4313,6 +4331,14 @@ export default function App() {
                                           e.stopPropagation();
                                           toggleExpandFinding(f.id);
                                         }}
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter" || e.key === " ") {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            toggleExpandFinding(f.id);
+                                          }
+                                        }}
+                                        aria-controls={`details-${f.id}`}
                                         aria-expanded={expandedFindingIds.has(f.id)}
                                         title={expandedFindingIds.has(f.id) ? "Hide detection details" : "Show detection details directly inside this row"}
                                       >
@@ -4412,7 +4438,11 @@ export default function App() {
                                 {/* Expandable Inline Details Accordion inside finding table */}
                                 {expandedFindingIds.has(f.id) && (
                                   <tr key={`${f.id}-expanded-details`} className="finding-expanded-detail-row">
-                                    <td colSpan={9} style={{ padding: 0, borderBottom: "2px solid var(--accent-cyan)", background: "var(--bg-secondary)" }}>
+                                    <td
+                                      id={`details-${f.id}`}
+                                      colSpan={9}
+                                      style={{ padding: 0, borderBottom: "2px solid var(--accent-cyan)", background: "var(--bg-secondary)" }}
+                                    >
                                       <FindingInlineDetailsAccordion
                                         finding={f}
                                         target={targets.find((t) => t.id === f.target_id) || selectedTarget}
@@ -4459,6 +4489,14 @@ export default function App() {
                           <div
                             key={f.id}
                             className="card finding-card"
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              setFindingContextMenu({
+                                x: e.clientX,
+                                y: e.clientY,
+                                finding: f,
+                              });
+                            }}
                             style={{
                               background: "var(--bg-secondary)",
                               border: `1px solid ${expandedFindingIds.has(f.id) ? "var(--accent-cyan)" : "var(--border-color)"}`,
@@ -4537,6 +4575,14 @@ export default function App() {
                                   fontWeight: 600,
                                 }}
                                 onClick={() => toggleExpandFinding(f.id)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    toggleExpandFinding(f.id);
+                                  }
+                                }}
+                                aria-controls={`details-${f.id}`}
                                 aria-expanded={expandedFindingIds.has(f.id)}
                                 title={expandedFindingIds.has(f.id) ? "Hide detection details" : "Show detection details inside card"}
                               >
@@ -4595,7 +4641,7 @@ export default function App() {
 
                             {/* Inline Expandable Details Accordion directly inside card */}
                             {expandedFindingIds.has(f.id) && (
-                              <div style={{ marginTop: "6px" }}>
+                              <div id={`details-${f.id}`} style={{ marginTop: "6px" }}>
                                 <FindingInlineDetailsAccordion
                                   finding={f}
                                   target={targets.find((t) => t.id === f.target_id) || selectedTarget}
@@ -4625,6 +4671,94 @@ export default function App() {
                         ))}
                       </div>
                     )}
+
+                {/* Right-click Context Menu for Finding Cards */}
+                {findingContextMenu && (
+                  <ContextMenu
+                    x={findingContextMenu.x}
+                    y={findingContextMenu.y}
+                    role={currentUserRole}
+                    onClose={() => setFindingContextMenu(null)}
+                    items={[
+                      {
+                        label: "Inspect Full Details",
+                        icon: <Eye size={12} color="var(--accent-cyan)" />,
+                        action: () => {
+                          setActiveFindingDetail(findingContextMenu.finding);
+                          setSelectedFinding(findingContextMenu.finding);
+                        },
+                      },
+                      {
+                        label: "Copy Finding ID",
+                        icon: <FileCode size={12} />,
+                        action: () => {
+                          if (navigator.clipboard) {
+                            navigator.clipboard.writeText(findingContextMenu.finding.id);
+                          }
+                          addToast({
+                            type: "info",
+                            title: "ID Copied",
+                            description: `Copied ${findingContextMenu.finding.id.slice(0, 8)}... to clipboard.`,
+                          });
+                        },
+                      },
+                      {
+                        label: "Copy Affected Asset",
+                        icon: <Globe size={12} />,
+                        action: () => {
+                          if (navigator.clipboard) {
+                            navigator.clipboard.writeText(findingContextMenu.finding.affected_asset);
+                          }
+                          addToast({
+                            type: "info",
+                            title: "Asset Copied",
+                            description: "Asset URL copied to clipboard.",
+                          });
+                        },
+                      },
+                      {
+                        label: "Ask AI Mentor",
+                        icon: <Sparkles size={12} color="var(--accent-cyan)" />,
+                        action: () => {
+                          handleExplainWithAi(findingContextMenu.finding);
+                        },
+                      },
+                      {
+                        label: "Study in Cyber Academy",
+                        icon: <GraduationCap size={12} color="var(--accent-cyan)" />,
+                        action: () => {
+                          setAcademySelectedVulnId(findingContextMenu.finding.title);
+                          setActiveTab("academy");
+                        },
+                      },
+                      {
+                        label: "Verify / Validate (Admin)",
+                        icon: <ShieldCheck size={12} color="var(--accent-emerald)" />,
+                        requiresAdmin: true,
+                        action: async () => {
+                          await handleValidateFinding(findingContextMenu.finding.id);
+                        },
+                      },
+                      {
+                        label: "Edit Finding (Admin)",
+                        icon: <Edit2 size={12} />,
+                        requiresAdmin: true,
+                        action: () => {
+                          setEditingFinding(findingContextMenu.finding);
+                        },
+                      },
+                      {
+                        label: "Delete Finding (Admin)",
+                        icon: <Trash2 size={12} color="var(--accent-rose)" />,
+                        requiresAdmin: true,
+                        danger: true,
+                        action: () => {
+                          setDeletingFinding(findingContextMenu.finding);
+                        },
+                      },
+                    ]}
+                  />
+                )}
 
                 {/* Pagination Controls */}
                 {filteredFindings.length > 0 && (
