@@ -148,6 +148,30 @@ const AppearanceSettings = lazy(() =>
 const ModelLabView = lazy(() =>
   import("./components/model_lab/ModelLabView").then((m) => ({ default: m.ModelLabView }))
 );
+const WebPentestingWorkbench = lazy(() =>
+  import("./pentest/WebPentestingWorkbench").then((m) => ({ default: m.WebPentestingWorkbench }))
+);
+const ApiSecurityWorkspace = lazy(() =>
+  import("./pentest/ApiSecurityWorkspace").then((m) => ({ default: m.ApiSecurityWorkspace }))
+);
+const NetworkReconWorkspace = lazy(() =>
+  import("./pentest/NetworkReconWorkspace").then((m) => ({ default: m.NetworkReconWorkspace }))
+);
+const ToolsWorkbench = lazy(() =>
+  import("./tools/ToolsWorkbench").then((m) => ({ default: m.ToolsWorkbench }))
+);
+const SecurityDocumentationCenter = lazy(() =>
+  import("./research/SecurityDocumentationCenter").then((m) => ({ default: m.SecurityDocumentationCenter }))
+);
+const ZeroDayResearchWorkspace = lazy(() =>
+  import("./research/ZeroDayResearchWorkspace").then((m) => ({ default: m.ZeroDayResearchWorkspace }))
+);
+const InteractiveDiagramLibrary = lazy(() =>
+  import("./diagrams/InteractiveDiagramLibrary").then((m) => ({ default: m.InteractiveDiagramLibrary }))
+);
+const GlossaryLibrary = lazy(() =>
+  import("./research/GlossaryLibrary").then((m) => ({ default: m.GlossaryLibrary }))
+);
 
 const TabLoadingSkeleton: React.FC = () => (
   <div style={{ padding: "24px 0", display: "flex", flexDirection: "column", gap: 16 }}>
@@ -187,6 +211,9 @@ export function sortAiModels(models: string[]): string[] {
 export type TabType =
   | "analytics"
   | "targets"
+  | "webPentest"
+  | "apiSecurity"
+  | "networkRecon"
   | "orchestration"
   | "tools"
   | "crawler"
@@ -198,6 +225,10 @@ export type TabType =
   | "mentor"
   | "history"
   | "academy"
+  | "documentationCenter"
+  | "zeroDayResearch"
+  | "diagramLibrary"
+  | "glossaryLibrary"
   | "hostmobile"
   | "appearance"
   | "categoryWorkflow"
@@ -2294,8 +2325,20 @@ export default function App() {
             </Suspense>
           )}
 
-          {/* TAB 2: TOOL HUB */}
+          {/* TAB 2: TOOL HUB & WORKBENCH */}
           {activeTab === "tools" && (
+            <Suspense fallback={<TabLoadingSkeleton />}>
+              <ToolsWorkbench
+                targets={targets}
+                selectedTarget={selectedTarget}
+                onSelectTarget={(target) => setSelectedTarget(target)}
+                onNavigateTab={(tab) => setActiveTab(tab as TabType)}
+              />
+            </Suspense>
+          )}
+
+          {/* LEGACY TAB 2: TOOL HUB FALLBACK (HIDDEN) */}
+          {false && activeTab === "tools" && (
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
                 <div>
@@ -5515,6 +5558,81 @@ export default function App() {
                 )}
               </div>
             </div>
+          )}
+
+          {/* TAB: WEB PENTESTING WORKBENCH */}
+          {activeTab === "webPentest" && (
+            <Suspense fallback={<TabLoadingSkeleton />}>
+              <WebPentestingWorkbench
+                targets={targets}
+                selectedTarget={selectedTarget}
+                onSelectTarget={(target) => setSelectedTarget(target)}
+                findings={findings}
+                onNavigateTab={(tab) => setActiveTab(tab as TabType)}
+              />
+            </Suspense>
+          )}
+
+          {/* TAB: API SECURITY TESTING WORKSPACE */}
+          {activeTab === "apiSecurity" && (
+            <Suspense fallback={<TabLoadingSkeleton />}>
+              <ApiSecurityWorkspace
+                targets={targets}
+                selectedTarget={selectedTarget}
+                onSelectTarget={(target) => setSelectedTarget(target)}
+                endpoints={endpoints}
+                findings={findings}
+                onNavigateTab={(tab) => setActiveTab(tab as TabType)}
+              />
+            </Suspense>
+          )}
+
+          {/* TAB: NETWORK RECONNAISSANCE */}
+          {activeTab === "networkRecon" && (
+            <Suspense fallback={<TabLoadingSkeleton />}>
+              <NetworkReconWorkspace
+                targets={targets}
+                selectedTarget={selectedTarget}
+                onSelectTarget={(target) => setSelectedTarget(target)}
+                onNavigateTab={(tab) => setActiveTab(tab as TabType)}
+              />
+            </Suspense>
+          )}
+
+          {/* TAB: SECURITY DOCUMENTATION CENTER */}
+          {activeTab === "documentationCenter" && (
+            <Suspense fallback={<TabLoadingSkeleton />}>
+              <SecurityDocumentationCenter
+                onNavigateTab={(tab) => setActiveTab(tab as TabType)}
+              />
+            </Suspense>
+          )}
+
+          {/* TAB: ZERO-DAY RESEARCH WORKSPACE */}
+          {activeTab === "zeroDayResearch" && (
+            <Suspense fallback={<TabLoadingSkeleton />}>
+              <ZeroDayResearchWorkspace
+                onNavigateTab={(tab) => setActiveTab(tab as TabType)}
+              />
+            </Suspense>
+          )}
+
+          {/* TAB: INTERACTIVE DIAGRAM LIBRARY */}
+          {activeTab === "diagramLibrary" && (
+            <Suspense fallback={<TabLoadingSkeleton />}>
+              <InteractiveDiagramLibrary
+                onNavigateTab={(tab) => setActiveTab(tab as TabType)}
+              />
+            </Suspense>
+          )}
+
+          {/* TAB: GLOSSARY LIBRARY */}
+          {activeTab === "glossaryLibrary" && (
+            <Suspense fallback={<TabLoadingSkeleton />}>
+              <GlossaryLibrary
+                onNavigateTab={(tab) => setActiveTab(tab as TabType)}
+              />
+            </Suspense>
           )}
 
           {/* TAB 8: CYBER ACADEMY & FOUNDATIONS */}

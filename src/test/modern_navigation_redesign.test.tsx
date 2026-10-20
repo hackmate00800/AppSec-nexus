@@ -225,10 +225,9 @@ describe("AppSidebar Component", () => {
   it("renders all 4 navigation groups and items with badges", () => {
     render(<AppSidebar {...defaultSidebarProps} />);
 
-    expect(screen.getByText("Workspace")).toBeInTheDocument();
-    expect(screen.getByText("Security Tools")).toBeInTheDocument();
-    expect(screen.getByText("AI Workspace")).toBeInTheDocument();
-    expect(screen.getByText("Platform")).toBeInTheDocument();
+    expect(screen.getByText("Main Workspace")).toBeInTheDocument();
+    expect(screen.getByText("Learning & Research")).toBeInTheDocument();
+    expect(screen.getByText("AI & Administration")).toBeInTheDocument();
 
     // Verify badges
     expect(screen.getByText("7")).toBeInTheDocument(); // Findings badge
@@ -249,10 +248,10 @@ describe("AppSidebar Component", () => {
   it("toggles group expansion when clicking group header", () => {
     render(<AppSidebar {...defaultSidebarProps} />);
 
-    const workspaceHeader = screen.getByText("Workspace");
+    const workspaceHeader = screen.getByText("Main Workspace");
     fireEvent.click(workspaceHeader); // Collapses Workspace group
 
     // Items inside collapsed group are hidden
-    expect(screen.queryByText("Security Analytics & Posture")).not.toBeInTheDocument();
+    expect(screen.queryByText("Dashboard")).not.toBeInTheDocument();
   });
 });

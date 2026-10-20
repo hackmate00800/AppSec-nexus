@@ -3,10 +3,7 @@ import {
   Activity,
   Target as TargetIcon,
   Terminal,
-  Cpu,
-  Compass,
   Layers,
-  Monitor,
   AlertTriangle,
   ClipboardList,
   UploadCloud,
@@ -22,6 +19,11 @@ import {
   ChevronRight,
   PanelLeftClose,
   PanelLeft,
+  Shield,
+  Globe,
+  ShieldAlert,
+  BookA,
+  Wrench,
 } from "lucide-react";
 import { TabType } from "../../App";
 import { Tooltip } from "../ui/design_system";
@@ -73,9 +75,8 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
   // Track collapsed groups
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({
     workspace: false,
-    security_tools: false,
-    ai_workspace: false,
-    system: false,
+    learning_research: false,
+    ai_admin: false,
   });
 
   const toggleGroup = (groupId: string) => {
@@ -85,20 +86,62 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
   const navGroups: NavGroupDef[] = [
     {
       id: "workspace",
-      label: "Workspace",
+      label: "Main Workspace",
       items: [
         {
           id: "analytics",
-          label: "Security Analytics",
+          label: "Dashboard",
           icon: <Activity size={15} />,
-          tooltip: "Security Analytics & Posture",
+          tooltip: "Security Analytics & Posture Dashboard",
         },
         {
           id: "targets",
-          label: "Target & Scope",
+          label: "Projects & Targets",
           icon: <TargetIcon size={15} />,
-          tooltip: "Target & Scope",
+          tooltip: "Projects and Authorized Target Inventory",
           dataTour: "sidebar-target",
+        },
+        {
+          id: "webPentest",
+          label: "Web Pentesting",
+          icon: <Shield size={15} />,
+          tooltip: "Authorized Web Application Pentesting Workbench",
+        },
+        {
+          id: "apiSecurity",
+          label: "API Security",
+          icon: <Globe size={15} />,
+          badge:
+            endpointsCount > 0 ? (
+              <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-slate-800 text-slate-400">
+                {endpointsCount}
+              </span>
+            ) : undefined,
+          tooltip: "API Security Testing, OpenAPI & Postman Runner",
+        },
+        {
+          id: "networkRecon",
+          label: "Network Recon",
+          icon: <Radio size={15} />,
+          tooltip: "Network Reconnaissance & Port Discovery",
+        },
+        {
+          id: "tools",
+          label: "Tools Workbench",
+          icon: <Wrench size={15} />,
+          badge: (
+            <span className="px-1.5 py-0.2 text-[10px] font-semibold rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-800/80">
+              {readyToolsCount > 0 ? readyToolsCount : 20}
+            </span>
+          ),
+          tooltip: "Dedicated GUI for Every Supported Security Tool",
+        },
+        {
+          id: "scanner",
+          label: "Scan Jobs",
+          icon: <Terminal size={15} />,
+          tooltip: "Active Scan Jobs & Execution Console",
+          dataTour: "sidebar-scanner",
         },
         {
           id: "findings",
@@ -110,116 +153,79 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                 {findingsCount}
               </span>
             ) : undefined,
-          tooltip: "Vulnerability Findings",
+          tooltip: "Vulnerability Findings & Evidence",
           dataTour: "sidebar-findings",
         },
         {
           id: "issues",
-          label: "Issues & Reports",
+          label: "Reports & Issues",
           icon: <ClipboardList size={15} />,
-          tooltip: "Issue Documentation & Reports",
+          tooltip: "Issue Management & Exportable Reports",
         },
         {
-          id: "history",
-          label: "Audit History",
-          icon: <History size={15} />,
-          badge:
-            scanHistoryCount > 0 ? (
-              <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-slate-800 text-slate-400">
-                {scanHistoryCount}
-              </span>
-            ) : undefined,
-          tooltip: "Audit History",
+          id: "burp",
+          label: "Integrations & Proxy",
+          icon: <Radio size={15} />,
+          badge: (
+            <span className="px-1.5 py-0.2 text-[10px] font-bold rounded bg-amber-950/80 text-amber-300 border border-amber-800/80">
+              Burp
+            </span>
+          ),
+          tooltip: "Burp Suite & Interception Proxy Integrations",
         },
       ],
     },
     {
-      id: "security_tools",
-      label: "Security Tools",
+      id: "learning_research",
+      label: "Learning & Research",
       items: [
         {
-          id: "scanner",
-          label: "Scan Console",
-          icon: <Terminal size={15} />,
-          tooltip: "Live Scan Console",
-          dataTour: "sidebar-scanner",
+          id: "academy",
+          label: "Cyber Academy",
+          icon: <GraduationCap size={15} />,
+          tooltip: "Complete Cyber Academy Curriculum (Beginner to Advanced)",
         },
         {
-          id: "orchestration",
-          label: "Universal Orchestration",
-          icon: <Cpu size={15} />,
-          tooltip: "Scan Pipelines & Autonomous Workflows",
+          id: "documentationCenter",
+          label: "Documentation Center",
+          icon: <BookOpen size={15} />,
+          tooltip: "Security Documentation Center (NIST, MITRE, OWASP, CISA)",
         },
         {
-          id: "crawler",
-          label: "Crawler & Surface",
-          icon: <Compass size={15} />,
-          badge:
-            endpointsCount > 0 ? (
-              <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-slate-800 text-slate-400">
-                {endpointsCount}
-              </span>
-            ) : undefined,
-          tooltip: "Crawler & Discovered Endpoints",
+          id: "zeroDayResearch",
+          label: "Zero-Day Research",
+          icon: <ShieldAlert size={15} />,
+          tooltip: "Zero-Day Research Workspace & Patch Diff Analysis",
         },
         {
-          id: "categoryWorkflow",
-          label: "Category Intel",
+          id: "diagramLibrary",
+          label: "Diagram Library",
           icon: <Layers size={15} />,
-          tooltip: "Category-Based Workflow",
+          tooltip: "Interactive Diagram Library & Visual Flows",
+        },
+        {
+          id: "glossaryLibrary",
+          label: "Glossary & Reference",
+          icon: <BookA size={15} />,
+          tooltip: "Cybersecurity Glossary & Reference Library",
         },
         {
           id: "playbooks",
           label: "Playbooks & Checklists",
           icon: <FileCheck size={15} />,
-          tooltip: "Manual Testing Checklists",
+          tooltip: "Attack & Defense Playbooks and Manual Testing Checklists",
         },
         {
           id: "methodologies",
           label: "Methodology Explorer",
           icon: <BookOpen size={15} />,
-          tooltip: "Methodology Transparency",
-        },
-        {
-          id: "tools",
-          label: "Tools & Plugins",
-          icon: <Layers size={15} />,
-          badge:
-            readyToolsCount > 0 ? (
-              <span className="px-1.5 py-0.2 text-[10px] font-semibold rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-800/80">
-                {readyToolsCount}
-              </span>
-            ) : undefined,
-          tooltip: "Security Tools Inventory",
-        },
-        {
-          id: "terminal",
-          label: "Multi-Terminal",
-          icon: <Terminal size={15} />,
-          tooltip: "Multi-Terminal Orchestration & Tool Execution",
-        },
-        {
-          id: "burp",
-          label: "Burp Suite",
-          icon: <Radio size={15} />,
-          badge: (
-            <span className="px-1.5 py-0.2 text-[10px] font-bold rounded bg-amber-950/80 text-amber-300 border border-amber-800/80">
-              Proxy
-            </span>
-          ),
-          tooltip: "Burp Suite Local Integration",
-        },
-        {
-          id: "hostmobile",
-          label: "Host & Mobile",
-          icon: <Monitor size={15} />,
-          tooltip: "Host & Mobile Audit",
+          tooltip: "Methodologies, Transparency & Attack Trees",
         },
       ],
     },
     {
-      id: "ai_workspace",
-      label: "AI Workspace",
+      id: "ai_admin",
+      label: "AI & Administration",
       items: [
         {
           id: "mentor",
@@ -242,28 +248,28 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           tooltip: "Heretic Model Lab & Abliteration Pipeline",
         },
         {
+          id: "history",
+          label: "Audit History",
+          icon: <History size={15} />,
+          badge:
+            scanHistoryCount > 0 ? (
+              <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-slate-800 text-slate-400">
+                {scanHistoryCount}
+              </span>
+            ) : undefined,
+          tooltip: "Audit Logs & Chat History",
+        },
+        {
           id: "importer",
           label: "Import Reports",
           icon: <UploadCloud size={15} />,
-          tooltip: "Import Scanner Reports",
-        },
-      ],
-    },
-    {
-      id: "system",
-      label: "Platform",
-      items: [
-        {
-          id: "academy",
-          label: "Cyber Academy",
-          icon: <GraduationCap size={15} />,
-          tooltip: "Cyber Academy & OWASP Cheat Sheets",
+          tooltip: "Import External Scanner Reports",
         },
         {
           id: "appearance",
-          label: "Appearance",
+          label: "Settings & Appearance",
           icon: <Palette size={15} />,
-          tooltip: "Appearance & Personalization",
+          tooltip: "Appearance, Theme & Workspace Settings",
         },
       ],
     },
@@ -298,60 +304,64 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             <div key={group.id} className="space-y-0.5">
               {/* Group Header (Expanded mode only) */}
               {!isCollapsed ? (
-                <div
+                <button
                   onClick={() => toggleGroup(group.id)}
-                  className="flex items-center justify-between px-2.5 py-1 text-[11px] font-semibold tracking-wider uppercase text-slate-400 hover:text-slate-300 cursor-pointer rounded transition"
+                  className="w-full flex items-center justify-between px-2 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider hover:text-slate-200 transition-colors group cursor-pointer"
                 >
                   <span>{group.label}</span>
-                  {isGroupCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-                </div>
+                  <span className="text-slate-500 group-hover:text-slate-300">
+                    {isGroupCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                  </span>
+                </button>
               ) : (
-                <div className="my-2 border-t border-slate-800/60 mx-1" />
+                <div className="w-full h-px bg-slate-800 my-2" />
               )}
 
-              {/* Group Items */}
+              {/* Group Nav Items */}
               {!isGroupCollapsed && (
                 <div className="space-y-0.5">
                   {group.items.map((item) => {
                     const isActive = activeTab === item.id;
 
-                    const itemButton = (
+                    const buttonContent = (
                       <button
                         key={item.id}
                         onClick={() => onSelectTab(item.id)}
-                        title={item.tooltip}
                         data-tour={item.dataTour}
-                        className={`nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all text-left group ${
-                          isCollapsed ? "justify-center px-0 h-9" : ""
-                        } ${
+                        className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all text-left relative ${
                           isActive
-                            ? "active bg-slate-900 text-cyan-300 font-semibold border-l-2 border-cyan-500 rounded-l-none pl-2 shadow-sm"
+                            ? "bg-cyan-500/10 text-cyan-300 font-semibold border border-cyan-500/20 shadow-sm shadow-cyan-950"
                             : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60"
                         }`}
                       >
+                        {/* Active Accent Indicator */}
+                        {isActive && (
+                          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-cyan-400 rounded-r" />
+                        )}
+
                         <span
                           className={`shrink-0 transition-colors ${
-                            isActive ? "text-cyan-400" : "text-slate-400 group-hover:text-slate-200"
+                            isActive ? "text-cyan-400" : "text-slate-400 group-hover:text-slate-300"
                           }`}
                         >
                           {item.icon}
                         </span>
 
-                        <span className={`sidebar-label truncate flex-1 ${isCollapsed ? "sr-only" : ""}`}>
-                          {item.label}
-                        </span>
-                        {!isCollapsed && item.badge && (
-                          <span className="shrink-0">{item.badge}</span>
+                        {!isCollapsed && (
+                          <div className="flex-1 flex items-center justify-between min-w-0">
+                            <span className="truncate">{item.label}</span>
+                            {item.badge && <span className="ml-1.5 shrink-0">{item.badge}</span>}
+                          </div>
                         )}
                       </button>
                     );
 
                     return isCollapsed ? (
-                      <Tooltip key={item.id} content={item.tooltip} position="right">
-                        {itemButton}
+                      <Tooltip key={item.id} content={item.tooltip}>
+                        {buttonContent}
                       </Tooltip>
                     ) : (
-                      itemButton
+                      <React.Fragment key={item.id}>{buttonContent}</React.Fragment>
                     );
                   })}
                 </div>
@@ -361,25 +371,17 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         })}
       </div>
 
-      {/* Bottom Sidebar Collapse Toggle Bar */}
-      <div className="p-2 border-t border-slate-800/80 bg-slate-950/80 flex items-center justify-between">
-        {!isCollapsed && (
-          <span className="text-[10px] text-slate-400 font-mono px-2">
-            AppSec v2.1 PRO
-          </span>
-        )}
+      {/* Sidebar Footer with Collapse/Expand button */}
+      <div className="p-2 border-t border-slate-800/80 shrink-0">
         <button
           onClick={onToggleCollapse}
-          className={`sidebar-collapse-btn p-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-850 transition ${
-            isCollapsed ? "w-full flex items-center justify-center" : ""
-          }`}
-          title={isCollapsed ? "Expand sidebar (Ctrl+B)" : "Collapse sidebar (Ctrl+B)"}
+          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-900 transition-colors"
+          title={isCollapsed ? "Expand Sidebar (Ctrl+B)" : "Collapse Sidebar (Ctrl+B)"}
         >
-          {isCollapsed ? <PanelLeft size={15} /> : <PanelLeftClose size={15} />}
+          {isCollapsed ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
+          {!isCollapsed && <span className="truncate">Collapse Sidebar</span>}
         </button>
       </div>
     </aside>
   );
 };
-
-export default AppSidebar;
