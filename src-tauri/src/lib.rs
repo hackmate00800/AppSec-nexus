@@ -6,6 +6,7 @@ pub mod crawler;
 pub mod db;
 pub mod extensions;
 pub mod feeds;
+pub mod heretic;
 pub mod importers;
 pub mod methodologies;
 pub mod models;
@@ -49,6 +50,7 @@ pub struct AppState {
     adapter_registry: Arc<adapters::AdapterRegistry>,
     extension_engine: Arc<extensions::ExtensionEngine>,
     job_manager: Arc<orchestration::JobManager>,
+    pub heretic_supervisor: Arc<heretic::HereticJobSupervisor>,
     pub current_user_role: UserRole,
 }
 
@@ -1858,6 +1860,7 @@ pub fn run() {
         extension_engine.clone(),
         arc_db.clone(),
     ));
+    let heretic_supervisor = Arc::new(heretic::HereticJobSupervisor::new());
 
     let state = AppState {
         db: arc_db,
@@ -1869,6 +1872,7 @@ pub fn run() {
         adapter_registry,
         extension_engine,
         job_manager,
+        heretic_supervisor,
         current_user_role: UserRole::Admin,
     };
 
@@ -2017,7 +2021,17 @@ pub fn run() {
             get_assessment_runs,
             get_test_executions,
             create_assessment_run,
-            update_test_case_execution
+            update_test_case_execution,
+            heretic::detect_heretic_hardware,
+            heretic::setup_heretic_environment,
+            heretic::start_heretic_job,
+            heretic::get_heretic_jobs,
+            heretic::get_heretic_job_logs,
+            heretic::cancel_heretic_job,
+            heretic::validate_heretic_export,
+            heretic::import_heretic_to_ollama,
+            heretic::run_heretic_evaluation,
+            heretic::get_heretic_evaluations
         ]);
 
     let app = match builder.build(tauri::generate_context!()) {

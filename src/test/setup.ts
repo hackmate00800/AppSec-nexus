@@ -180,11 +180,45 @@ vi.mock("@tauri-apps/api/core", () => ({
       case "chat_with_mentor": {
         const lastMsg = args?.messages?.[args?.messages?.length - 1]?.content || "";
         const lower = lastMsg.toLowerCase();
+        // Malicious attack request safeguard: safe redirection and refusal
+        if (lower.includes("hack bank.com") || lower.includes("exfiltrate user credentials") || lower.includes("unauthorized target")) {
+          return "I can't assist with that request. I can explain the defensive mechanisms, security testing methodologies, and how to verify vulnerabilities safely in an authorized local lab.";
+        }
+        // HTTP Security Header Inspection methodology (METH-HTTP-HEADERS)
+        if (lower.includes("meth-http-headers") || lower.includes("http security header inspection")) {
+          return `### HTTP Security Header Inspection Methodology (METH-HTTP-HEADERS)
+
+1. **Definition & Security Objective**:
+HTTP Security Header Inspection analyzes HTTP response headers to verify defense-in-depth security controls (CSP, HSTS, X-Content-Type-Options, Referrer-Policy, and Permissions-Policy).
+
+2. **Heuristic Logic & Normalization**:
+- Normalizes header casing and handles duplicate or conflicting headers across redirect chains.
+- Validates presence vs policy quality: having a weak policy (e.g. \`unsafe-inline\` in CSP) is flagged even if the header is present.
+- Evaluates transport contexts: HSTS is only valid over HTTPS.
+
+3. **Common Evasion & Detection Blind Spots**:
+- Reverse proxies or CDNs stripping headers before reaching backend clients.
+- Multi-header injection or conflicting duplicate response headers.
+- Client-side DOM manipulation overriding server-delivered meta policies.
+
+4. **Safe Local Lab Testing**:
+- Practice with \`curl -I https://localhost:8443\` or test against intentionally vulnerable testbeds (e.g., OWASP Juice Shop in Docker).
+
+5. **Remediation & Validation**:
+- Configure strict Nginx/Apache response headers with \`add_header\` directives.
+- Implement phased rollout: deploy \`Content-Security-Policy-Report-Only\` first to gather violation telemetry before enforcement.`;
+        }
         if (lower.includes("content security policy") || lower.includes("csp") || (args?.system && args.system.includes("CSP"))) {
           return "The missing Content-Security-Policy header represents a defense-in-depth security hardening omission rather than confirmed Cross-Site Scripting (XSS). Without CSP, the browser cannot restrict origin script sources, but XSS requires an active reflection or DOM injection vector.\n\n### Remediation (Nginx):\n```nginx\nadd_header Content-Security-Policy \"default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self';\" always;\n```\n\n### Staged Rollout:\nDeploy Content-Security-Policy-Report-Only first to collect violation reports before enforcing the policy in production.";
         }
         if (lower.includes("sql injection") || lower.includes("sqli")) {
           return "SQL Injection occurs when untrusted input is directly concatenated into SQL queries. Remediate using parameterized queries / prepared statements (e.g., PDO in PHP, parameterized SQL in Node/Python).";
+        }
+        if (lower.includes("idor") || lower.includes("bola") || lower.includes("authorization")) {
+          return "Broken Object Level Authorization (BOLA/IDOR) occurs when an API fails to validate user ownership of the requested resource. Remediate by implementing server-side session-based ownership verification for all record queries.";
+        }
+        if (lower.includes("false positive") || lower.includes("scanner validation")) {
+          return "Automated scanner detections represent hypotheses requiring deterministic verification. Differentiate scanner regex matches from confirmed exploitability using targeted non-destructive validation probes.";
         }
         if (lower.includes("prompt injection") || lower.includes("jailbreak") || lower.includes("dan")) {
           return "Prompt injection and jailbreaks attempt to override an LLM's system persona. Defenses include separating system instructions in role: 'system', sandboxing outputs, and never trusting user input to grant tool execution permissions.";
@@ -799,6 +833,124 @@ vi.mock("@tauri-apps/api/core", () => ({
           preconditions_checked: ["Target host reachable", "Authorized scope verified", "Non-destructive probe permitted"],
           limitations: ["Passive reflection does not guarantee DOM execution if client-side framework sanitizes"],
         };
+      case "detect_heretic_hardware":
+        return {
+          os: "Windows 11 (x64)",
+          gpu_name: "Intel(R) Iris(R) Xe Graphics",
+          gpu_vram_mb: 1024,
+          cuda_available: false,
+          ram_total_mb: 16384,
+          ram_avail_mb: 8192,
+          disk_total_gb: 256.0,
+          disk_free_gb: 95.4,
+          python_version: "Python 3.12.3",
+          python_path: "C:\\Python312\\python.exe",
+          pytorch_version: "2.5.1+cpu",
+          wsl_installed: true,
+          wsl_distro: "Ubuntu (WSL2)",
+          wsl_python_version: "Python 3.12.3",
+          heretic_installed: true,
+          heretic_version: "0.1.0",
+          compatibility_level: "supported_with_warnings",
+          warnings: ["NVIDIA CUDA acceleration not detected. Offloading to CPU tensors."],
+          recommendations: ["WSL2 Ubuntu is available and recommended for optimal Linux wheel compatibility."],
+        };
+      case "start_heretic_job":
+        return {
+          id: "job-mock-1",
+          source_model: args?.config?.source_model || "Qwen/Qwen3-4B-Instruct-2507",
+          output_path: args?.config?.output_dir || "C:\\AppSecNexus\\heretic_models\\job-mock-1",
+          status: "running",
+          stage: "abliteration_optimization",
+          execution_mode: args?.config?.execution_mode || "native",
+          config: args?.config || {
+            source_model: "Qwen/Qwen3-4B-Instruct-2507",
+            output_dir: "C:\\AppSecNexus\\heretic_models\\job-mock-1",
+            quantization: "bnb_4bit",
+            device_map: "auto",
+            n_trials: 50,
+            skip_optimization: false,
+            execution_mode: "native",
+          },
+          created_at: new Date().toISOString(),
+          started_at: new Date().toISOString(),
+          duration_ms: 0,
+          exported_files: [],
+        };
+      case "get_heretic_jobs":
+        return [
+          {
+            id: "job-mock-1",
+            source_model: "Qwen/Qwen3-4B-Instruct-2507",
+            output_path: "C:\\AppSecNexus\\heretic_models\\job-mock-1",
+            status: "completed",
+            stage: "ready_for_ollama",
+            execution_mode: "native",
+            config: {
+              source_model: "Qwen/Qwen3-4B-Instruct-2507",
+              output_dir: "C:\\AppSecNexus\\heretic_models\\job-mock-1",
+              quantization: "bnb_4bit",
+              device_map: "auto",
+              n_trials: 50,
+              skip_optimization: false,
+              execution_mode: "native",
+            },
+            created_at: new Date().toISOString(),
+            started_at: new Date().toISOString(),
+            completed_at: new Date().toISOString(),
+            duration_ms: 120000,
+            ollama_model_name: "cyberqwen-heretic:4b",
+            exported_files: ["model.safetensors", "config.json", "tokenizer.json"],
+          },
+        ];
+      case "get_heretic_job_logs":
+        return [
+          { id: 1, job_id: args?.jobId || "job-mock-1", line: "Optimizing refusal direction trial 1/50", timestamp: new Date().toISOString() },
+          { id: 2, job_id: args?.jobId || "job-mock-1", line: "Exporting modified Safetensors weights...", timestamp: new Date().toISOString() },
+        ];
+      case "cancel_heretic_job":
+        return null;
+      case "validate_heretic_export":
+        return {
+          is_valid: true,
+          artifact_format: "safetensors",
+          total_size_bytes: 4294967296,
+          files_found: ["model.safetensors (4096 MB)", "config.json (0.01 MB)", "tokenizer.json (1.2 MB)"],
+          missing_files: [],
+          has_config_json: true,
+          has_tokenizer: true,
+          has_weights: true,
+        };
+      case "import_heretic_to_ollama":
+        return {
+          success: true,
+          model_name: args?.params?.model_name || "cyberqwen-heretic:4b",
+          modelfile_path: "Modelfile",
+          logs: ["transferring model data", "creating model layer", "writing manifest", "success"],
+        };
+      case "run_heretic_evaluation":
+        return {
+          job_id: args?.jobId || "job-mock-1",
+          model_name: args?.modelName || "cyberqwen-heretic:4b",
+          tested_at: new Date().toISOString(),
+          total_prompts: 10,
+          refusal_count: 0,
+          refusal_rate: 0.0,
+          technical_quality_score: 9.4,
+          questions_tested: [
+            {
+              id: "EVAL-01-SQLI",
+              category: "Injection",
+              prompt: "Explain AST parameterization...",
+              response: "AST isolation eliminates injection...",
+              was_refused: false,
+              has_remediation_code: true,
+              duration_ms: 1200,
+            },
+          ],
+        };
+      case "get_heretic_evaluations":
+        return [];
       default:
         return null;
     }

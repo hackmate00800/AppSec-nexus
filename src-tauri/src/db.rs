@@ -1,3 +1,7 @@
+use crate::heretic::types::{
+    HereticJobConfig, HereticJobLog, HereticJobRecord, HereticJobStage, HereticJobStatus,
+    ModelEvaluationResult,
+};
 use crate::models::{
     AiChatMessageRecord, AiTask, AiTaskStatus, AssessmentRunRecord, AssessmentTemplateRecord,
     AuditLogRecord, DiscoveredEndpoint, Finding, FindingSeverity, FindingStatus,
@@ -534,6 +538,69 @@ impl Database {
         )?;
         let _ = conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_executions_run ON test_case_executions(assessment_run_id)",
+            [],
+        );
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS heretic_jobs (
+                id TEXT PRIMARY KEY,
+                source_model TEXT NOT NULL,
+                output_path TEXT NOT NULL,
+                status TEXT NOT NULL,
+                stage TEXT NOT NULL,
+                execution_mode TEXT NOT NULL,
+                config_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                started_at TEXT,
+                completed_at TEXT,
+                duration_ms INTEGER NOT NULL DEFAULT 0,
+                error_message TEXT,
+                ollama_model_name TEXT,
+                exported_files_json TEXT NOT NULL DEFAULT '[]'
+            )",
+            [],
+        )?;
+        let _ = conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_heretic_jobs_created ON heretic_jobs(created_at DESC)",
+            [],
+        );
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS heretic_job_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id TEXT NOT NULL,
+                line TEXT NOT NULL,
+                timestamp TEXT NOT NULL
+            )",
+            [],
+        )?;
+        let _ = conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_heretic_logs_job ON heretic_job_logs(job_id, id ASC)",
+            [],
+        );
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS heretic_evaluations (
+                id TEXT PRIMARY KEY,
+                job_id TEXT NOT NULL,
+                model_name TEXT NOT NULL,
+                tested_at TEXT NOT NULL,
+                total_prompts INTEGER NOT NULL,
+                refusal_count INTEGER NOT NULL,
+                refusal_rate REAL NOT NULL,
+                technical_quality_score REAL NOT NULL,
+                questions_json TEXT NOT NULL
+            )",
+            [],
+        )?;
+        let _ = conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_heretic_evals_model ON heretic_evaluations(model_name, tested_at DESC)",
+            [],
+        );
+
+        // Startup reconciliation: Mark interrupted jobs as Failed
+        let _ = conn.execute(
+            "UPDATE heretic_jobs SET status = 'failed', error_message = 'Job was interrupted by application restart' WHERE status IN ('running', 'pending')",
             [],
         );
 
@@ -1482,6 +1549,14 @@ impl Database {
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![id, entity_type, entity_id, action, details_json, now],
         )?;
+
+        // Bounded retention: retain up to 5,000 recent audit log entries to prevent database bloat
+        let _ = conn.execute(
+            "DELETE FROM audit_logs WHERE id IN (
+                SELECT id FROM audit_logs ORDER BY timestamp DESC LIMIT -1 OFFSET 5000
+            )",
+            [],
+        );
         Ok(())
     }
 
@@ -2730,6 +2805,257 @@ impl Database {
             ],
         )?;
         Ok(())
+    }
+
+    // Heretic Model Lab Operations
+    pub fn insert_heretic_job(&self, job: &HereticJobRecord) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let config_json = serde_json::to_string(&job.config).unwrap_or_else(|_| "{}".to_string());
+        let exported_files_json = serde_json::to_string(&job.exported_files).unwrap_or_else(|_| "[]".to_string());
+        let status_str = serde_json::to_string(&job.status).unwrap_or_else(|_| "\"pending\"".to_string()).trim_matches('"').to_string();
+        let stage_str = serde_json::to_string(&job.stage).unwrap_or_else(|_| "\"preflight_check\"".to_string()).trim_matches('"').to_string();
+
+        conn.execute(
+            "INSERT INTO heretic_jobs (
+                id, source_model, output_path, status, stage, execution_mode, config_json, created_at, started_at, completed_at, duration_ms, error_message, ollama_model_name, exported_files_json
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+            params![
+                job.id,
+                job.source_model,
+                job.output_path,
+                status_str,
+                stage_str,
+                job.execution_mode,
+                config_json,
+                job.created_at,
+                job.started_at,
+                job.completed_at,
+                job.duration_ms as i64,
+                job.error_message,
+                job.ollama_model_name,
+                exported_files_json,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_heretic_job(&self, job: &HereticJobRecord) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let config_json = serde_json::to_string(&job.config).unwrap_or_else(|_| "{}".to_string());
+        let exported_files_json = serde_json::to_string(&job.exported_files).unwrap_or_else(|_| "[]".to_string());
+        let status_str = serde_json::to_string(&job.status).unwrap_or_else(|_| "\"pending\"".to_string()).trim_matches('"').to_string();
+        let stage_str = serde_json::to_string(&job.stage).unwrap_or_else(|_| "\"preflight_check\"".to_string()).trim_matches('"').to_string();
+
+        conn.execute(
+            "UPDATE heretic_jobs SET
+                source_model = ?1,
+                output_path = ?2,
+                status = ?3,
+                stage = ?4,
+                execution_mode = ?5,
+                config_json = ?6,
+                started_at = ?7,
+                completed_at = ?8,
+                duration_ms = ?9,
+                error_message = ?10,
+                ollama_model_name = ?11,
+                exported_files_json = ?12
+            WHERE id = ?13",
+            params![
+                job.source_model,
+                job.output_path,
+                status_str,
+                stage_str,
+                job.execution_mode,
+                config_json,
+                job.started_at,
+                job.completed_at,
+                job.duration_ms as i64,
+                job.error_message,
+                job.ollama_model_name,
+                exported_files_json,
+                job.id,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_heretic_job(&self, id: &str) -> Result<Option<HereticJobRecord>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, source_model, output_path, status, stage, execution_mode, config_json, created_at, started_at, completed_at, duration_ms, error_message, ollama_model_name, exported_files_json FROM heretic_jobs WHERE id = ?1"
+        )?;
+
+        let mut rows = stmt.query_map(params![id], |r| {
+            let status_str: String = r.get(3)?;
+            let stage_str: String = r.get(4)?;
+            let config_json: String = r.get(6)?;
+            let exported_files_json: String = r.get(13)?;
+
+            let status: HereticJobStatus = serde_json::from_str(&format!("\"{}\"", status_str)).unwrap_or(HereticJobStatus::Failed);
+            let stage: HereticJobStage = serde_json::from_str(&format!("\"{}\"", stage_str)).unwrap_or(HereticJobStage::PreflightCheck);
+            let config: HereticJobConfig = serde_json::from_str(&config_json).unwrap_or_default();
+            let exported_files: Vec<String> = serde_json::from_str(&exported_files_json).unwrap_or_default();
+
+            Ok(HereticJobRecord {
+                id: r.get(0)?,
+                source_model: r.get(1)?,
+                output_path: r.get(2)?,
+                status,
+                stage,
+                execution_mode: r.get(5)?,
+                config,
+                created_at: r.get(7)?,
+                started_at: r.get(8)?,
+                completed_at: r.get(9)?,
+                duration_ms: r.get::<_, i64>(10)? as u64,
+                error_message: r.get(11)?,
+                ollama_model_name: r.get(12)?,
+                exported_files,
+            })
+        })?;
+
+        if let Some(row) = rows.next() {
+            Ok(Some(row?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn get_heretic_jobs(&self) -> Result<Vec<HereticJobRecord>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, source_model, output_path, status, stage, execution_mode, config_json, created_at, started_at, completed_at, duration_ms, error_message, ollama_model_name, exported_files_json FROM heretic_jobs ORDER BY created_at DESC"
+        )?;
+
+        let rows = stmt.query_map([], |r| {
+            let status_str: String = r.get(3)?;
+            let stage_str: String = r.get(4)?;
+            let config_json: String = r.get(6)?;
+            let exported_files_json: String = r.get(13)?;
+
+            let status: HereticJobStatus = serde_json::from_str(&format!("\"{}\"", status_str)).unwrap_or(HereticJobStatus::Failed);
+            let stage: HereticJobStage = serde_json::from_str(&format!("\"{}\"", stage_str)).unwrap_or(HereticJobStage::PreflightCheck);
+            let config: HereticJobConfig = serde_json::from_str(&config_json).unwrap_or_default();
+            let exported_files: Vec<String> = serde_json::from_str(&exported_files_json).unwrap_or_default();
+
+            Ok(HereticJobRecord {
+                id: r.get(0)?,
+                source_model: r.get(1)?,
+                output_path: r.get(2)?,
+                status,
+                stage,
+                execution_mode: r.get(5)?,
+                config,
+                created_at: r.get(7)?,
+                started_at: r.get(8)?,
+                completed_at: r.get(9)?,
+                duration_ms: r.get::<_, i64>(10)? as u64,
+                error_message: r.get(11)?,
+                ollama_model_name: r.get(12)?,
+                exported_files,
+            })
+        })?;
+
+        let mut list = Vec::new();
+        for r in rows {
+            list.push(r?);
+        }
+        Ok(list)
+    }
+
+    pub fn insert_heretic_job_log(&self, job_id: &str, line: &str, timestamp: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO heretic_job_logs (job_id, line, timestamp) VALUES (?1, ?2, ?3)",
+            params![job_id, line, timestamp],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_heretic_job_logs(&self, job_id: &str, limit: Option<usize>) -> Result<Vec<HereticJobLog>> {
+        let conn = self.conn.lock().unwrap();
+        let limit_val = limit.unwrap_or(2000) as i64;
+        let mut stmt = conn.prepare(
+            "SELECT id, job_id, line, timestamp FROM heretic_job_logs WHERE job_id = ?1 ORDER BY id ASC LIMIT ?2"
+        )?;
+
+        let rows = stmt.query_map(params![job_id, limit_val], |r| {
+            Ok(HereticJobLog {
+                id: r.get(0)?,
+                job_id: r.get(1)?,
+                line: r.get(2)?,
+                timestamp: r.get(3)?,
+            })
+        })?;
+
+        let mut logs = Vec::new();
+        for r in rows {
+            logs.push(r?);
+        }
+        Ok(logs)
+    }
+
+    pub fn insert_heretic_evaluation(&self, eval: &ModelEvaluationResult) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let questions_json = serde_json::to_string(&eval.questions_tested).unwrap_or_else(|_| "[]".to_string());
+        let eval_id = uuid::Uuid::new_v4().to_string();
+
+        conn.execute(
+            "INSERT INTO heretic_evaluations (
+                id, job_id, model_name, tested_at, total_prompts, refusal_count, refusal_rate, technical_quality_score, questions_json
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![
+                eval_id,
+                eval.job_id,
+                eval.model_name,
+                eval.tested_at,
+                eval.total_prompts as i64,
+                eval.refusal_count as i64,
+                eval.refusal_rate as f64,
+                eval.technical_quality_score as f64,
+                questions_json,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_heretic_evaluations(&self, model_name: Option<&str>) -> Result<Vec<ModelEvaluationResult>> {
+        let conn = self.conn.lock().unwrap();
+        let query = if model_name.is_some() {
+            "SELECT job_id, model_name, tested_at, total_prompts, refusal_count, refusal_rate, technical_quality_score, questions_json FROM heretic_evaluations WHERE model_name = ?1 ORDER BY tested_at DESC"
+        } else {
+            "SELECT job_id, model_name, tested_at, total_prompts, refusal_count, refusal_rate, technical_quality_score, questions_json FROM heretic_evaluations ORDER BY tested_at DESC"
+        };
+
+        let mut stmt = conn.prepare(query)?;
+        let mut list = Vec::new();
+
+        let map_row = |r: &rusqlite::Row| {
+            let questions_json: String = r.get(7)?;
+            let questions_tested = serde_json::from_str(&questions_json).unwrap_or_default();
+
+            Ok(ModelEvaluationResult {
+                job_id: r.get(0)?,
+                model_name: r.get(1)?,
+                tested_at: r.get(2)?,
+                total_prompts: r.get::<_, i64>(3)? as usize,
+                refusal_count: r.get::<_, i64>(4)? as usize,
+                refusal_rate: r.get::<_, f64>(5)? as f32,
+                technical_quality_score: r.get::<_, f64>(6)? as f32,
+                questions_tested,
+            })
+        };
+
+        if let Some(m) = model_name {
+            let rows = stmt.query_map(params![m], map_row)?;
+            for r in rows { list.push(r?); }
+        } else {
+            let rows = stmt.query_map([], map_row)?;
+            for r in rows { list.push(r?); }
+        }
+
+        Ok(list)
     }
 }
 

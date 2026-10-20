@@ -23,6 +23,7 @@ import {
   Radio,
   ClipboardList,
   Workflow,
+  Bot,
 } from "lucide-react";
 import { useWorkspace } from "../../context/WorkspaceContext";
 
@@ -152,6 +153,12 @@ const ALL_TABS_META: Record<string, TabMeta> = {
     id: "methodologies",
     label: "Methodology Explorer",
     icon: <Workflow size={14} />,
+    closable: true,
+  },
+  modelLab: {
+    id: "modelLab",
+    label: "Model Lab (Heretic)",
+    icon: <Bot size={14} />,
     closable: true,
   },
 };
@@ -314,7 +321,7 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
               </span>
 
               {/* Tab Label */}
-              <span style={{ fontSize: "11px", fontWeight: isActive ? 600 : 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <span style={{ fontSize: "11px", fontWeight: isActive ? 600 : 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }}>
                 {meta.label}
               </span>
 

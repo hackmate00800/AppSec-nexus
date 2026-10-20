@@ -89,7 +89,6 @@ import { useTheme } from "./theme/ThemeProvider";
 import { useToast } from "./components/ui/Toast";
 import { SeverityBadge, StatusBadge, ScopeBadge, ValidationBadge } from "./components/ui/Badge";
 import { CommandPalette } from "./components/CommandPalette";
-import { AppearanceSettings } from "./components/AppearanceSettings";
 import { useAiTaskContext } from "./context/AiTaskContext";
 import { useWorkspace } from "./context/WorkspaceContext";
 import { WorkspaceTabs } from "./components/ui/WorkspaceTabs";
@@ -108,7 +107,6 @@ import { TargetEditModal } from "./components/crud/TargetEditModal";
 import { FindingEditModal } from "./components/crud/FindingEditModal";
 import { FindingCreateModal } from "./components/crud/FindingCreateModal";
 import { AuditLogModal } from "./components/crud/AuditLogModal";
-import { IssueCenter } from "./components/issues/IssueCenter";
 import { KeyboardShortcutsModal } from "./components/help/KeyboardShortcutsModal";
 import { NavigationBreadcrumbs } from "./components/ui/NavigationBreadcrumbs";
 import { SecurityCategory } from "./categories/types";
@@ -153,6 +151,15 @@ const VulnerabilityDetailPage = lazy(() =>
 );
 const MethodologyExplorer = lazy(() =>
   import("./components/methodologies/MethodologyExplorer").then((m) => ({ default: m.MethodologyExplorer }))
+);
+const IssueCenter = lazy(() =>
+  import("./components/issues/IssueCenter").then((m) => ({ default: m.IssueCenter }))
+);
+const AppearanceSettings = lazy(() =>
+  import("./components/AppearanceSettings").then((m) => ({ default: m.AppearanceSettings }))
+);
+const ModelLabView = lazy(() =>
+  import("./components/model_lab/ModelLabView").then((m) => ({ default: m.ModelLabView }))
 );
 
 const TabLoadingSkeleton: React.FC = () => (
@@ -209,7 +216,8 @@ export type TabType =
   | "categoryWorkflow"
   | "playbooks"
   | "burp"
-  | "methodologies";
+  | "methodologies"
+  | "modelLab";
 
 export default function App() {
   const { preferences, setTheme, setSidebarMode } = useTheme();
@@ -3995,13 +4003,13 @@ export default function App() {
                 {/* Filter and Search Bar */}
                 <div className="filter-bar">
                   <div style={{ position: "relative", minWidth: "220px", flex: 1 }}>
-                    <Search size={14} color="var(--text-dim)" style={{ position: "absolute", left: "10px", top: "10px" }} />
+                    <Search size={14} color="var(--text-dim)" style={{ position: "absolute", left: "10px", top: "11px" }} />
                     <input
                       className="input-field"
                       placeholder="Search title, asset, tool, CWE..."
                       value={findingSearchQuery}
                       onChange={(e) => setFindingSearchQuery(e.target.value)}
-                      style={{ paddingLeft: "30px", height: "34px", fontSize: "0.8rem" }}
+                      style={{ paddingLeft: "32px", height: "36px", minHeight: "36px", fontSize: "0.82rem" }}
                     />
                   </div>
 
@@ -4991,10 +4999,12 @@ export default function App() {
 
           {/* TAB: ISSUE DOCUMENTATION & TRACKING */}
           {activeTab === "issues" && (
-            <IssueCenter
-              targets={targets}
-              currentTargetId={selectedTarget?.id || null}
-            />
+            <Suspense fallback={<TabLoadingSkeleton />}>
+              <IssueCenter
+                targets={targets}
+                currentTargetId={selectedTarget?.id || null}
+              />
+            </Suspense>
           )}
 
           {/* TAB 6: IMPORT REPORTS */}
@@ -5576,7 +5586,7 @@ export default function App() {
                           className="input-field"
                           value={quickModel}
                           onChange={(e) => handleAssignModelSlot("quick", e.target.value)}
-                          style={{ width: "100%", fontSize: "0.8rem", height: "32px" }}
+                          style={{ width: "100%", fontSize: "0.82rem", height: "36px", minHeight: "36px", padding: "6px 10px" }}
                         >
                           {aiModels.length === 0 ? (
                             <option value={quickModel}>{quickModel} (Not installed)</option>
@@ -5599,7 +5609,7 @@ export default function App() {
                           className="input-field"
                           value={deepModel}
                           onChange={(e) => handleAssignModelSlot("deep", e.target.value)}
-                          style={{ width: "100%", fontSize: "0.8rem", height: "32px" }}
+                          style={{ width: "100%", fontSize: "0.82rem", height: "36px", minHeight: "36px", padding: "6px 10px" }}
                         >
                           {aiModels.length === 0 ? (
                             <option value={deepModel}>{deepModel} (Not installed)</option>
@@ -5628,14 +5638,14 @@ export default function App() {
                           placeholder="e.g. llama3.2:1b, llama3:8b, qwen2.5-coder:1.5b"
                           value={customModelInput}
                           onChange={(e) => setCustomModelInput(e.target.value)}
-                          style={{ flex: 1, minWidth: "220px", height: "32px", fontSize: "0.8rem" }}
+                          style={{ flex: 1, minWidth: "220px", height: "36px", minHeight: "36px", fontSize: "0.82rem" }}
                           disabled={Boolean(pullingModel)}
                         />
                         <button
                           className="btn btn-primary"
                           disabled={!customModelInput.trim() || Boolean(pullingModel) || !aiAvailable}
                           onClick={() => handlePullModel(customModelInput.trim())}
-                          style={{ padding: "0 14px", height: "32px", fontSize: "0.78rem" }}
+                          style={{ padding: "0 14px", height: "36px", minHeight: "36px", fontSize: "0.8rem" }}
                         >
                           {pullingModel ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
                           <span>{pullingModel ? "Pulling..." : "Install Model"}</span>
@@ -5722,7 +5732,7 @@ export default function App() {
                             className="input-field"
                             value={aiMode}
                             onChange={(e: any) => setAiMode(e.target.value)}
-                            style={{ fontSize: "0.75rem", height: "28px", padding: "2px 8px" }}
+                            style={{ fontSize: "0.82rem", height: "36px", minHeight: "36px", padding: "6px 10px" }}
                           >
                             <option value="beginner">Beginner / Learner Mode (Simple Analogies)</option>
                             <option value="advanced">Senior Pentester Mode (Remediation & Code)</option>
@@ -6149,6 +6159,18 @@ export default function App() {
                 onSelectMethodology={(m: MethodologyDefinition) => setActiveMethodologyId(m.id)}
                 onOpenAiMentor={(prompt: string) => {
                   setExternalMentorPrompt(prompt);
+                  setActiveTab("mentor");
+                }}
+              />
+            </Suspense>
+          )}
+
+          {/* TAB 14: HERETIC MODEL LAB */}
+          {activeTab === "modelLab" && (
+            <Suspense fallback={<TabLoadingSkeleton />}>
+              <ModelLabView
+                onAssignToMentor={(modelName: string) => {
+                  setSelectedModel(modelName);
                   setActiveTab("mentor");
                 }}
               />
