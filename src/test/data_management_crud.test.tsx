@@ -333,6 +333,35 @@ describe("Data Management & Complete CRUD Suite", () => {
       expect(screen.getByRole("button", { name: /Next/i })).toBeInTheDocument();
     });
 
+    it("deletes finding using correct findingId argument format", async () => {
+      await act(async () => {
+        render(<App />);
+      });
+
+      // Switch to Findings tab
+      const findingsTabBtn = screen.getByTitle("Vulnerability Findings");
+      fireEvent.click(findingsTabBtn);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Unified Findings & Deduplication Engine/i)).toBeInTheDocument();
+      });
+
+      // Click Delete Finding button on the first finding
+      const deleteButtons = screen.getAllByTitle("Delete Finding");
+      expect(deleteButtons.length).toBeGreaterThan(0);
+      fireEvent.click(deleteButtons[0]);
+
+      // Confirm deletion in modal
+      const confirmBtn = screen.getByRole("button", { name: /^Delete Finding$/i });
+      fireEvent.click(confirmBtn);
+
+      await waitFor(() => {
+        expect(invoke).toHaveBeenCalledWith("delete_finding", expect.objectContaining({
+          findingId: expect.any(String),
+        }));
+      });
+    });
+
     it("renders Scan Audit History tab with Audit Trail and Clear History controls", async () => {
       await act(async () => {
         render(<App />);

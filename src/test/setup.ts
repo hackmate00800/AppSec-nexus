@@ -275,12 +275,14 @@ HTTP Security Header Inspection analyzes HTTP response headers to verify defense
           created_at: new Date().toISOString(),
           validation_status: "CONFIRMED",
         };
-      case "delete_finding":
-        return true;
+      case "delete_finding": {
+        const fId = args?.findingId || args?.finding_id || args?.id;
+        return Boolean(fId);
+      }
       case "bulk_update_finding_status":
-        return args?.finding_ids?.length || 1;
+        return args?.findingIds?.length || args?.finding_ids?.length || args?.ids?.length || 1;
       case "bulk_delete_findings":
-        return args?.finding_ids?.length || 1;
+        return args?.findingIds?.length || args?.finding_ids?.length || args?.ids?.length || 1;
       case "create_endpoint":
         return {
           id: "ep-mock-1",

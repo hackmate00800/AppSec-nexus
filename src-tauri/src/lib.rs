@@ -775,10 +775,17 @@ fn update_finding(
 }
 
 #[tauri::command]
-fn delete_finding(state: State<'_, AppState>, finding_id: String) -> Result<bool, String> {
-    let deleted = state.db.delete_finding(&finding_id).map_err(|e| e.to_string())?;
+fn delete_finding(
+    state: State<'_, AppState>,
+    finding_id: Option<String>,
+    id: Option<String>,
+) -> Result<bool, String> {
+    let target_id = finding_id
+        .or(id)
+        .ok_or_else(|| "Missing required parameter: findingId or id".to_string())?;
+    let deleted = state.db.delete_finding(&target_id).map_err(|e| e.to_string())?;
     if deleted {
-        let _ = state.db.log_audit_event("finding", &finding_id, "DELETE", "Deleted finding and validation history");
+        let _ = state.db.log_audit_event("finding", &target_id, "DELETE", "Deleted finding and validation history");
     }
     Ok(deleted)
 }
@@ -786,30 +793,45 @@ fn delete_finding(state: State<'_, AppState>, finding_id: String) -> Result<bool
 #[tauri::command]
 fn bulk_update_finding_status(
     state: State<'_, AppState>,
-    finding_ids: Vec<String>,
-    status: String,
+    finding_ids: Option<Vec<String>>,
+    ids: Option<Vec<String>>,
+    status: Option<String>,
+    new_status: Option<String>,
 ) -> Result<usize, String> {
     if state.current_user_role != UserRole::Admin {
         return Err("Permission denied: only admins may bulk update findings".into());
     }
+    let target_ids = finding_ids
+        .or(ids)
+        .ok_or_else(|| "Missing required parameter: findingIds or ids".to_string())?;
+    let target_status = status
+        .or(new_status)
+        .ok_or_else(|| "Missing required parameter: status or newStatus".to_string())?;
     let count = state
         .db
-        .bulk_update_finding_status(&finding_ids, &status)
+        .bulk_update_finding_status(&target_ids, &target_status)
         .map_err(|e| e.to_string())?;
     let _ = state.db.log_audit_event(
         "finding",
         "bulk",
         "BULK_UPDATE",
-        &format!("Updated {} findings to status '{}'", count, status),
+        &format!("Updated {} findings to status '{}'", count, target_status),
     );
     Ok(count)
 }
 
 #[tauri::command]
-fn bulk_delete_findings(state: State<'_, AppState>, finding_ids: Vec<String>) -> Result<usize, String> {
+fn bulk_delete_findings(
+    state: State<'_, AppState>,
+    finding_ids: Option<Vec<String>>,
+    ids: Option<Vec<String>>,
+) -> Result<usize, String> {
+    let target_ids = finding_ids
+        .or(ids)
+        .ok_or_else(|| "Missing required parameter: findingIds or ids".to_string())?;
     let count = state
         .db
-        .bulk_delete_findings(&finding_ids)
+        .bulk_delete_findings(&target_ids)
         .map_err(|e| e.to_string())?;
     let _ = state.db.log_audit_event(
         "finding",
@@ -846,10 +868,17 @@ fn create_endpoint(
 }
 
 #[tauri::command]
-fn delete_endpoint(state: State<'_, AppState>, endpoint_id: String) -> Result<bool, String> {
-    let deleted = state.db.delete_endpoint(&endpoint_id).map_err(|e| e.to_string())?;
+fn delete_endpoint(
+    state: State<'_, AppState>,
+    endpoint_id: Option<String>,
+    id: Option<String>,
+) -> Result<bool, String> {
+    let target_id = endpoint_id
+        .or(id)
+        .ok_or_else(|| "Missing required parameter: endpointId or id".to_string())?;
+    let deleted = state.db.delete_endpoint(&target_id).map_err(|e| e.to_string())?;
     if deleted {
-        let _ = state.db.log_audit_event("endpoint", &endpoint_id, "DELETE", "Deleted endpoint");
+        let _ = state.db.log_audit_event("endpoint", &target_id, "DELETE", "Deleted endpoint");
     }
     Ok(deleted)
 }
@@ -862,10 +891,17 @@ fn clear_endpoints(state: State<'_, AppState>, target_id: String) -> Result<usiz
 }
 
 #[tauri::command]
-fn delete_scan_history(state: State<'_, AppState>, scan_id: String) -> Result<bool, String> {
-    let deleted = state.db.delete_scan_history(&scan_id).map_err(|e| e.to_string())?;
+fn delete_scan_history(
+    state: State<'_, AppState>,
+    scan_id: Option<String>,
+    id: Option<String>,
+) -> Result<bool, String> {
+    let target_id = scan_id
+        .or(id)
+        .ok_or_else(|| "Missing required parameter: scanId or id".to_string())?;
+    let deleted = state.db.delete_scan_history(&target_id).map_err(|e| e.to_string())?;
     if deleted {
-        let _ = state.db.log_audit_event("scan", &scan_id, "DELETE", "Deleted scan history record");
+        let _ = state.db.log_audit_event("scan", &target_id, "DELETE", "Deleted scan history record");
     }
     Ok(deleted)
 }

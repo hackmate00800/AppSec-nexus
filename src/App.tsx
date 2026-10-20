@@ -1164,7 +1164,7 @@ export default function App() {
     setIsDeletingFinding(true);
     try {
       if (isTauriApp) {
-        await invoke("delete_finding", { id: deletingFinding.id });
+        await invoke("delete_finding", { findingId: deletingFinding.id, id: deletingFinding.id });
       }
       const id = deletingFinding.id;
       const title = deletingFinding.title;
@@ -1226,7 +1226,7 @@ export default function App() {
     const ids = Array.from(selectedFindingIds);
     try {
       if (isTauriApp) {
-        await invoke("bulk_update_finding_status", { ids, newStatus: bulkStatusTarget });
+        await invoke("bulk_update_finding_status", { findingIds: ids, ids, status: bulkStatusTarget, newStatus: bulkStatusTarget });
       }
       setFindings((prev) =>
         prev.map((f) => (selectedFindingIds.has(f.id) ? { ...f, status: bulkStatusTarget } : f))
@@ -1251,7 +1251,7 @@ export default function App() {
     setIsBulkDeleting(true);
     try {
       if (isTauriApp) {
-        await invoke("bulk_delete_findings", { ids });
+        await invoke("bulk_delete_findings", { findingIds: ids, ids });
       }
       setFindings((prev) => prev.filter((f) => !selectedFindingIds.has(f.id)));
       if (selectedFinding && selectedFindingIds.has(selectedFinding.id)) {
@@ -1296,7 +1296,7 @@ export default function App() {
   const handleDeleteEndpoint = async (ep: DiscoveredEndpoint) => {
     try {
       if (isTauriApp) {
-        await invoke("delete_endpoint", { id: ep.id });
+        await invoke("delete_endpoint", { endpointId: ep.id, id: ep.id });
       }
       setEndpoints((prev) => prev.filter((e) => e.id !== ep.id));
       addToast({
@@ -1339,7 +1339,7 @@ export default function App() {
   const handleDeleteScanHistory = async (scan: ScanResult) => {
     try {
       if (isTauriApp) {
-        await invoke("delete_scan_history", { id: scan.scan_id });
+        await invoke("delete_scan_history", { scanId: scan.scan_id, id: scan.scan_id });
       }
       setScanHistory((prev) => prev.filter((s) => s.scan_id !== scan.scan_id));
       addToast({
