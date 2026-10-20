@@ -34,18 +34,25 @@ export interface Lesson {
   id: string;
   moduleId: string;
   pathId: string;
+  stageId?: string;
   title: string;
+  fullForm?: string;
   level: SkillLevel;
   estimatedMinutes: number;
   objectives: string[];
   prerequisites: string[];
   summary: string;
   beginnerExplanation: string;
+  hinglishExplanation?: string;
+  realWorldAnalogy?: string;
+  whyItExists?: string;
+  cybersecurityConnection?: string;
   technicalDeepDive: string;
   diagramAscii?: string;
   codeExamples?: CodeSnippet[];
   commonMistakes: string[];
   practicalExercise?: string;
+  applicationTask?: string;
   authoritativeReferences: { title: string; url: string; isOfficial: boolean }[];
   quiz?: Quiz;
   relatedVulnerabilityIds?: string[];
@@ -63,6 +70,8 @@ export interface Module {
 
 export interface LearningPath {
   id: string;
+  stageNumber?: number;
+  stageCode?: string;
   title: string;
   subtitle: string;
   level: SkillLevel;
@@ -278,4 +287,19 @@ export interface UserAcademyState {
   bookmarks: string[];
   notes: Record<string, string>; // lessonId -> markdown note text
   lastVisitedLessonId?: string;
+  explanationMode?: "beginner" | "hinglish" | "technical" | "analogy";
+}
+
+export interface GlossaryEntry {
+  id: string;
+  term: string;
+  fullForm?: string;
+  category: "networking" | "web" | "security" | "pentest" | "cryptography" | "system";
+  englishDefinition: string;
+  hinglishDefinition: string;
+  whyItExists: string;
+  realWorldAnalogy: string;
+  relatedTerms?: string[];
+  cwe?: string;
+  relatedTools?: string[];
 }

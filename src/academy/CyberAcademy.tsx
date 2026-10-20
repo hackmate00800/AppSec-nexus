@@ -21,10 +21,11 @@ import {
   Check,
   Copy,
   Layers,
-  Users,
   FileCode,
   Compass,
   FolderTree,
+  BookA,
+  Send,
 } from "lucide-react";
 import {
   Lesson,
@@ -51,6 +52,8 @@ import { CommunityDirectoryView } from "./components/CommunityDirectoryView";
 import { ProjectsAndCapstoneView } from "./components/ProjectsAndCapstoneView";
 import { SkillMapView } from "./components/SkillMapView";
 import { TaxonomyKnowledgeTreeView } from "./components/TaxonomyKnowledgeTreeView";
+import { VirtualLabsWorkspace } from "./components/VirtualLabsWorkspace";
+import { GlossaryKnowledgeBaseView } from "./components/GlossaryKnowledgeBaseView";
 import { evaluateLessonPrerequisites, getRecommendedNextLessons } from "./prerequisites";
 import { SecurityFlowchart } from "../Flowchart";
 
@@ -72,7 +75,9 @@ export type AcademyTab =
   | "methodologies"
   | "labs"
   | "certifications"
-  | "notes";
+  | "notes"
+  | "glossary"
+  | "ai_tutor";
 
 interface CyberAcademyProps {
   onNavigateScanner?: (toolId: string) => void;
@@ -126,6 +131,8 @@ export function CyberAcademy({ onNavigateScanner, onOpenAiMentor, findings, init
   const [currentNote, setCurrentNote] = useState<string>("");
   const [copiedCode, setCopiedCode] = useState<string>("");
   const [showDiagram, setShowDiagram] = useState<boolean>(false);
+  const [explanationMode, setExplanationMode] = useState<"beginner" | "hinglish" | "analogy" | "technical" | "ai_tutor">("beginner");
+  const [aiTutorPrompt, setAiTutorPrompt] = useState<string>("");
 
   // Sync state to local storage
   useEffect(() => {
@@ -326,24 +333,24 @@ export function CyberAcademy({ onNavigateScanner, onOpenAiMentor, findings, init
         }}
       >
         {[
-          { id: "dashboard", label: "Dashboard & Progress", icon: Award },
-          { id: "taxonomy", label: "Knowledge Taxonomy", icon: FolderTree },
+          { id: "dashboard", label: "Learning Dashboard", icon: Award },
+          { id: "paths", label: "Roadmap (Stages 0–11)", icon: BookOpen },
+          { id: "lesson", label: "Interactive Lessons", icon: FileCode },
+          { id: "labs", label: "Virtual Labs & Sandboxes", icon: Play },
+          { id: "commands", label: "Practice Challenges & CLI", icon: Terminal },
           { id: "visuals", label: "Visual Learning Engine", icon: Layers },
-          { id: "commands", label: "OS & Terminal Academy", icon: Terminal },
-          { id: "projects", label: "Projects & Capstone", icon: Award },
-          { id: "paths", label: "Learning Paths", icon: BookOpen },
-          { id: "lesson", label: "Interactive Lesson", icon: FileCode },
-          { id: "skills", label: "Skill Map", icon: Compass },
-          { id: "resources", label: "Documentation Hub", icon: BookOpen },
-          { id: "communities", label: "Community Directory", icon: Users },
-          { id: "concepts", label: "Concept Library", icon: Sparkles },
-          { id: "workflows", label: "Security Workflows", icon: ChevronRight },
+          { id: "projects", label: "Cybersecurity Projects", icon: Award },
+          { id: "certifications", label: "Assessments & Quizzes", icon: GraduationCap },
+          { id: "skills", label: "Learning Progress", icon: Compass },
+          { id: "glossary", label: "Glossary & Knowledge Base", icon: BookA },
+          { id: "notes", label: "My Notes & Bookmarks", icon: Bookmark },
+          { id: "ai_tutor", label: "Ask AI Tutor", icon: Sparkles },
           { id: "encyclopedia", label: "Vulnerability Encyclopedia", icon: ShieldAlert },
           { id: "tools", label: "Tools Knowledge Base", icon: Radio },
+          { id: "workflows", label: "Security Workflows", icon: ChevronRight },
           { id: "methodologies", label: "Methodologies & Frameworks", icon: GitBranch },
-          { id: "labs", label: "Hands-on Guided Labs", icon: Play },
-          { id: "certifications", label: "Certifications & Careers", icon: GraduationCap },
-          { id: "notes", label: "My Bookmarks & Notes", icon: Bookmark }
+          { id: "taxonomy", label: "Knowledge Taxonomy", icon: FolderTree },
+          { id: "resources", label: "Documentation Hub", icon: BookOpen },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -758,10 +765,10 @@ export function CyberAcademy({ onNavigateScanner, onOpenAiMentor, findings, init
         />
       )}
 
-      {/* TAB 2: LEARNING PATHS EXPLORER */}
+      {/* TAB 2: LEARNING PATHS EXPLORER (STAGES 0 - 11) */}
       {activeTab === "paths" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          {LEARNING_PATHS.map((path) => (
+          {[...LEARNING_PATHS].sort((a, b) => (a.stageNumber ?? 99) - (b.stageNumber ?? 99)).map((path) => (
             <div key={path.id} className="card" style={{ margin: 0 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "10px" }}>
                 <div>
@@ -890,9 +897,14 @@ export function CyberAcademy({ onNavigateScanner, onOpenAiMentor, findings, init
                 </div>
               </div>
 
-              <h2 style={{ fontSize: "1.35rem", fontWeight: 800, margin: "0 0 12px 0" }}>
+              <h2 style={{ fontSize: "1.35rem", fontWeight: 800, margin: "0 0 4px 0" }}>
                 {selectedLesson.title}
               </h2>
+              {selectedLesson.fullForm && (
+                <div style={{ fontSize: "0.82rem", color: "var(--accent-cyan)", fontStyle: "italic", marginBottom: "12px" }}>
+                  Full Form: {selectedLesson.fullForm}
+                </div>
+              )}
 
               {/* Objectives Box */}
               <div style={{ background: "rgba(6, 182, 212, 0.08)", border: "1px solid rgba(6, 182, 212, 0.2)", borderRadius: "8px", padding: "12px 16px", marginBottom: "18px" }}>
@@ -949,24 +961,149 @@ export function CyberAcademy({ onNavigateScanner, onOpenAiMentor, findings, init
                 return null;
               })()}
 
-              {/* Section 1: Beginner Explanation */}
-              <div style={{ marginBottom: "20px" }}>
-                <h3 style={{ fontSize: "1rem", fontWeight: 700, color: "var(--accent-emerald)", marginBottom: "6px" }}>
-                  1. Conceptual Overview (Beginner Friendly)
-                </h3>
-                <p style={{ fontSize: "0.88rem", lineHeight: "1.6", color: "var(--text-main)", margin: 0 }}>
-                  {selectedLesson.beginnerExplanation}
-                </p>
+              {/* Explanation Mode Switcher */}
+              <div
+                style={{
+                  display: "flex",
+                  gap: "6px",
+                  flexWrap: "wrap",
+                  padding: "6px",
+                  backgroundColor: "var(--bg-secondary)",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-color)",
+                  marginBottom: "18px",
+                }}
+              >
+                {[
+                  { id: "beginner", label: "🎓 Beginner English" },
+                  { id: "hinglish", label: "🇮🇳 आसान भाषा (Hinglish)" },
+                  { id: "analogy", label: "💡 Everyday Analogy" },
+                  { id: "technical", label: "🔬 Technical Deep Dive" },
+                  { id: "ai_tutor", label: "🤖 Ask AI Tutor" },
+                ].map((mode) => (
+                  <button
+                    key={mode.id}
+                    onClick={() => setExplanationMode(mode.id as any)}
+                    className={`filter-chip ${explanationMode === mode.id ? "active" : ""}`}
+                    style={{ fontSize: "0.78rem", padding: "5px 12px" }}
+                  >
+                    {mode.label}
+                  </button>
+                ))}
               </div>
 
-              {/* Section 2: Technical Deep Dive */}
-              <div style={{ marginBottom: "20px" }}>
-                <h3 style={{ fontSize: "1rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "6px" }}>
-                  2. Technical Architecture & Deep Dive
-                </h3>
-                <p style={{ fontSize: "0.88rem", lineHeight: "1.6", color: "var(--text-main)", margin: 0 }}>
-                  {selectedLesson.technicalDeepDive}
-                </p>
+              {/* Dynamic Explanation Content Based on Active Mode */}
+              {explanationMode === "beginner" && (
+                <div style={{ marginBottom: "20px" }}>
+                  <h3 style={{ fontSize: "1rem", fontWeight: 700, color: "var(--accent-emerald)", marginBottom: "6px" }}>
+                    1. Conceptual Overview (Beginner Friendly)
+                  </h3>
+                  <p style={{ fontSize: "0.88rem", lineHeight: "1.6", color: "var(--text-main)", margin: 0 }}>
+                    {selectedLesson.beginnerExplanation}
+                  </p>
+                </div>
+              )}
+
+              {explanationMode === "hinglish" && (
+                <div style={{ marginBottom: "20px", background: "rgba(16, 185, 129, 0.08)", border: "1px solid rgba(16, 185, 129, 0.3)", borderRadius: "8px", padding: "14px" }}>
+                  <h3 style={{ fontSize: "1rem", fontWeight: 700, color: "var(--accent-emerald)", marginBottom: "6px" }}>
+                    🇮🇳 आसान हिंदी व्याख्या (Hinglish Ground-Zero Explanation)
+                  </h3>
+                  <p style={{ fontSize: "0.9rem", lineHeight: "1.65", color: "var(--text-main)", margin: 0 }}>
+                    {selectedLesson.hinglishExplanation || selectedLesson.beginnerExplanation}
+                  </p>
+                </div>
+              )}
+
+              {explanationMode === "analogy" && (
+                <div style={{ marginBottom: "20px", background: "rgba(245, 158, 11, 0.08)", border: "1px solid rgba(245, 158, 11, 0.3)", borderRadius: "8px", padding: "14px" }}>
+                  <h3 style={{ fontSize: "1rem", fontWeight: 700, color: "var(--accent-amber)", marginBottom: "6px" }}>
+                    💡 Everyday Real-World Analogy
+                  </h3>
+                  <p style={{ fontSize: "0.9rem", lineHeight: "1.65", color: "var(--text-main)", margin: 0 }}>
+                    {selectedLesson.realWorldAnalogy || selectedLesson.beginnerExplanation}
+                  </p>
+                </div>
+              )}
+
+              {explanationMode === "technical" && (
+                <div style={{ marginBottom: "20px" }}>
+                  <h3 style={{ fontSize: "1rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "6px" }}>
+                    2. Technical Architecture & Deep Dive
+                  </h3>
+                  <p style={{ fontSize: "0.88rem", lineHeight: "1.6", color: "var(--text-main)", margin: 0 }}>
+                    {selectedLesson.technicalDeepDive}
+                  </p>
+                </div>
+              )}
+
+              {explanationMode === "ai_tutor" && (
+                <div style={{ marginBottom: "20px", background: "rgba(6, 182, 212, 0.08)", border: "1px solid rgba(6, 182, 212, 0.3)", borderRadius: "8px", padding: "14px" }}>
+                  <h3 style={{ fontSize: "1rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "6px", display: "flex", alignItems: "center", gap: "8px" }}>
+                    <Sparkles size={16} /> AI Tutor: Context-Aware Lesson Explainer
+                  </h3>
+                  <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", margin: "0 0 10px 0" }}>
+                    Have your AI Tutor clarify '{selectedLesson.title}' using simple analogies, Hinglish, or real attack steps.
+                  </p>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "10px" }}>
+                    {[
+                      "Explain in simple Hinglish with an everyday analogy",
+                      "How do hackers exploit this in real life?",
+                      "How do developers fix this in secure code?",
+                      "Ask me a quiz question to test my understanding",
+                    ].map((promptText) => (
+                      <button
+                        key={promptText}
+                        onClick={() => onOpenAiMentor?.(`${promptText} regarding '${selectedLesson.title}'`)}
+                        style={{
+                          padding: "4px 10px",
+                          fontSize: "0.75rem",
+                          borderRadius: "4px",
+                          border: "1px solid var(--border-color)",
+                          backgroundColor: "var(--bg-secondary)",
+                          color: "var(--accent-cyan)",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {promptText}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Core Pedagogical Pillars: Why It Exists, Cybersecurity Connection & Practical Task */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px", marginBottom: "20px" }}>
+                {selectedLesson.whyItExists && (
+                  <div style={{ background: "rgba(168, 85, 247, 0.08)", border: "1px solid rgba(168, 85, 247, 0.25)", borderRadius: "8px", padding: "12px" }}>
+                    <div style={{ fontWeight: 700, fontSize: "0.8rem", color: "var(--accent-purple)", marginBottom: "4px" }}>
+                      Why Was This Created?
+                    </div>
+                    <div style={{ fontSize: "0.82rem", color: "var(--text-main)", lineHeight: "1.45" }}>
+                      {selectedLesson.whyItExists}
+                    </div>
+                  </div>
+                )}
+                {selectedLesson.cybersecurityConnection && (
+                  <div style={{ background: "rgba(244, 63, 94, 0.08)", border: "1px solid rgba(244, 63, 94, 0.25)", borderRadius: "8px", padding: "12px" }}>
+                    <div style={{ fontWeight: 700, fontSize: "0.8rem", color: "var(--accent-rose)", marginBottom: "4px" }}>
+                      Cybersecurity & Pentesting Connection
+                    </div>
+                    <div style={{ fontSize: "0.82rem", color: "var(--text-main)", lineHeight: "1.45" }}>
+                      {selectedLesson.cybersecurityConnection}
+                    </div>
+                  </div>
+                )}
+                {selectedLesson.applicationTask && (
+                  <div style={{ background: "rgba(16, 185, 129, 0.08)", border: "1px solid rgba(16, 185, 129, 0.25)", borderRadius: "8px", padding: "12px" }}>
+                    <div style={{ fontWeight: 700, fontSize: "0.8rem", color: "var(--accent-emerald)", marginBottom: "4px" }}>
+                      Hands-On Practical Task
+                    </div>
+                    <div style={{ fontSize: "0.82rem", color: "var(--text-main)", lineHeight: "1.45" }}>
+                      {selectedLesson.applicationTask}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Section 3: ASCII Diagram */}
@@ -1728,64 +1865,235 @@ export function CyberAcademy({ onNavigateScanner, onOpenAiMentor, findings, init
         </div>
       )}
 
-      {/* TAB 7: HANDS-ON GUIDED LABS */}
+      {/* TAB 7: HANDS-ON GUIDED LABS & VIRTUAL SANDBOXES */}
       {activeTab === "labs" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          {PRACTICAL_LABS.map((lab) => (
-            <div key={lab.id} className="card" style={{ margin: 0 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
-                <div>
-                  <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-main)", margin: 0 }}>
-                    {lab.title}
-                  </h3>
-                  <div style={{ fontSize: "0.8rem", color: "var(--text-dim)", marginTop: "2px" }}>
-                    Category: {lab.category} &bull; Estimated Time: {lab.estimatedMinutes} minutes
+        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+          {/* Interactive Virtual Labs Workspace */}
+          <VirtualLabsWorkspace
+            onNavigateVerificationLab={() => onNavigateScanner?.("verificationLab")}
+            onOpenAiMentor={onOpenAiMentor}
+          />
+
+          <div className="card" style={{ margin: 0 }}>
+            <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "4px" }}>
+              Guided Walkthrough Labs & Exploit Scenarios
+            </h3>
+            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: "0 0 16px 0" }}>
+              Step-by-step verified walkthroughs for testing common vulnerabilities in authorized environments.
+            </p>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              {PRACTICAL_LABS.map((lab) => (
+                <div key={lab.id} className="card" style={{ margin: 0, backgroundColor: "var(--bg-secondary)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+                    <div>
+                      <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-main)", margin: 0 }}>
+                        {lab.title}
+                      </h3>
+                      <div style={{ fontSize: "0.8rem", color: "var(--text-dim)", marginTop: "2px" }}>
+                        Category: {lab.category} &bull; Estimated Time: {lab.estimatedMinutes} minutes
+                      </div>
+                    </div>
+
+                    <span className="badge badge-high">{lab.difficulty.toUpperCase()}</span>
+                  </div>
+
+                  <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "14px" }}>
+                    {lab.scenarioDescription}
+                  </p>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "14px" }}>
+                    {lab.stepByStepWalkthrough.map((st) => (
+                      <div
+                        key={st.step}
+                        style={{
+                          background: "var(--bg-primary)",
+                          border: "1px solid var(--border-color)",
+                          borderRadius: "6px",
+                          padding: "10px 14px"
+                        }}
+                      >
+                        <div style={{ fontWeight: 600, fontSize: "0.84rem", color: "var(--accent-cyan)", marginBottom: "4px" }}>
+                          Step {st.step}: {st.title}
+                        </div>
+                        <div style={{ fontSize: "0.82rem", color: "var(--text-main)", marginBottom: "6px" }}>
+                          {st.instruction}
+                        </div>
+                        {st.commandOrPayload && (
+                          <div style={{ background: "#050811", padding: "6px 10px", borderRadius: "4px", fontFamily: "monospace", fontSize: "0.75rem", color: "var(--accent-amber)" }}>
+                            Payload / Command: {st.commandOrPayload}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ background: "rgba(245, 158, 11, 0.08)", border: "1px solid rgba(245, 158, 11, 0.25)", borderRadius: "6px", padding: "10px 14px" }}>
+                    <span style={{ fontWeight: 600, fontSize: "0.8rem", color: "var(--accent-amber)" }}>
+                      ⚠️ Laboratory Warning & Scope Rules:
+                    </span>
+                    <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: "2px 0 0 0" }}>
+                      {lab.warningNotice} Target recommendation: {lab.targetRecommendation}
+                    </p>
                   </div>
                 </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
-                <span className="badge badge-high">{lab.difficulty.toUpperCase()}</span>
+      {/* TAB: GLOSSARY & KNOWLEDGE BASE */}
+      {activeTab === "glossary" && (
+        <GlossaryKnowledgeBaseView
+          onAskAiTutor={(q) => onOpenAiMentor?.(q)}
+          onNavigateTool={onNavigateScanner}
+        />
+      )}
+
+      {/* TAB: ASK THE AI TUTOR */}
+      {activeTab === "ai_tutor" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <div className="card" style={{ margin: 0, padding: "24px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
+              <div
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "8px",
+                  backgroundColor: "rgba(6, 182, 212, 0.15)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Sparkles size={22} color="var(--accent-cyan)" />
               </div>
-
-              <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "14px" }}>
-                {lab.scenarioDescription}
-              </p>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "14px" }}>
-                {lab.stepByStepWalkthrough.map((st) => (
-                  <div
-                    key={st.step}
-                    style={{
-                      background: "var(--bg-secondary)",
-                      border: "1px solid var(--border-color)",
-                      borderRadius: "6px",
-                      padding: "10px 14px"
-                    }}
-                  >
-                    <div style={{ fontWeight: 600, fontSize: "0.84rem", color: "var(--accent-cyan)", marginBottom: "4px" }}>
-                      Step {st.step}: {st.title}
-                    </div>
-                    <div style={{ fontSize: "0.82rem", color: "var(--text-main)", marginBottom: "6px" }}>
-                      {st.instruction}
-                    </div>
-                    {st.commandOrPayload && (
-                      <div style={{ background: "#050811", padding: "6px 10px", borderRadius: "4px", fontFamily: "monospace", fontSize: "0.75rem", color: "var(--accent-amber)" }}>
-                        Payload / Command: {st.commandOrPayload}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ background: "rgba(245, 158, 11, 0.08)", border: "1px solid rgba(245, 158, 11, 0.25)", borderRadius: "6px", padding: "10px 14px" }}>
-                <span style={{ fontWeight: 600, fontSize: "0.8rem", color: "var(--accent-amber)" }}>
-                  ⚠️ Laboratory Warning & Scope Rules:
-                </span>
-                <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: "2px 0 0 0" }}>
-                  {lab.warningNotice} Target recommendation: {lab.targetRecommendation}
+              <div>
+                <h2 style={{ fontSize: "1.25rem", fontWeight: 700, margin: 0, color: "var(--text-main)" }}>
+                  Ask the AI Cybersecurity Tutor
+                </h2>
+                <p style={{ margin: "2px 0 0", fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                  Personalized 1-on-1 mentor: Ask questions from absolute beginner level to advanced penetration testing in English or Hinglish.
                 </p>
               </div>
             </div>
-          ))}
+
+            {/* Quick Prompt Cards */}
+            <div style={{ marginTop: "16px", marginBottom: "20px" }}>
+              <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontWeight: 600, display: "block", marginBottom: "8px" }}>
+                Suggested Prompts for "{selectedLesson.title}":
+              </span>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "10px" }}>
+                {[
+                  {
+                    title: "🇮🇳 Hinglish Explanation",
+                    desc: "Explain this concept in simple Hindi-English with everyday examples.",
+                    prompt: `Explain '${selectedLesson.title}' from ground zero in simple Hinglish terms, with an everyday real-world analogy.`,
+                  },
+                  {
+                    title: "🔍 Manual Verification Steps",
+                    desc: "How do I manually test this vulnerability with Burp Suite or curl?",
+                    prompt: `Give me step-by-step instructions to manually verify '${selectedLesson.title}' in an authorized lab target without automated scanners.`,
+                  },
+                  {
+                    title: "🛡️ Secure Code Fix",
+                    desc: "Show before-and-after code fixing this flaw permanently.",
+                    prompt: `Show me the vulnerable code pattern for '${selectedLesson.title}' and the secure parameterized fix in Python/JavaScript.`,
+                  },
+                  {
+                    title: "💼 Job Interview Prep",
+                    desc: "Simulate a junior pentester technical interview question.",
+                    prompt: `Act as a senior cybersecurity interviewer. Ask me 3 technical interview questions about '${selectedLesson.title}' and evaluate my understanding.`,
+                  },
+                ].map((card, i) => (
+                  <div
+                    key={i}
+                    onClick={() => onOpenAiMentor?.(card.prompt)}
+                    style={{
+                      padding: "12px",
+                      borderRadius: "6px",
+                      backgroundColor: "var(--bg-secondary)",
+                      border: "1px solid var(--border-color)",
+                      cursor: "pointer",
+                      transition: "border-color 0.2s ease",
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: "0.85rem", color: "var(--accent-cyan)", marginBottom: "4px" }}>
+                      {card.title}
+                    </div>
+                    <div style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
+                      {card.desc}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom Question Form */}
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+                backgroundColor: "var(--bg-secondary)",
+                padding: "16px",
+                borderRadius: "8px",
+                border: "1px solid var(--border-color)",
+              }}
+            >
+              <label style={{ fontSize: "0.8rem", color: "var(--text-main)", fontWeight: 600 }}>
+                Ask Any Technical or Conceptual Question:
+              </label>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <input
+                  type="text"
+                  value={aiTutorPrompt}
+                  onChange={(e) => setAiTutorPrompt(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && aiTutorPrompt.trim()) {
+                      onOpenAiMentor?.(aiTutorPrompt);
+                      setAiTutorPrompt("");
+                    }
+                  }}
+                  placeholder="e.g. What is the difference between TCP and UDP? Explain like I am 10..."
+                  style={{
+                    flex: 1,
+                    padding: "10px 14px",
+                    fontSize: "0.85rem",
+                    backgroundColor: "var(--bg-primary)",
+                    border: "1px solid var(--border-color)",
+                    borderRadius: "6px",
+                    color: "var(--text-main)",
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    if (aiTutorPrompt.trim()) {
+                      onOpenAiMentor?.(aiTutorPrompt);
+                      setAiTutorPrompt("");
+                    }
+                  }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "10px 18px",
+                    backgroundColor: "var(--accent-cyan)",
+                    color: "#0f172a",
+                    fontWeight: 600,
+                    fontSize: "0.85rem",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Send size={15} />
+                  Ask Tutor
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

@@ -1,10 +1,12 @@
 import { LearningPath } from "../types";
 
 export const LEARNING_PATHS: LearningPath[] = [
-  // LEVEL 0: IT & COMPUTER FUNDAMENTALS
+  // STAGE 0: IT & COMPUTER FUNDAMENTALS
   {
     id: "path-0",
-    title: "Level 0: Computer & IT Fundamentals",
+    stageNumber: 0,
+    stageCode: "Stage 0",
+    title: "Stage 0: Digital Literacy & Computer Architecture",
     subtitle: "Hardware, Operating Systems, Filesystems, Processes & Command Line",
     level: "beginner",
     iconName: "Monitor",
@@ -24,7 +26,9 @@ export const LEARNING_PATHS: LearningPath[] = [
             id: "les-0-1-1",
             moduleId: "mod-0-1",
             pathId: "path-0",
+            stageId: "stage-0",
             title: "CPU, Memory, Storage & System Bus",
+            fullForm: "Central Processing Unit (CPU) & Random Access Memory (RAM)",
             level: "beginner",
             estimatedMinutes: 20,
             objectives: [
@@ -36,6 +40,11 @@ export const LEARNING_PATHS: LearningPath[] = [
             prerequisites: ["None - absolute beginner starting point"],
             summary: "A computer consists of processing cores that fetch, decode, and execute binary instructions from RAM over a system bus.",
             beginnerExplanation: "Think of the CPU as a master chef, RAM as the kitchen prep counter where active ingredients sit, and storage (SSD) as the pantry downstairs where ingredients are stored long-term. When you open a program, the OS moves it from the pantry to the prep counter so the chef can work on it at lightning speed.",
+            hinglishExplanation: "CPU computer ka dimag hota hai jo saari calculations aur instructions execute karta hai. RAM ek fast temporary prep counter hai jahan open apps ka data rehta hai. Jab computer switch off hota hai toh RAM ka data gayab ho jata hai jabki SSD/HDD mein data permanent rehta hai.",
+            realWorldAnalogy: "CPU ek restaurant ka Head Chef hai, RAM kitchen ka prep table hai jahan active ingredients rakhe hain, aur SSD basement ka pantry godown hai jahan mahino ka saman safe rehta hai.",
+            whyItExists: "Bina CPU ke mathematical processing impossible hai aur bina RAM ke SSD ki slow speed computer ko chalne nahi degi.",
+            cybersecurityConnection: "Hackers buffer overflow attack ke zariye RAM ke stack memory ko overwrite karke CPU ke instruction pointer (EIP/RIP) ko hijack karte hain taaki arbitrary code run ho sake.",
+            applicationTask: "Open Windows Task Manager (Ctrl+Shift+Esc) or Activity Monitor. Inspect the CPU utilization percentage and observe how much RAM your active browser process consumes.",
             technicalDeepDive: "CPUs execute instructions at the nanosecond scale using registers (e.g. RAX, RBX in x86_64). Instructions are fetched sequentially unless redirected by branch instructions. Memory management units (MMUs) translate virtual memory addresses assigned to processes into physical RAM addresses, preventing one user process from corrupting another process's memory space.",
             diagramAscii: `+--------------------------------------------------------------+
 |                        CENTRAL CPU                           |
@@ -99,7 +108,9 @@ export const LEARNING_PATHS: LearningPath[] = [
             id: "les-0-1-2",
             moduleId: "mod-0-1",
             pathId: "path-0",
+            stageId: "stage-0",
             title: "Operating Systems, Processes & Threads",
+            fullForm: "Operating System (OS) & Process Identifier (PID)",
             level: "beginner",
             estimatedMinutes: 25,
             objectives: [
@@ -111,6 +122,11 @@ export const LEARNING_PATHS: LearningPath[] = [
             prerequisites: ["CPU, Memory, Storage & System Bus"],
             summary: "An operating system manages hardware resources and isolates software applications using privilege rings and process boundaries.",
             beginnerExplanation: "The operating system acts as the conductor of an orchestra. Normal programs (browser, music player) run in 'User Mode', meaning they cannot directly touch the physical hard drive or network card. When a program wants to save a file, it must politely ask the OS kernel (running in 'Kernel Mode') via a System Call.",
+            hinglishExplanation: "Operating system computer ka coordinator hai. Apps User Mode mein run hote hain taaki system crash na ho. Jab unhe hard drive ya internet use karna hota hai, toh wo Kernel Mode ko polite system call request bhejte hain.",
+            realWorldAnalogy: "OS ek building ka security manager hai. Kirayedaar (User Mode apps) building ke electrical panels ya main water valve (Kernel Mode) ko bina security manager se permission liye nahi chhoo sakte.",
+            whyItExists: "Agar har application direct hardware ko instruct kare toh apps aapas mein clash honge aur memory overwrite hone se crash ho jayenge.",
+            cybersecurityConnection: "Privilege Escalation attacks mein hacker normal user process (Ring 3) se kernel vulnerability exploit karke Ring 0 (root/SYSTEM) access hasil karta hai.",
+            applicationTask: "Run 'tasklist' in CMD or 'ps aux' in Linux to inspect process IDs (PIDs) and their memory usage.",
             technicalDeepDive: "Modern x86/x64 processors implement hierarchical privilege rings. Ring 0 (Kernel Mode) has complete, unrestricted access to hardware instructions and physical memory. Ring 3 (User Mode) runs applications in an isolated sandbox. Switching between user and kernel space requires software interrupts (`syscall` in x86_64), which incur context-switching overhead.",
             diagramAscii: `+--------------------------------------------------------------+
 | USER MODE (Ring 3) - Applications & Sandboxed Code           |
@@ -162,10 +178,12 @@ export const LEARNING_PATHS: LearningPath[] = [
     ]
   },
 
-  // LEVEL 1: NETWORKING ACADEMY
+  // STAGE 2: NETWORKING ACADEMY
   {
     id: "path-1",
-    title: "Level 1: Networking Academy",
+    stageNumber: 2,
+    stageCode: "Stage 2",
+    title: "Stage 2: Computer Networking & Internet Protocols",
     subtitle: "OSI 7 Layers, TCP/IP, IP Addressing, Subnetting, DNS, TLS 1.3 & Packet Inspection",
     level: "beginner",
     iconName: "Globe",
@@ -185,7 +203,9 @@ export const LEARNING_PATHS: LearningPath[] = [
             id: "les-1-1-1",
             moduleId: "mod-1-1",
             pathId: "path-1",
+            stageId: "stage-2",
             title: "OSI 7-Layer vs. TCP/IP 4-Layer Reference Models",
+            fullForm: "Open Systems Interconnection (OSI) & Transmission Control Protocol / Internet Protocol (TCP/IP)",
             level: "beginner",
             estimatedMinutes: 30,
             objectives: [
@@ -197,6 +217,11 @@ export const LEARNING_PATHS: LearningPath[] = [
             prerequisites: ["Computer Architecture & Hardware"],
             summary: "Network communication relies on standardized layering. Each layer prepends its own header during encapsulation and strips it during de-encapsulation.",
             beginnerExplanation: "Sending a message over the internet is like mailing a letter. You write the letter (Application layer), put it in an envelope with an apartment number (Transport port), put that inside a box with the street address (Network IP), and give it to a postal truck with license plates (Data Link MAC).",
+            hinglishExplanation: "OSI 7-Layer model internet communication ko 7 alag alag levels mein baant'ta hai taaki hardware aur software aapas mein bina confusion ke baat kar sakein. Jab aap browser mein search karte hain, data Layer 7 se Layer 1 tak neeche travel karta hai (encapsulation) aur doosre computer par Layer 1 se Layer 7 tak upar pahunchta hai (decapsulation).",
+            realWorldAnalogy: "Russian Matryoshka doll (nesting dolls): choti gudiya (web data) ko transport dabbe mein band kiya, fir network packet dabbe mein, fir ethernet frame dabbe mein. Destination par saare dabbe ek ek karke khole jate hain.",
+            whyItExists: "Bina universal layered standard ke, kisi Dell computer ka network card kisi Apple laptop se baat hi nahi kar pata.",
+            cybersecurityConnection: "Hacker jis layer par attack karega, defense bhi usi layer par honi chahiye. L3/L4 par Network Firewall (DDoS), L7 par Web Application Firewall (SQLi/XSS).",
+            applicationTask: "Open the Visual Learning Engine tab in Cyber Academy and inspect the interactive OSI 7-Layer Explorer.",
             technicalDeepDive: "As data flows down the protocol stack on the transmitting host, each layer adds a header: Layer 4 adds TCP/UDP ports and sequence numbers; Layer 3 adds source and destination IP addresses (IPv4/IPv6); Layer 2 adds source/destination MAC addresses and a Frame Check Sequence (FCS) trailer. The receiving host reverses this process.",
             diagramAscii: `OSI 7-LAYER MODEL               TCP/IP 4-LAYER             DATA UNIT (PDU)
 +-----------------------+     +-------------------+       +---------------+
@@ -334,16 +359,18 @@ Loopback:   127.0.0.1     - 127.255.255.254  (Host Localhost)`,
     ]
   },
 
-  // LEVEL 2: LINUX & WINDOWS SECURITY
+  // STAGE 1: LINUX & WINDOWS CLI & OS SECURITY
   {
     id: "path-2",
-    title: "Level 2: Linux & Windows Security",
+    stageNumber: 1,
+    stageCode: "Stage 1",
+    title: "Stage 1: Operating Systems & Command-Line Interfaces",
     subtitle: "Filesystems, User Privileges, SUID, Windows Tokens, Sysmon & Hardening",
     level: "beginner",
     iconName: "Terminal",
     category: "foundations",
     estimatedHours: 16,
-    prerequisitePathIds: ["path-0", "path-1"],
+    prerequisitePathIds: ["path-0"],
     description: "Operating systems host servers and databases. Learn Linux permissions, privilege escalation vectors (SUID/capabilities), Windows Access Tokens, UAC, and PowerShell incident response.",
     modules: [
       {
@@ -357,7 +384,9 @@ Loopback:   127.0.0.1     - 127.255.255.254  (Host Localhost)`,
             id: "les-2-1-1",
             moduleId: "mod-2-1",
             pathId: "path-2",
+            stageId: "stage-1",
             title: "Linux Filesystem Hierarchy, Permissions & SUID Bits",
+            fullForm: "Set User ID (SUID) & Discretionary Access Control (DAC)",
             level: "beginner",
             estimatedMinutes: 25,
             objectives: [
@@ -369,6 +398,11 @@ Loopback:   127.0.0.1     - 127.255.255.254  (Host Localhost)`,
             prerequisites: ["Computer Architecture & Operating Systems"],
             summary: "Linux enforces discretionary access control (DAC) based on owner, group, and other permissions, with special bits like SUID allowing temporary privilege elevation.",
             beginnerExplanation: "In Linux, everything is a file. Every file has an Owner, a Group, and Others. The permissions dictate who can Read, Write, or Execute it. If a file has the SUID bit set, running it executes with the powers of the file's owner (often root), similar to a regular citizen temporarily holding presidential executive authority.",
+            hinglishExplanation: "Linux mein sab kuch ek file hota hai. Har file ke teen pehredaar hote hain: Owner (malik), Group (team), aur Others (baaki log). SUID ek special permission bit hai jisse koi aam user kisi program ko root (super admin) power ke saath chala sakta hai.",
+            realWorldAnalogy: "Like a valet key for a car: you give it to the parking attendant so they can drive and park the car, but it cannot open the private locked glove compartment.",
+            whyItExists: "Aam users ko password change karne ke liye `/etc/shadow` file write karni padti hai, isliye `passwd` command par SUID lagana zaroori hota hai.",
+            cybersecurityConnection: "Privilege Escalation (PrivEsc) mein attacker misconfigured SUID binaries (jaise `/usr/bin/find` ya `vim`) dhoond kar instant root shell le leta hai.",
+            applicationTask: "Use the Academy Virtual Labs Command Shell to run 'whoami' and 'ls -la', then inspect file permission bits.",
             technicalDeepDive: "Linux permission modes are stored in 12 bits: 3 special bits (SUID=4000, SGID=2000, Sticky=1000) followed by 9 standard permission bits (rwx for User, Group, Others). A binary with permissions `-rwsr-xr-x` (4755) executes with the Effective UID (EUID) of its owner. If an administrator improperly grants SUID to binaries like `find`, `vim`, or `bash`, any low-privilege user can spawn a root shell.",
             diagramAscii: `LINUX PERMISSION BITS MATRIX:
 Special Bits: SUID (4), SGID (2), Sticky (1)
@@ -423,10 +457,12 @@ Type Owner  Group   Others
     ]
   },
 
-  // LEVEL 3: PROGRAMMING FOR CYBERSECURITY
+  // STAGE 4: PROGRAMMING FOR CYBERSECURITY
   {
     id: "path-3",
-    title: "Level 3: Programming for Cybersecurity",
+    stageNumber: 4,
+    stageCode: "Stage 4",
+    title: "Stage 4: Programming Foundations for Security",
     subtitle: "Python, Bash, JavaScript, SQL & PHP for Security Automation & Code Auditing",
     level: "beginner",
     iconName: "Code",
@@ -519,10 +555,12 @@ except requests.exceptions.RequestException as e:
     ]
   },
 
-  // LEVEL 4: CYBERSECURITY FUNDAMENTALS
+  // STAGE 5: CYBERSECURITY FUNDAMENTALS
   {
     id: "path-4",
-    title: "Level 4: Cybersecurity Fundamentals",
+    stageNumber: 5,
+    stageCode: "Stage 5",
+    title: "Stage 5: Cybersecurity Foundations & Core Principles",
     subtitle: "CIA Triad, STRIDE Threat Modeling, Cryptography, Identity & Risk Assessment",
     level: "beginner",
     iconName: "Shield",
@@ -596,10 +634,12 @@ except requests.exceptions.RequestException as e:
     ]
   },
 
-  // LEVEL 5: WEB DEVELOPMENT & APPLICATION ARCHITECTURE
+  // STAGE 3: WEB DEVELOPMENT & APPLICATION ARCHITECTURE
   {
     id: "path-5",
-    title: "Level 5: Web Dev & Application Architecture",
+    stageNumber: 3,
+    stageCode: "Stage 3",
+    title: "Stage 3: Web Architecture & How Applications Work",
     subtitle: "HTTP Lifecycle, Cookies, Sessions, Tokens, Same-Origin Policy & Browser Security",
     level: "intermediate",
     iconName: "Globe",
@@ -708,10 +748,12 @@ app.use((req, res, next) => {
     ]
   },
 
-  // LEVEL 6: ETHICAL HACKING & PENETRATION TESTING
+  // STAGE 6: ETHICAL HACKING & PENETRATION TESTING
   {
     id: "path-6",
-    title: "Level 6: Ethical Hacking & Penetration Testing",
+    stageNumber: 6,
+    stageCode: "Stage 6",
+    title: "Stage 6: Ethical Hacking Methodology & Scope",
     subtitle: "Rules of Engagement, PTES, WSTG, Passive/Active Recon & Professional Reporting",
     level: "intermediate",
     iconName: "ShieldAlert",
@@ -798,10 +840,12 @@ app.use((req, res, next) => {
     ]
   },
 
-  // LEVEL 7: COMPLETE WEB APPLICATION PENTESTING
+  // STAGE 7: COMPLETE WEB APPLICATION PENTESTING
   {
     id: "path-7",
-    title: "Level 7: Web Application Penetration Testing",
+    stageNumber: 7,
+    stageCode: "Stage 7",
+    title: "Stage 7: Web Vulnerability Classes",
     subtitle: "OWASP Top 10, SQLi, XSS, SSRF, IDOR, Path Traversal, SSTI & Deserialization",
     level: "advanced",
     iconName: "Bug",
@@ -905,10 +949,12 @@ $account = $stmt->fetch();`,
     ]
   },
 
-  // LEVEL 8: COMPLETE API SECURITY & PENTESTING
+  // STAGE 8: COMPLETE API SECURITY & PENTESTING TOOLS
   {
     id: "path-8",
-    title: "Level 8: API Security & Penetration Testing",
+    stageNumber: 8,
+    stageCode: "Stage 8",
+    title: "Stage 8: Pentesting Tools Mastery & API Security",
     subtitle: "OWASP API Top 10, REST, GraphQL, BOLA/BFLA, JWT Flaws & Rate Limiting",
     level: "advanced",
     iconName: "Radio",
@@ -993,11 +1039,13 @@ $account = $stmt->fetch();`,
     ]
   },
 
-  // LEVEL 9: SYSTEMS, CLOUD & DEVSECOPS
+  // STAGE 9: SYSTEMS, CLOUD & VULNERABILITY VERIFICATION
   {
     id: "path-9",
-    title: "Level 9: Cloud, Systems & DevSecOps",
-    subtitle: "Active Directory, SIEM / SOC Monitoring, AWS/Azure IAM, Docker & CI/CD Pipelines",
+    stageNumber: 9,
+    stageCode: "Stage 9",
+    title: "Stage 9: Vulnerability Verification Lab & Systems Security",
+    subtitle: "Active Directory, SIEM / SOC Monitoring, AWS/Azure IAM, Docker & Evidence-Based Verification",
     level: "advanced",
     iconName: "Cloud",
     category: "defensive",
@@ -1069,6 +1117,164 @@ $account = $stmt->fetch();`,
                   ],
                   correctIndex: 1,
                   explanation: "Access to docker.sock allows any process inside the container to issue API commands to the host Docker daemon, including creating a container that mounts the host root drive."
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+
+  // STAGE 10: SECURE REMEDIATION & DEFENSIVE ENGINEERING
+  {
+    id: "path-10",
+    stageNumber: 10,
+    stageCode: "Stage 10",
+    title: "Stage 10: Secure Remediation & Defensive Engineering",
+    subtitle: "Root-Cause Patching, Contextual Encoding, Security Headers & WAF Configuration",
+    level: "advanced",
+    iconName: "ShieldCheck",
+    category: "defensive",
+    estimatedHours: 20,
+    prerequisitePathIds: ["path-7", "path-8"],
+    description: "Finding vulnerabilities is only half the job. Job-ready security professionals must guide developers to remediate vulnerabilities permanently at the source code, architecture, and configuration layers.",
+    modules: [
+      {
+        id: "mod-10-1",
+        pathId: "path-10",
+        title: "Secure Coding & Defensive Architecture",
+        description: "Implementing parameterization, contextual output encoding, CSP, and defensive security headers.",
+        iconName: "Shield",
+        lessons: [
+          {
+            id: "les-10-1-1",
+            moduleId: "mod-10-1",
+            pathId: "path-10",
+            stageId: "stage-10",
+            title: "Comprehensive Vulnerability Remediation & Defense in Depth",
+            fullForm: "Content Security Policy (CSP), HTTP Strict Transport Security (HSTS)",
+            level: "advanced",
+            estimatedMinutes: 30,
+            objectives: [
+              "Master the difference between input filtering, validation, and contextual output encoding",
+              "Configure robust security headers: CSP, HSTS, X-Frame-Options, X-Content-Type-Options",
+              "Implement database prepared statements across ORM and raw SQL frameworks",
+              "Formulate actionable, developer-friendly remediation guidance in security reports"
+            ],
+            prerequisites: ["Web Application Penetration Testing", "API Security"],
+            summary: "True defense requires addressing root causes rather than applying regex filters. Use prepared statements for SQL, contextual encoding for XSS, and defense-in-depth headers.",
+            beginnerExplanation: "Fixing a vulnerability isn't just slapping tape over a pipe leak. If a pipe bursts because water pressure is too high, you must install a pressure regulator (parameterized query) and add a safety drainage tray underneath (CSP header) just in case.",
+            hinglishExplanation: "Vulnerability fix karne ka matlab sirf blacklist lagana nahi hota. Agar SQLi hai toh prepared statement use karo taaki user input code na ban sake. Agar XSS hai toh context ke hisab se encode karo aur CSP header lagao taaki script execute hi na ho.",
+            realWorldAnalogy: "Like a bank vault: the primary defense is the 10-ton steel door (prepared statements), but you also have CCTV, lasers, and seismic alarms (CSP & defense in depth) in case someone finds a clever trick.",
+            whyItExists: "Blacklists and naive sanitization are routinely bypassed by novel encoding tricks; structural separation of code and data is the only permanent solution.",
+            cybersecurityConnection: "Remediation verification is the final step of a pentest engagement. Testers retest patched endpoints to ensure fixes are airtight without introducing regressions.",
+            applicationTask: "Review a vulnerable SQL query and rewrite it using parameterized placeholders, then draft a Content-Security-Policy header blocking inline scripts.",
+            technicalDeepDive: "Defense in depth layers: Layer 1 (Input Validation with strict allowlists), Layer 2 (Separation of code & data via parameterized queries or DOM safe methods like textContent), Layer 3 (Runtime browser enforcement via CSP `default-src 'self'; script-src 'self' 'nonce-...'`), Layer 4 (WAF rate limiting and anomaly inspection).",
+            commonMistakes: [
+              "Using blacklists (e.g. blocking `<script>`) instead of proper contextual encoding",
+              "Believing WAFs replace the need for secure application code fixes",
+              "Setting CSP with `unsafe-inline` or wildcard `*`, which completely undermines XSS protection"
+            ],
+            authoritativeReferences: [
+              { title: "OWASP Cheat Sheet Series: Secure Coding & Remediation", url: "https://cheatsheetseries.owasp.org/", isOfficial: true },
+              { title: "NIST SP 800-218: Secure Software Development Framework (SSDF)", url: "https://csrc.nist.gov/publications/detail/sp/800-218/final", isOfficial: true }
+            ],
+            quiz: {
+              id: "quiz-10-1-1",
+              lessonId: "les-10-1-1",
+              title: "Remediation & Secure Architecture Knowledge Check",
+              questions: [
+                {
+                  id: "q-10-1-1-1",
+                  question: "Which of the following is considered the most secure and permanent defense against SQL Injection?",
+                  options: [
+                    "Filtering out single quotes with regex replace",
+                    "Using parameterized prepared statements or stored procedures",
+                    "Encrypting the database hard drive",
+                    "Deploying a commercial Web Application Firewall without code changes"
+                  ],
+                  correctIndex: 1,
+                  explanation: "Parameterized prepared statements guarantee that the database engine treats all user input strictly as literal data, making query structure alteration impossible."
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+
+  // STAGE 11: PROFESSIONAL PRACTICE, REPORTING & CAPSTONE
+  {
+    id: "path-11",
+    stageNumber: 11,
+    stageCode: "Stage 11",
+    title: "Stage 11: Professional Practice, Reporting & Capstone",
+    subtitle: "Rules of Engagement, Executive Reporting, Client Debriefs & Technical Interview Prep",
+    level: "expert",
+    iconName: "Award",
+    category: "specialized",
+    estimatedHours: 30,
+    prerequisitePathIds: ["path-7", "path-8", "path-10"],
+    description: "Complete your transformation into a job-ready penetration tester. Learn professional reporting standards, legal contracts, risk rating (CVSS), executive communication, and practical technical interview problem-solving.",
+    modules: [
+      {
+        id: "mod-11-1",
+        pathId: "path-11",
+        title: "Professional Reporting & Pentesting Capstone",
+        description: "Executing full-scope authorized assessments, writing executive summaries, and calculating CVSS 3.1/4.0 scores.",
+        iconName: "Award",
+        lessons: [
+          {
+            id: "les-11-1-1",
+            moduleId: "mod-11-1",
+            pathId: "path-11",
+            stageId: "stage-11",
+            title: "Executive & Technical Reporting, CVSS Scoring & Client Communication",
+            fullForm: "Common Vulnerability Scoring System (CVSS), Rules of Engagement (RoE)",
+            level: "expert",
+            estimatedMinutes: 40,
+            objectives: [
+              "Structure a professional penetration test report containing both Executive Summary and Technical Finding writeups",
+              "Accurately calculate CVSS Base, Temporal, and Environmental metrics",
+              "Document reproducible, step-by-step Proof of Concepts (PoC) with benign evidence",
+              "Present technical findings clearly to non-technical C-suite executives and board members"
+            ],
+            prerequisites: ["Web Application Penetration Testing", "Remediation & Defensive Architecture"],
+            summary: "A penetration tester's true deliverable is the written report. If the client cannot understand the business risk or reproduce the finding, the assessment has failed.",
+            beginnerExplanation: "Imagine a master detective who solves a mystery but can't explain who did it or how. A pentester must write two stories: one for the CEO in plain dollars-and-cents terms, and one for the engineers with exact technical code coordinates.",
+            hinglishExplanation: "Pentester ka sabse important product uska report hota hai. Report mein do parts hote hain: Executive Summary (company ke CEO/CTO ke liye bina technical terms ke business risk samjhana) aur Technical Findings (developers ke liye exact reproduction steps aur code fix dena).",
+            realWorldAnalogy: "Like a comprehensive medical diagnostic report: the first page gives the patient a clear high-level diagnosis and health plan, while the attached pages give the surgeon detailed blood markers and MRI coordinates.",
+            whyItExists: "Executives need to allocate budget and prioritize business risk, while engineering teams need deterministic steps to reproduce and verify fixes.",
+            cybersecurityConnection: "In the cybersecurity industry, job hiring managers evaluate sample pentest reports and finding writeups to test a candidate's communication clarity and professional rigor.",
+            applicationTask: "Draft an Executive Summary and a CVSS 3.1 vector for an unauthenticated SQL injection finding on an ecommerce payment portal.",
+            technicalDeepDive: "Standard report architecture: 1. Executive Summary (Overall posture, key risks, positive observations), 2. Scope & Methodology (RoE, testing windows, IP boundaries), 3. Finding Matrix (Severity, Title, Category, CVSS, Status), 4. Detailed Finding Chapters (Description, Business Impact, Reproduction Steps, Proof of Concept, Remediation Guidance, Official References).",
+            commonMistakes: [
+              "Copy-pasting automated tool scanner output directly into the client deliverable without manual verification",
+              "Using alarmist or hyperbolic language instead of objective, evidence-based risk analysis",
+              "Omitting reproduction steps or benign proof-of-concept evidence"
+            ],
+            authoritativeReferences: [
+              { title: "PTES: Penetration Testing Execution Standard - Reporting Guidelines", url: "http://www.pentest-standard.org/index.php/Reporting", isOfficial: true },
+              { title: "FIRST CVSS v3.1 Specification & Calculator", url: "https://www.first.org/cvss/v3.1/specification-document", isOfficial: true }
+            ],
+            quiz: {
+              id: "quiz-11-1-1",
+              lessonId: "les-11-1-1",
+              title: "Professional Reporting Knowledge Check",
+              questions: [
+                {
+                  id: "q-11-1-1-1",
+                  question: "What is the primary objective of the Executive Summary section in a penetration test report?",
+                  options: [
+                    "To list all TCP port numbers and raw Nmap packet dumps",
+                    "To communicate high-level business risks, overall security posture, and strategic remediation priorities to non-technical stakeholders",
+                    "To provide the developers with exact lines of vulnerable code",
+                    "To list the pentester's personal qualifications and certifications"
+                  ],
+                  correctIndex: 1,
+                  explanation: "The Executive Summary is written specifically for business leaders (CEOs, CISOs, board members) to understand the business risk and financial impact without needing deep technical jargon."
                 }
               ]
             }
