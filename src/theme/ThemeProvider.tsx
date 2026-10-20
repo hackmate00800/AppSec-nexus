@@ -106,6 +106,24 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       root.style.setProperty("--text-muted", themeDef.colors.textMuted);
       root.style.setProperty("--text-dim", themeDef.colors.textDim);
 
+      // Standardized Semantic Design Tokens (Global Master Theme System)
+      root.style.setProperty("--app-bg", themeDef.colors.bgPrimary);
+      root.style.setProperty("--surface", themeDef.colors.bgSecondary);
+      root.style.setProperty("--surface-elevated", themeDef.colors.bgCard);
+      root.style.setProperty("--surface-hover", themeDef.colors.bgCardHover);
+      root.style.setProperty("--text-primary", themeDef.colors.textMain);
+      root.style.setProperty("--text-secondary", themeDef.colors.textMuted);
+      root.style.setProperty("--text-muted", themeDef.colors.textDim);
+      root.style.setProperty("--border", themeDef.colors.borderColor);
+      root.style.setProperty("--accent", accentDef.hex);
+      root.style.setProperty("--accent-foreground", themeDef.isDark ? "#ffffff" : "#0f172a");
+      root.style.setProperty("--focus-ring", accentDef.subtleHex || `${accentDef.hex}55`);
+      root.style.setProperty("--success", "#10b981");
+      root.style.setProperty("--warning", "#f59e0b");
+      root.style.setProperty("--danger", "#f43f5e");
+      root.style.setProperty("--input-bg", themeDef.colors.bgCard);
+      root.style.setProperty("--input-border", themeDef.colors.borderColor);
+
       // Extended surface and geometry variables
       root.style.setProperty("--radius-card", themeDef.colors.cardRadius || "8px");
       root.style.setProperty("--radius-btn", themeDef.colors.buttonRadius || "6px");

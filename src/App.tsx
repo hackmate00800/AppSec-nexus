@@ -322,6 +322,18 @@ export default function App() {
     }
   }, [preferences.sidebarMode]);
 
+  // Auto-collapse sidebar on smaller screens (tablet/mobile viewports < 800px)
+  useEffect(() => {
+    const handleWindowResize = () => {
+      if (typeof window !== 'undefined' && window.innerWidth < 800 && sidebarWidth > 80) {
+        setSidebarWidth(60);
+      }
+    };
+    handleWindowResize();
+    window.addEventListener('resize', handleWindowResize);
+    return () => window.removeEventListener('resize', handleWindowResize);
+  }, [sidebarWidth]);
+
   // Workspace Layout Presets
   const [workspacePreset, setWorkspacePreset] = useState<WorkspacePreset>(() => {
     try {
