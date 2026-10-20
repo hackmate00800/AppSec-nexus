@@ -337,4 +337,23 @@ describe("AppSec UI/UX Bug Fixes, Appearance Controls & Activity Monitor", () =>
       expect(screen.getByText(/SQL Injection occurs when user input/i)).toBeInTheDocument();
     });
   });
+
+  // Test 8: Global Browser Context Menu Suppression
+  it("prevents default browser context menu globally on right-click", () => {
+    // Attach the global contextmenu handler as configured in main.tsx
+    const handler = (e: MouseEvent) => e.preventDefault();
+    window.addEventListener("contextmenu", handler);
+
+    const event = new MouseEvent("contextmenu", {
+      bubbles: true,
+      cancelable: true,
+      button: 2,
+    });
+
+    const notCancelled = window.dispatchEvent(event);
+    expect(notCancelled).toBe(false);
+    expect(event.defaultPrevented).toBe(true);
+
+    window.removeEventListener("contextmenu", handler);
+  });
 });

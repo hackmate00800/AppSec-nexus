@@ -7,6 +7,13 @@ import { AiTaskProvider } from "./context/AiTaskContext";
 import { WorkspaceProvider } from "./context/WorkspaceContext";
 import { ScanProgressProvider } from "./context/ScanProgressContext";
 
+// Disable default browser/webview context menu (Back, Refresh, Save as, Print, etc.) in AppSec
+if (typeof window !== "undefined") {
+  window.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+  });
+}
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <ThemeProvider>
