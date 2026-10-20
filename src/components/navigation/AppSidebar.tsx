@@ -20,10 +20,10 @@ import {
   PanelLeftClose,
   PanelLeft,
   Shield,
-  Globe,
   ShieldAlert,
   BookA,
   Wrench,
+  Search,
 } from "lucide-react";
 import { TabType } from "../../App";
 import { Tooltip } from "../ui/design_system";
@@ -74,9 +74,10 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
 }) => {
   // Track collapsed groups
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({
-    workspace: false,
-    learning_research: false,
-    ai_admin: false,
+    sec_ops: false,
+    knowledge_research: false,
+    ai_workspace: false,
+    app_management: false,
   });
 
   const toggleGroup = (groupId: string) => {
@@ -85,8 +86,8 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
 
   const navGroups: NavGroupDef[] = [
     {
-      id: "workspace",
-      label: "Main Workspace",
+      id: "sec_ops",
+      label: "Security Operations",
       items: [
         {
           id: "analytics",
@@ -103,31 +104,19 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         },
         {
           id: "webPentest",
-          label: "Web Pentesting",
+          label: "Pentesting Workbench",
           icon: <Shield size={15} />,
-          tooltip: "Authorized Web Application Pentesting Workbench",
-        },
-        {
-          id: "apiSecurity",
-          label: "API Security",
-          icon: <Globe size={15} />,
           badge:
             endpointsCount > 0 ? (
               <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-slate-800 text-slate-400">
                 {endpointsCount}
               </span>
             ) : undefined,
-          tooltip: "API Security Testing, OpenAPI & Postman Runner",
-        },
-        {
-          id: "networkRecon",
-          label: "Network Recon",
-          icon: <Radio size={15} />,
-          tooltip: "Network Reconnaissance & Port Discovery",
+          tooltip: "Authorized Web Application & API Pentesting Workbench",
         },
         {
           id: "tools",
-          label: "Tools Workbench",
+          label: "Tool Integrations",
           icon: <Wrench size={15} />,
           badge: (
             <span className="px-1.5 py-0.2 text-[10px] font-semibold rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-800/80">
@@ -158,26 +147,15 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         },
         {
           id: "issues",
-          label: "Reports & Issues",
+          label: "Reports",
           icon: <ClipboardList size={15} />,
-          tooltip: "Issue Management & Exportable Reports",
-        },
-        {
-          id: "burp",
-          label: "Integrations & Proxy",
-          icon: <Radio size={15} />,
-          badge: (
-            <span className="px-1.5 py-0.2 text-[10px] font-bold rounded bg-amber-950/80 text-amber-300 border border-amber-800/80">
-              Burp
-            </span>
-          ),
-          tooltip: "Burp Suite & Interception Proxy Integrations",
+          tooltip: "Issue Management & Exportable Security Reports",
         },
       ],
     },
     {
-      id: "learning_research",
-      label: "Learning & Research",
+      id: "knowledge_research",
+      label: "Knowledge and Research",
       items: [
         {
           id: "academy",
@@ -187,15 +165,27 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         },
         {
           id: "documentationCenter",
-          label: "Documentation Center",
+          label: "Security Intelligence Center",
           icon: <BookOpen size={15} />,
           tooltip: "Security Documentation Center (NIST, MITRE, OWASP, CISA)",
+        },
+        {
+          id: "vulnerabilityExplorer",
+          label: "Vulnerability Explorer",
+          icon: <Search size={15} />,
+          tooltip: "Vulnerability Explorer (Search CVEs, CWEs, CVSS, and KEV)",
         },
         {
           id: "zeroDayResearch",
           label: "Zero-Day Research",
           icon: <ShieldAlert size={15} />,
           tooltip: "Zero-Day Research Workspace & Patch Diff Analysis",
+        },
+        {
+          id: "methodologies",
+          label: "Methodologies & Workflows",
+          icon: <FileCheck size={15} />,
+          tooltip: "Attack & Defense Playbooks and Methodology Explorer",
         },
         {
           id: "diagramLibrary",
@@ -209,32 +199,32 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           icon: <BookA size={15} />,
           tooltip: "Cybersecurity Glossary & Reference Library",
         },
-        {
-          id: "playbooks",
-          label: "Playbooks & Checklists",
-          icon: <FileCheck size={15} />,
-          tooltip: "Attack & Defense Playbooks and Manual Testing Checklists",
-        },
-        {
-          id: "methodologies",
-          label: "Methodology Explorer",
-          icon: <BookOpen size={15} />,
-          tooltip: "Methodologies, Transparency & Attack Trees",
-        },
       ],
     },
     {
-      id: "ai_admin",
-      label: "AI & Administration",
+      id: "ai_workspace",
+      label: "AI Workspace",
       items: [
         {
           id: "mentor",
-          label: "Local AI Mentor",
+          label: "AI Mentor",
           icon: <Sparkles size={15} />,
           badge: hasRunningAiTask ? (
             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
           ) : undefined,
           tooltip: "Interactive AI Mentor & Security Copilot",
+        },
+        {
+          id: "history",
+          label: "Conversation History",
+          icon: <History size={15} />,
+          badge:
+            scanHistoryCount > 0 ? (
+              <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-slate-800 text-slate-400">
+                {scanHistoryCount}
+              </span>
+            ) : undefined,
+          tooltip: "Conversation History & Audit Logs",
         },
         {
           id: "modelLab",
@@ -247,17 +237,17 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           ),
           tooltip: "Heretic Model Lab & Abliteration Pipeline",
         },
+      ],
+    },
+    {
+      id: "app_management",
+      label: "Application Management",
+      items: [
         {
-          id: "history",
-          label: "Audit History",
-          icon: <History size={15} />,
-          badge:
-            scanHistoryCount > 0 ? (
-              <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-slate-800 text-slate-400">
-                {scanHistoryCount}
-              </span>
-            ) : undefined,
-          tooltip: "Audit Logs & Chat History",
+          id: "appearance",
+          label: "Settings & Appearance",
+          icon: <Palette size={15} />,
+          tooltip: "Settings, Theme, Appearance & Layout",
         },
         {
           id: "importer",
@@ -266,10 +256,15 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           tooltip: "Import External Scanner Reports",
         },
         {
-          id: "appearance",
-          label: "Settings & Appearance",
-          icon: <Palette size={15} />,
-          tooltip: "Appearance, Theme & Workspace Settings",
+          id: "burp",
+          label: "Integrations & Proxy",
+          icon: <Radio size={15} />,
+          badge: (
+            <span className="px-1.5 py-0.2 text-[10px] font-bold rounded bg-amber-950/80 text-amber-300 border border-amber-800/80">
+              Burp
+            </span>
+          ),
+          tooltip: "Burp Suite & Interception Proxy Integrations",
         },
       ],
     },

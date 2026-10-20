@@ -225,9 +225,10 @@ describe("AppSidebar Component", () => {
   it("renders all 4 navigation groups and items with badges", () => {
     render(<AppSidebar {...defaultSidebarProps} />);
 
-    expect(screen.getByText("Main Workspace")).toBeInTheDocument();
-    expect(screen.getByText("Learning & Research")).toBeInTheDocument();
-    expect(screen.getByText("AI & Administration")).toBeInTheDocument();
+    expect(screen.getByText("Security Operations")).toBeInTheDocument();
+    expect(screen.getByText("Knowledge and Research")).toBeInTheDocument();
+    expect(screen.getByText("AI Workspace")).toBeInTheDocument();
+    expect(screen.getByText("Application Management")).toBeInTheDocument();
 
     // Verify badges
     expect(screen.getByText("7")).toBeInTheDocument(); // Findings badge
@@ -248,7 +249,7 @@ describe("AppSidebar Component", () => {
   it("toggles group expansion when clicking group header", () => {
     render(<AppSidebar {...defaultSidebarProps} />);
 
-    const workspaceHeader = screen.getByText("Main Workspace");
+    const workspaceHeader = screen.getByText("Security Operations");
     fireEvent.click(workspaceHeader); // Collapses Workspace group
 
     // Items inside collapsed group are hidden

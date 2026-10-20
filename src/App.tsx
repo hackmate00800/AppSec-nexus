@@ -163,6 +163,9 @@ const ToolsWorkbench = lazy(() =>
 const SecurityDocumentationCenter = lazy(() =>
   import("./research/SecurityDocumentationCenter").then((m) => ({ default: m.SecurityDocumentationCenter }))
 );
+const VulnerabilityExplorer = lazy(() =>
+  import("./research/VulnerabilityExplorer").then((m) => ({ default: m.VulnerabilityExplorer }))
+);
 const ZeroDayResearchWorkspace = lazy(() =>
   import("./research/ZeroDayResearchWorkspace").then((m) => ({ default: m.ZeroDayResearchWorkspace }))
 );
@@ -226,6 +229,7 @@ export type TabType =
   | "history"
   | "academy"
   | "documentationCenter"
+  | "vulnerabilityExplorer"
   | "zeroDayResearch"
   | "diagramLibrary"
   | "glossaryLibrary"
@@ -5594,6 +5598,15 @@ export default function App() {
                 targets={targets}
                 selectedTarget={selectedTarget}
                 onSelectTarget={(target) => setSelectedTarget(target)}
+                onNavigateTab={(tab) => setActiveTab(tab as TabType)}
+              />
+            </Suspense>
+          )}
+
+          {/* TAB: VULNERABILITY EXPLORER */}
+          {activeTab === "vulnerabilityExplorer" && (
+            <Suspense fallback={<TabLoadingSkeleton />}>
+              <VulnerabilityExplorer
                 onNavigateTab={(tab) => setActiveTab(tab as TabType)}
               />
             </Suspense>
