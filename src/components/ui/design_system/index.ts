@@ -18,3 +18,6 @@ export type { ModalProps } from "./Modal";
 
 export { Tooltip } from "./Tooltip";
 export type { TooltipProps } from "./Tooltip";
+
+export { InfoButton } from "../InfoButton";
+export type { InfoButtonProps } from "../InfoButton";

@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { useTheme } from "../theme/ThemeProvider";
+import { InfoButton } from "./ui/design_system";
 import { BUILT_IN_ACCENTS } from "../theme/themes";
 import { ThemeId, AccentId, FontScale, ThemeCategory, ThemeDefinition } from "../theme/types";
 import { useToast } from "./ui/Toast";
@@ -918,6 +919,121 @@ export function AppearanceSettings() {
             </span>
           </div>
         </div>
+
+      {/* =========================================================================
+          SECTION: LIVE APPEARANCE PREVIEW (Phase 5 C)
+          ========================================================================= */}
+      <section className="card" style={{ marginTop: "24px" }} data-testid="appearance-live-preview">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <Eye size={18} color="var(--accent-cyan)" />
+            <h3 style={{ fontSize: "1.05rem", fontWeight: 700, margin: 0 }}>
+              Live Appearance Preview
+            </h3>
+            <InfoButton
+              title="Live Theme & Typography Preview"
+              description="Demonstrates how headings, body text, sidebar controls, buttons, inputs, and information tooltips render with the currently active theme, accent, and font scale."
+              whyItMatters="Allows immediate verification of contrast, readability, and visual hierarchy without having to navigate between different application screens."
+            />
+          </div>
+          <span style={{ fontSize: "0.75rem", fontFamily: "var(--font-mono)", color: "var(--text-dim)" }}>
+            Palette: {activeThemeDef.id} ({activeThemeDef.isDark ? "Dark" : "Light"}) • Scale: {preferences.fontScale.toUpperCase()} • Density: {preferences.density}
+          </span>
+        </div>
+
+        <div
+          style={{
+            padding: "18px",
+            borderRadius: "8px",
+            border: "1px solid var(--border-color)",
+            backgroundColor: "var(--bg-secondary)",
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+            gap: "20px",
+          }}
+        >
+          {/* Sample Content Block: Heading & Body */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <span style={{ fontSize: "0.72rem", textTransform: "uppercase", fontWeight: 600, color: "var(--text-dim)", letterSpacing: "0.05em" }}>
+              Typography & Hierarchy
+            </span>
+            <h4 style={{ fontSize: "1.15rem", fontWeight: 700, color: "var(--text-main)", margin: 0 }}>
+              Critical Security Finding: CWE-89 SQL Injection
+            </h4>
+            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", lineHeight: 1.6, margin: 0 }}>
+              Unsanitized user parameters passed to dynamic query constructors allow attackers to extract database tables, bypass authentication, and escalate privileges.
+            </p>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span className="badge badge-critical" style={{ fontSize: "0.72rem" }}>Critical Severity</span>
+              <span className="badge badge-locked" style={{ fontSize: "0.72rem" }}>Validated Canary</span>
+            </div>
+          </div>
+
+          {/* Sample UI Controls: Sidebar Item, Button, Input & Tooltip */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <span style={{ fontSize: "0.72rem", textTransform: "uppercase", fontWeight: 600, color: "var(--text-dim)", letterSpacing: "0.05em" }}>
+              Interactive Components
+            </span>
+
+            {/* Mock Sidebar Item */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                padding: "8px 12px",
+                borderRadius: "6px",
+                backgroundColor: "var(--accent-primary-subtle)",
+                border: "1px solid rgba(6, 182, 212, 0.3)",
+                color: "var(--accent-primary)",
+                fontWeight: 600,
+                fontSize: "0.82rem",
+              }}
+            >
+              <Shield size={15} />
+              <span>Web Pentesting Workbench</span>
+              <span style={{ marginLeft: "auto", fontSize: "0.7rem", backgroundColor: "var(--bg-card)", padding: "2px 6px", borderRadius: "4px" }}>
+                Active
+              </span>
+            </div>
+
+            {/* Mock Form Input */}
+            <div>
+              <input
+                type="text"
+                readOnly
+                value="https://target.corp.internal/api/v1/auth"
+                placeholder="Enter target URL..."
+                style={{
+                  width: "100%",
+                  padding: "8px 12px",
+                  borderRadius: "6px",
+                  border: "1px solid var(--border-color)",
+                  backgroundColor: "var(--bg-card)",
+                  color: "var(--text-main)",
+                  fontSize: "0.82rem",
+                  fontFamily: "var(--font-mono)",
+                }}
+              />
+            </div>
+
+            {/* Mock Buttons with Info Tooltip */}
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <button className="btn btn-primary" style={{ fontSize: "0.8rem", padding: "6px 14px" }}>
+                <Sparkles size={13} /> Launch Validation
+              </button>
+              <button className="btn btn-secondary" style={{ fontSize: "0.8rem", padding: "6px 14px" }}>
+                Cancel
+              </button>
+              <InfoButton
+                title="Validation Canary Engine"
+                description="Sends non-destructive out-of-band canary payloads to verify vulnerability exploitability without causing service interruption."
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
       </section>
 
       {/* =========================================================================

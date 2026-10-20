@@ -11,7 +11,6 @@ import {
   Sparkles,
   Target as TargetIcon,
   Download,
-  History,
   FileCode,
   ArrowDownCircle,
   Compass,
@@ -102,7 +101,7 @@ import { FindingInlineDetailsAccordion } from "./components/findings/FindingInli
 import { ContextMenu } from "./components/ui/ContextMenu";
 import { useScanProgress } from "./context/ScanProgressContext";
 import { ScanProgressIndicatorBanner } from "./components/scanners/ScanProgressIndicatorBanner";
-import { FindingsTableSkeleton, ScanHistorySkeleton } from "./components/ui/SkeletonLoaders";
+import { FindingsTableSkeleton } from "./components/ui/SkeletonLoaders";
 
 // High-Performance Code-Splitting for Low-Spec PCs:
 // Defer loading heavy components until the user switches to their respective tabs
@@ -172,6 +171,9 @@ const ZeroDayResearchWorkspace = lazy(() =>
 const InteractiveDiagramLibrary = lazy(() =>
   import("./diagrams/InteractiveDiagramLibrary").then((m) => ({ default: m.InteractiveDiagramLibrary }))
 );
+const ActivityMonitor = lazy(() =>
+  import("./activity/ActivityMonitor").then((m) => ({ default: m.ActivityMonitor }))
+);
 const GlossaryLibrary = lazy(() =>
   import("./research/GlossaryLibrary").then((m) => ({ default: m.GlossaryLibrary }))
 );
@@ -221,6 +223,7 @@ export type TabType =
   | "tools"
   | "crawler"
   | "scanner"
+  | "activity"
   | "terminal"
   | "findings"
   | "issues"
@@ -475,7 +478,6 @@ export default function App() {
   // Scan progress and background task integration
   const { startScan } = useScanProgress();
   const [isFindingsLoading, setIsFindingsLoading] = useState(false);
-  const [isScanHistoryLoading, setIsScanHistoryLoading] = useState(false);
 
   // Scan execution
   const [isScanning, setIsScanning] = useState(false);
@@ -564,11 +566,6 @@ export default function App() {
     x: number;
     y: number;
     target: Target;
-  } | null>(null);
-  const [scanHistoryContextMenu, setScanHistoryContextMenu] = useState<{
-    x: number;
-    y: number;
-    scan: ScanResult;
   } | null>(null);
 
   const toggleExpandFinding = (id: string) => {
@@ -679,7 +676,6 @@ export default function App() {
       }
 
       setIsFindingsLoading(true);
-      setIsScanHistoryLoading(true);
       const findingsList = await invoke<Finding[]>("get_findings");
       const dedup = new FindingDeduplicator();
       const dedupedFindings = findingsList.filter(
@@ -690,7 +686,6 @@ export default function App() {
 
       const historyList = await invoke<ScanResult[]>("get_scan_history");
       setScanHistory(historyList);
-      setIsScanHistoryLoading(false);
 
       let isOnline = false;
       let installedList: string[] = [];
@@ -1371,25 +1366,6 @@ export default function App() {
   };
 
   // --- SCAN HISTORY CRUD HANDLERS ---
-  const handleDeleteScanHistory = async (scan: ScanResult) => {
-    try {
-      if (isTauriApp) {
-        await invoke("delete_scan_history", { scanId: scan.scan_id, id: scan.scan_id });
-      }
-      setScanHistory((prev) => prev.filter((s) => s.scan_id !== scan.scan_id));
-      addToast({
-        type: "success",
-        title: "Scan Record Removed",
-        description: `Removed scan entry for ${scan.tool}`,
-      });
-    } catch (err: any) {
-      addToast({
-        type: "error",
-        title: "Delete Failed",
-        description: err?.message || String(err),
-      });
-    }
-  };
 
   const handleClearScanHistory = async () => {
     try {
@@ -5402,166 +5378,18 @@ export default function App() {
             </Suspense>
           )}
 
-          {/* TAB 8: AUDIT & SCAN HISTORY */}
-          {activeTab === "history" && (
-            <div>
-              <div className="card">
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
-                  <h2 className="card-title" style={{ margin: 0 }}>
-                    <History size={20} color="var(--accent-cyan)" />
-                    Scan Audit History ({scanHistory.length})
-                  </h2>
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={() => setIsAuditLogModalOpen(true)}
-                      title="View System & Security Audit Trail"
-                    >
-                      <History size={14} /> Audit Trail
-                    </button>
-                    {scanHistory.length > 0 && (
-                      <button
-                        type="button"
-                        className="btn btn-danger"
-                        onClick={() => setIsClearingScanHistoryModalOpen(true)}
-                        title="Clear all scan execution history"
-                      >
-                        <Trash2 size={14} /> Clear History
-                      </button>
-                    )}
-                    <button className="btn btn-secondary" onClick={loadInitialData}>
-                      <RotateCcw size={14} /> Refresh
-                    </button>
-                  </div>
-                </div>
-
-                {isScanHistoryLoading ? (
-                  <ScanHistorySkeleton rows={5} />
-                ) : scanHistory.length === 0 ? (
-                  <p style={{ color: "var(--text-dim)", fontSize: "0.85rem" }}>
-                    No scan executions recorded yet. Run a scan from the Tool Hub or Scan Console.
-                  </p>
-                ) : (
-                  <div className="table-responsive">
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>Target URL</th>
-                          <th>Tool Used</th>
-                          <th>Status</th>
-                          <th>Findings Discovered</th>
-                          <th>Duration</th>
-                          <th style={{ textAlign: "right" }}>Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {scanHistory.map((s, idx) => (
-                          <tr
-                            key={s.scan_id || idx}
-                            onContextMenu={(e) => {
-                              e.preventDefault();
-                              setScanHistoryContextMenu({
-                                x: e.clientX,
-                                y: e.clientY,
-                                scan: s,
-                              });
-                            }}
-                            style={{ cursor: "context-menu" }}
-                          >
-                            <td style={{ fontWeight: 600 }}>{s.target_url}</td>
-                            <td>
-                              <span style={{ color: "var(--accent-cyan)", fontWeight: 500 }}>
-                                {s.tool}
-                              </span>
-                            </td>
-                            <td>
-                              <span className="badge badge-locked">{s.status}</span>
-                            </td>
-                            <td style={{ fontWeight: 600 }}>{s.findings_count} findings</td>
-                            <td style={{ color: "var(--text-dim)", fontFamily: "monospace", fontSize: "0.8rem" }}>
-                              {s.duration_ms} ms
-                            </td>
-                            <td style={{ textAlign: "right" }}>
-                              <button
-                                type="button"
-                                className="btn btn-secondary"
-                                style={{ padding: "3px 7px", fontSize: "0.72rem", color: "var(--accent-rose)" }}
-                                onClick={() => handleDeleteScanHistory(s)}
-                                title="Delete scan execution record"
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-
-                {/* Right-click Context Menu for Scan History Records */}
-                {scanHistoryContextMenu && (
-                  <ContextMenu
-                    x={scanHistoryContextMenu.x}
-                    y={scanHistoryContextMenu.y}
-                    role={currentUserRole}
-                    onClose={() => setScanHistoryContextMenu(null)}
-                    items={[
-                      {
-                        label: `Re-run ${scanHistoryContextMenu.scan.tool.toUpperCase()} Scan`,
-                        icon: <RotateCcw size={12} color="var(--accent-cyan)" />,
-                        action: () => {
-                          const target = targets.find((t) => t.primary_url === scanHistoryContextMenu.scan.target_url) || selectedTarget;
-                          if (target) {
-                            setSelectedTarget(target);
-                            setActiveTab("scanner");
-                            handleRunScan(scanHistoryContextMenu.scan.tool.toLowerCase());
-                          } else {
-                            addToast({
-                              type: "warning",
-                              title: "Target Not Selected",
-                              description: `Please select an authorized target matching ${scanHistoryContextMenu.scan.target_url}`,
-                            });
-                          }
-                        },
-                      },
-                      {
-                        label: "Copy Target URL",
-                        icon: <Globe size={12} />,
-                        action: () => {
-                          if (navigator.clipboard) {
-                            navigator.clipboard.writeText(scanHistoryContextMenu.scan.target_url);
-                          }
-                          addToast({
-                            type: "info",
-                            title: "URL Copied",
-                            description: `Copied ${scanHistoryContextMenu.scan.target_url} to clipboard.`,
-                          });
-                        },
-                      },
-                      {
-                        label: "View in Unified Findings",
-                        icon: <Search size={12} color="var(--accent-cyan)" />,
-                        action: () => {
-                          setFindingSearchQuery(scanHistoryContextMenu.scan.tool);
-                          setActiveTab("findings");
-                        },
-                      },
-                      {
-                        label: "Delete Record",
-                        icon: <Trash2 size={12} />,
-                        requiresAdmin: true,
-                        danger: true,
-                        action: () => {
-                          handleDeleteScanHistory(scanHistoryContextMenu.scan);
-                        },
-                      },
-                    ]}
-                  />
-                )}
-              </div>
-            </div>
+          {/* TAB: ACTIVITY MONITOR & TELEMETRY */}
+          {(activeTab === "activity" || activeTab === "history") && (
+            <Suspense fallback={<TabLoadingSkeleton />}>
+              <ActivityMonitor
+                targets={targets}
+                selectedTarget={selectedTarget}
+                scanHistory={scanHistory}
+                findings={findings}
+                onNavigateTab={(tab) => setActiveTab(tab)}
+                onRefreshData={loadInitialData}
+              />
+            </Suspense>
           )}
 
           {/* TAB: WEB PENTESTING WORKBENCH */}

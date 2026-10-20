@@ -36,7 +36,7 @@ use scope::ScopeValidator;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tauri::State;
+use tauri::{Emitter, State};
 use tools::ToolManager;
 use uuid::Uuid;
 
@@ -1148,6 +1148,7 @@ async fn run_tool_health_check(
 #[tauri::command]
 async fn execute_tool_adapter(
     state: State<'_, AppState>,
+    app_handle: tauri::AppHandle,
     tool_id: String,
     target_id: String,
     target_url: String,
@@ -1163,7 +1164,7 @@ async fn execute_tool_adapter(
 
     let scan_id = Uuid::new_v4().to_string();
 
-    let _ = state.db.insert_scan_event(&ScanEvent {
+    let start_event = ScanEvent {
         id: Uuid::new_v4().to_string(),
         scan_id: scan_id.clone(),
         job_id: None,
@@ -1177,7 +1178,9 @@ async fn execute_tool_adapter(
         status: "running".to_string(),
         related_finding_id: None,
         error_details: None,
-    });
+    };
+    let _ = state.db.insert_scan_event(&start_event);
+    let _ = app_handle.emit("activity-event", &start_event);
 
     let input = adapters::AdapterInput {
         target_id: target_id.clone(),
@@ -1186,11 +1189,33 @@ async fn execute_tool_adapter(
         timeout_seconds: Some(300),
     };
 
-    let output = state.adapter_registry.execute(&tool_id, input).await?;
+    let output = match state.adapter_registry.execute(&tool_id, input).await {
+        Ok(out) => out,
+        Err(err) => {
+            let err_evt = ScanEvent {
+                id: Uuid::new_v4().to_string(),
+                scan_id: scan_id.clone(),
+                job_id: None,
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                event_type: "scan_failed".to_string(),
+                severity: "error".to_string(),
+                component_or_tool: tool_id.clone(),
+                message: format!("Tool adapter {} execution failed: {}", tool_id, err),
+                metadata_json: serde_json::json!({ "error": err }).to_string(),
+                duration_ms: 0,
+                status: "failed".to_string(),
+                related_finding_id: None,
+                error_details: Some(err.clone()),
+            };
+            let _ = state.db.insert_scan_event(&err_evt);
+            let _ = app_handle.emit("activity-event", &err_evt);
+            return Err(err);
+        }
+    };
 
     for finding in &output.findings {
         let _ = state.db.insert_finding(finding);
-        let _ = state.db.insert_scan_event(&ScanEvent {
+        let f_evt = ScanEvent {
             id: Uuid::new_v4().to_string(),
             scan_id: scan_id.clone(),
             job_id: None,
@@ -1207,13 +1232,15 @@ async fn execute_tool_adapter(
             status: "success".to_string(),
             related_finding_id: Some(finding.id.clone()),
             error_details: None,
-        });
+        };
+        let _ = state.db.insert_scan_event(&f_evt);
+        let _ = app_handle.emit("activity-event", &f_evt);
     }
     for ep in &output.endpoints {
         let _ = state.db.insert_endpoint(ep);
     }
 
-    let _ = state.db.insert_scan_event(&ScanEvent {
+    let comp_evt = ScanEvent {
         id: Uuid::new_v4().to_string(),
         scan_id,
         job_id: None,
@@ -1227,7 +1254,9 @@ async fn execute_tool_adapter(
         status: "success".to_string(),
         related_finding_id: None,
         error_details: None,
-    });
+    };
+    let _ = state.db.insert_scan_event(&comp_evt);
+    let _ = app_handle.emit("activity-event", &comp_evt);
 
     Ok(output)
 }
@@ -1252,6 +1281,50 @@ fn get_scan_events(
     state.db.get_scan_events(scan_id.as_deref(), finding_id.as_deref(), limit).map_err(|e| e.to_string())
 }
 
+
+#[tauri::command]
+fn record_activity_event(
+    state: State<'_, AppState>,
+    app_handle: tauri::AppHandle,
+    scan_id: Option<String>,
+    job_id: Option<String>,
+    event_type: String,
+    severity: String,
+    component_or_tool: String,
+    message: String,
+    metadata_json: Option<String>,
+    duration_ms: Option<u64>,
+    status: Option<String>,
+    related_finding_id: Option<String>,
+    error_details: Option<String>,
+) -> Result<ScanEvent, String> {
+    let event = ScanEvent {
+        id: Uuid::new_v4().to_string(),
+        scan_id: scan_id.unwrap_or_else(|| Uuid::new_v4().to_string()),
+        job_id,
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        event_type,
+        severity,
+        component_or_tool,
+        message,
+        metadata_json: metadata_json.unwrap_or_else(|| "{}".to_string()),
+        duration_ms: duration_ms.unwrap_or(0),
+        status: status.unwrap_or_else(|| "success".to_string()),
+        related_finding_id,
+        error_details,
+    };
+    state.db.insert_scan_event(&event).map_err(|e| e.to_string())?;
+    let _ = app_handle.emit("activity-event", &event);
+    Ok(event)
+}
+
+#[tauri::command]
+fn get_recent_activity_events(
+    state: State<'_, AppState>,
+    limit: Option<usize>,
+) -> Result<Vec<ScanEvent>, String> {
+    state.db.get_recent_scan_events(limit.unwrap_or(150)).map_err(|e| e.to_string())
+}
 #[tauri::command]
 fn get_finding_trace(
     state: State<'_, AppState>,
@@ -2048,6 +2121,8 @@ pub fn run() {
             get_methodologies,
             get_methodology_by_id,
             get_scan_events,
+            record_activity_event,
+            get_recent_activity_events,
             get_finding_trace,
             get_current_user_role,
             get_taxonomy_domains,

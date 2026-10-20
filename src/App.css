@@ -467,16 +467,87 @@
   --density-card-padding: 20px;
 }
 
+html[data-font-scale="sm"],
 [data-font-scale="sm"] {
+  font-size: 13px !important;
+  --app-font-scale: 0.88;
+}
+
+html[data-font-scale="md"],
+[data-font-scale="md"] {
+  font-size: 14px !important;
+  --app-font-scale: 1.0;
+}
+
+html[data-font-scale="lg"],
+[data-font-scale="lg"] {
+  font-size: 16px !important;
+  --app-font-scale: 1.14;
+}
+
+[data-font-scale="sm"] body,
+[data-font-scale="sm"] .workspace,
+[data-font-scale="sm"] .sidebar {
   font-size: 13px;
 }
 
-[data-font-scale="md"] {
+[data-font-scale="md"] body,
+[data-font-scale="md"] .workspace,
+[data-font-scale="md"] .sidebar {
   font-size: 14px;
 }
 
-[data-font-scale="lg"] {
-  font-size: 15px;
+[data-font-scale="lg"] body,
+[data-font-scale="lg"] .workspace,
+[data-font-scale="lg"] .sidebar {
+  font-size: 16px;
+}
+
+/* WCAG AA High Contrast and Light Theme Tokens */
+[data-theme-mode="light"] {
+  --text-main: #0f172a;
+  --text-muted: #334155;
+  --text-dim: #64748b;
+  color: var(--text-main);
+}
+
+[data-theme-mode="light"] .sidebar,
+[data-theme-mode="light"] aside {
+  background-color: var(--bg-secondary) !important;
+  border-color: var(--border-color) !important;
+}
+
+[data-theme-mode="light"] .top-nav,
+[data-theme-mode="light"] header {
+  background-color: var(--bg-secondary) !important;
+  border-color: var(--border-color) !important;
+}
+
+[data-theme-mode="light"] input,
+[data-theme-mode="light"] select,
+[data-theme-mode="light"] textarea {
+  background-color: var(--bg-card) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border-color) !important;
+}
+
+[data-theme-mode="light"] input::placeholder,
+[data-theme-mode="light"] textarea::placeholder {
+  color: #64748b !important;
+  opacity: 1 !important;
+}
+
+/* Global Placeholder & Disabled Contrast */
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-dim, #64748b);
+  opacity: 0.9;
+}
+
+:disabled,
+[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed !important;
 }
 
 [data-reduced-motion="true"] *,
@@ -677,6 +748,7 @@ code, pre, kbd {
 /* Workspace content */
 .workspace {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   overflow-y: auto;

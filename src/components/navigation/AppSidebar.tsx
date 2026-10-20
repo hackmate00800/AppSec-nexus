@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import {
   Activity,
+  LayoutDashboard,
   Target as TargetIcon,
   Terminal,
   Layers,
@@ -92,7 +93,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         {
           id: "analytics",
           label: "Dashboard",
-          icon: <Activity size={15} />,
+          icon: <LayoutDashboard size={15} />,
           tooltip: "Security Analytics & Posture Dashboard",
         },
         {
@@ -131,6 +132,19 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           icon: <Terminal size={15} />,
           tooltip: "Active Scan Jobs & Execution Console",
           dataTour: "sidebar-scanner",
+        },
+        {
+          id: "activity",
+          label: "Activity Monitor",
+          icon: <Activity size={15} />,
+          badge:
+            scanHistoryCount > 0 ? (
+              <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-slate-800 text-slate-400">
+                {scanHistoryCount}
+              </span>
+            ) : undefined,
+          tooltip: "Real-time Telemetry, Safe Command Inspector & Tool Execution Monitor",
+          dataTour: "sidebar-activity",
         },
         {
           id: "findings",
@@ -218,12 +232,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           id: "history",
           label: "Conversation History",
           icon: <History size={15} />,
-          badge:
-            scanHistoryCount > 0 ? (
-              <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-slate-800 text-slate-400">
-                {scanHistoryCount}
-              </span>
-            ) : undefined,
           tooltip: "Conversation History & Audit Logs",
         },
         {

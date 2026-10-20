@@ -1209,6 +1209,39 @@ impl Database {
         Ok(events)
     }
 
+    pub fn get_recent_scan_events(&self, limit: usize) -> Result<Vec<ScanEvent>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, scan_id, job_id, timestamp, event_type, severity, component_or_tool, message, metadata_json, duration_ms, status, related_finding_id, error_details FROM scan_events ORDER BY timestamp DESC LIMIT ?"
+        )?;
+        let rows = stmt.query_map([limit as i64], |row| {
+            let dur: i64 = row.get(9)?;
+            Ok(ScanEvent {
+                id: row.get(0)?,
+                scan_id: row.get(1)?,
+                job_id: row.get(2)?,
+                timestamp: row.get(3)?,
+                event_type: row.get(4)?,
+                severity: row.get(5)?,
+                component_or_tool: row.get(6)?,
+                message: row.get(7)?,
+                metadata_json: row.get(8)?,
+                duration_ms: dur as u64,
+                status: row.get(10)?,
+                related_finding_id: row.get(11)?,
+                error_details: row.get(12)?,
+            })
+        })?;
+
+        let mut events = Vec::new();
+        for r in rows {
+            if let Ok(e) = r {
+                events.push(e);
+            }
+        }
+        Ok(events)
+    }
+
     pub fn get_finding_by_id(&self, id: &str) -> Result<Option<Finding>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(

@@ -3,7 +3,6 @@ import {
   LayoutGrid,
   Maximize2,
   Sliders,
-  PanelLeft,
   Bot,
   RotateCcw,
 } from "lucide-react";
@@ -28,8 +27,6 @@ export const WorkspaceToolbar: React.FC<WorkspaceToolbarProps> = ({
     setPreset,
     density,
     setDensity,
-    isSidebarCollapsed,
-    toggleSidebar,
     resetWorkspaceLayout,
   } = useWorkspace();
 
@@ -49,22 +46,11 @@ export const WorkspaceToolbar: React.FC<WorkspaceToolbarProps> = ({
         overflowX: "auto",
       }}
     >
-      {/* Left: Sidebar Toggle & Minimized Panels Dock Bar */}
+      {/* Left: Minimized Panels Dock Bar */}
       <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1, minWidth: 0, overflowX: "auto" }}>
-        {/* Toggle Sidebar Button */}
-        <button
-          type="button"
-          onClick={toggleSidebar}
-          title={isSidebarCollapsed ? "Expand Sidebar (Ctrl+B)" : "Collapse Sidebar (Ctrl+B)"}
-          className={`workspace-toolbar-btn ${isSidebarCollapsed ? "active" : ""}`}
-        >
-          <PanelLeft size={13} />
-          <span style={{ fontSize: "11px" }}>{isSidebarCollapsed ? "Expand" : "Collapse"}</span>
-        </button>
-
         {/* Minimized Panel Pills */}
-        {minimizedPanels.length > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", paddingLeft: "8px", borderLeft: "1px solid var(--border-color)" }}>
+        {minimizedPanels.length > 0 ? (
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             <span style={{ fontSize: "10px", textTransform: "uppercase", fontFamily: "var(--font-mono, monospace)", color: "var(--text-dim)", letterSpacing: "0.05em" }}>
               Docked ({minimizedPanels.length}):
             </span>
@@ -83,95 +69,100 @@ export const WorkspaceToolbar: React.FC<WorkspaceToolbarProps> = ({
               </button>
             ))}
           </div>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <span style={{ fontSize: "11px", color: "var(--text-dim)", fontWeight: 500 }}>
+              AppSec Workspace
+            </span>
+          </div>
         )}
       </div>
 
-      {/* Right: Layout Preset, Density, and Workspace Controls */}
+      {/* Center & Right Controls: Preset, Density, AI Copilot & Reset */}
       <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
-        {/* Quick AI Floating Assistant Trigger */}
-        {onOpenAiDrawer && (
-          <button
-            type="button"
-            onClick={onOpenAiDrawer}
-            title="Summon Quick AI Mentor Assistant Drawer"
-            className="workspace-toolbar-btn"
+        {/* Layout Presets Dropdown */}
+        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+          <LayoutGrid size={13} style={{ color: "var(--text-dim)" }} />
+          <select
+            value={preset}
+            onChange={(e) => setPreset(e.target.value as WorkspacePreset)}
+            aria-label="Workspace Layout Preset"
             style={{
-              backgroundColor: "rgba(6, 182, 212, 0.12)",
-              color: "var(--accent-cyan)",
-              borderColor: "rgba(6, 182, 212, 0.35)",
+              padding: "3px 8px",
+              fontSize: "11px",
+              background: "var(--bg-card)",
+              border: "1px solid var(--border-color)",
+              color: "var(--text-main)",
+              borderRadius: "4px",
+              cursor: "pointer",
+              outline: "none",
             }}
           >
-            <Bot size={13} style={{ color: "var(--accent-cyan)" }} />
-            <span style={{ fontSize: "11px", fontWeight: 600 }}>Quick AI</span>
-          </button>
-        )}
+            <option value="default">Default Multi-Pane</option>
+            <option value="triage_focused">Triage Focused</option>
+            <option value="code_analysis">Code Analysis</option>
+            <option value="minimal">Minimal Single-Pane</option>
+            <option value="dual_view">Dual View</option>
+          </select>
+        </div>
 
-        {/* Density Selector */}
-        <div className="workspace-density-group">
+        {/* Density Toggle Buttons */}
+        <div style={{ display: "flex", alignItems: "center", background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "4px", padding: "1px" }}>
           <button
             type="button"
             onClick={() => setDensity("compact")}
-            className={`workspace-density-btn ${density === "compact" ? "active" : ""}`}
-            title="Compact high-density view"
+            title="Compact high-density view for maximum information visibility"
+            className={`workspace-toolbar-btn ${density === "compact" ? "active" : ""}`}
+            style={{ padding: "2px 7px", fontSize: "10px", borderRadius: "3px", height: "22px" }}
           >
             Compact
           </button>
           <button
             type="button"
             onClick={() => setDensity("normal")}
-            className={`workspace-density-btn ${density === "normal" ? "active" : ""}`}
-            title="Balanced comfortable view"
+            title="Balanced comfortable view with generous line spacing"
+            className={`workspace-toolbar-btn ${density === "normal" ? "active" : ""}`}
+            style={{ padding: "2px 7px", fontSize: "10px", borderRadius: "3px", height: "22px" }}
           >
-            Normal
+            Comfortable
           </button>
+        </div>
+
+        {/* AI Mentor Drawer Quick Access */}
+        {onOpenAiDrawer && (
           <button
             type="button"
-            onClick={() => setDensity("spacious")}
-            className={`workspace-density-btn ${density === "spacious" ? "active" : ""}`}
-            title="Spacious learning & presentation view"
+            onClick={onOpenAiDrawer}
+            title="Open AI Mentor Sliding Panel"
+            className="workspace-toolbar-btn"
+            style={{ fontSize: "11px", padding: "3px 8px" }}
           >
-            Spacious
+            <Bot size={13} style={{ color: "var(--accent-cyan)" }} />
+            <span style={{ fontSize: "11px" }}>AI Mentor</span>
           </button>
-        </div>
+        )}
 
-        {/* Workspace Preset Dropdown */}
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <LayoutGrid size={13} style={{ color: "var(--text-dim)" }} />
-          <select
-            value={preset}
-            onChange={(e) => setPreset(e.target.value as WorkspacePreset)}
-            aria-label="Workspace Layout Preset"
-            className="workspace-select"
-            title="Select workspace layout preset"
-          >
-            <option value="default">⚡ Default Workspace</option>
-            <option value="compact">📐 Compact IDE</option>
-            <option value="analyst">🔬 Security Analyst</option>
-            <option value="pentest">🛡️ Pentest Console</option>
-            <option value="api">🌐 API Security</option>
-            <option value="learning">🎓 Cyber Academy</option>
-          </select>
-        </div>
-
-        {/* Workspace Customization Drawer Trigger */}
+        {/* Advanced Layout Drawer */}
         {onOpenControlsDrawer && (
           <button
             type="button"
             onClick={onOpenControlsDrawer}
-            title="Open Workspace Panels & Preferences Drawer"
+            title="Configure Panels & Docking"
             className="workspace-toolbar-btn"
+            style={{ fontSize: "11px", padding: "3px 8px" }}
           >
-            <Sliders size={12} style={{ color: "var(--accent-cyan)" }} />
-            <span style={{ fontSize: "11px" }}>Customize</span>
+            <Sliders size={13} />
+            <span style={{ fontSize: "11px" }}>Panels</span>
           </button>
         )}
 
-        {/* Reset Workspace Layout */}
+        {/* Reset Layout to Factory Defaults */}
         <button
           type="button"
           onClick={resetWorkspaceLayout}
-          title="Reset all panels, tabs, and drawers to factory default"
-          className="icon-btn-subtle"
+          title="Reset Workspace Panes to Default"
+          className="workspace-toolbar-btn"
+          style={{ fontSize: "11px", padding: "3px 8px", color: "var(--text-dim)" }}
         >
           <RotateCcw size={12} />
         </button>
