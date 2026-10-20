@@ -429,6 +429,148 @@
   --text-dim: #737373;
 }
 
+/* 7. Windows 11 Fluent Design (Mica Dark & Flagship) */
+[data-theme="windows_11"],
+[data-theme="windows_11_dark"] {
+  --bg-primary: #202020;
+  --bg-secondary: #272727;
+  --bg-card: #2c2c2c;
+  --bg-card-hover: #383838;
+  --border-color: #383838;
+  --border-accent: #4cc2ff;
+  --text-main: #ffffff;
+  --text-muted: #d0d0d0;
+  --text-dim: #8a8a8a;
+  --accent-cyan: #4cc2ff;
+  --accent-primary: #4cc2ff;
+  --radius-card: 8px;
+  --radius-btn: 6px;
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.28), 0 1px 2px rgba(0, 0, 0, 0.2);
+  font-family: 'Segoe UI Variable Text', 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+}
+
+[data-theme="windows_11"] .card,
+[data-theme="windows_11_dark"] .card {
+  background: #2c2c2c;
+  border: 1px solid #383838;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28), 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+[data-theme="windows_11"] .card:hover,
+[data-theme="windows_11_dark"] .card:hover {
+  background: #323232;
+  border-color: #4a4a4a;
+}
+
+[data-theme="windows_11"] .btn-primary,
+[data-theme="windows_11_dark"] .btn-primary {
+  background: #4cc2ff;
+  color: #0f172a;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="windows_11"] .btn-primary:hover,
+[data-theme="windows_11_dark"] .btn-primary:hover {
+  background: #60cdff;
+}
+
+/* 8. Windows 11 Fluent Design (Mica Light) */
+[data-theme="windows_11_light"] {
+  --bg-primary: #f3f3f3;
+  --bg-secondary: #f8f9fa;
+  --bg-card: #ffffff;
+  --bg-card-hover: #fcfcfc;
+  --border-color: #e5e5e5;
+  --border-accent: #0067c0;
+  --text-main: #1b1b1b;
+  --text-muted: #5d5d5d;
+  --text-dim: #767676;
+  --accent-cyan: #0067c0;
+  --accent-primary: #0067c0;
+  --radius-card: 8px;
+  --radius-btn: 6px;
+  --shadow-card: 0 2px 6px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.04);
+  font-family: 'Segoe UI Variable Text', 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+}
+
+[data-theme="windows_11_light"] .card {
+  background: #ffffff;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+[data-theme="windows_11_light"] .card:hover {
+  background: #fafafa;
+  border-color: #d1d5db;
+}
+
+[data-theme="windows_11_light"] .btn-primary {
+  background: #0067c0;
+  color: #ffffff;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="windows_11_light"] .btn-primary:hover {
+  background: #005a9e;
+}
+
+/* Windows 11 Shared Fluent Components */
+[data-theme="windows_11"] input,
+[data-theme="windows_11"] textarea,
+[data-theme="windows_11"] select,
+[data-theme="windows_11_dark"] input,
+[data-theme="windows_11_dark"] textarea,
+[data-theme="windows_11_dark"] select,
+[data-theme="windows_11_light"] input,
+[data-theme="windows_11_light"] textarea,
+[data-theme="windows_11_light"] select {
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  border-bottom: 2px solid var(--border-color);
+  transition: border-bottom-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+[data-theme="windows_11"] input:focus,
+[data-theme="windows_11"] textarea:focus,
+[data-theme="windows_11"] select:focus,
+[data-theme="windows_11_dark"] input:focus,
+[data-theme="windows_11_dark"] textarea:focus,
+[data-theme="windows_11_dark"] select:focus,
+[data-theme="windows_11_light"] input:focus,
+[data-theme="windows_11_light"] textarea:focus,
+[data-theme="windows_11_light"] select:focus {
+  border-bottom-color: var(--accent-primary);
+  outline: none;
+}
+
+[data-theme="windows_11"] .nav-item.active,
+[data-theme="windows_11_dark"] .nav-item.active,
+[data-theme="windows_11_light"] .nav-item.active {
+  position: relative;
+  font-weight: 600;
+}
+
+[data-theme="windows_11"] .nav-item.active::before,
+[data-theme="windows_11_dark"] .nav-item.active::before,
+[data-theme="windows_11_light"] .nav-item.active::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 2px;
+  background-color: var(--accent-primary);
+}
+
 /* ==========================================================================
    ACCENT COLOR OVERRIDES
    ========================================================================== */
@@ -473,6 +615,12 @@
   --accent-primary: #f43f5e;
   --accent-primary-hover: #e11d48;
   --accent-primary-subtle: rgba(244, 63, 94, 0.15);
+}
+[data-accent="windows_blue"] {
+  --accent-cyan: #0067c0;
+  --accent-primary: #0067c0;
+  --accent-primary-hover: #005a9e;
+  --accent-primary-subtle: rgba(0, 103, 192, 0.15);
 }
 
 /* ==========================================================================

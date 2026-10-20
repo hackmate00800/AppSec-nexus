@@ -26,7 +26,10 @@ export type PredefinedThemeId =
   | "solarized_light"
   | "threat_intel"
   | "crimson"
-  | "forensic_slate";
+  | "forensic_slate"
+  | "windows_11"
+  | "windows_11_light"
+  | "windows_11_dark";
 
 export type ThemeId = PredefinedThemeId | (string & {});
 
@@ -36,7 +39,8 @@ export type AccentId =
   | "emerald"
   | "amber"
   | "blue"
-  | "rose";
+  | "rose"
+  | "windows_blue";
 
 export type Density = "comfortable" | "compact";
 
