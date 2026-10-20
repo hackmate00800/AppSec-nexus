@@ -21,6 +21,51 @@ impl BaselineScanner {
         let headers = response.headers();
         let mut findings = Vec::new();
 
+        // 0. Perform Strict TLS Handshake / Certificate Validation
+        if url.starts_with("https://") {
+            let strict_client = reqwest::Client::builder()
+                .timeout(Duration::from_secs(8))
+                .danger_accept_invalid_certs(false)
+                .build();
+            if let Ok(sc) = strict_client {
+                if let Err(e) = sc.get(url).send().await {
+                    let err_str = e.to_string();
+                    if err_str.contains("certificate")
+                        || err_str.contains("cert")
+                        || err_str.contains("SSL")
+                        || err_str.contains("tls")
+                        || err_str.contains("handshake")
+                    {
+                        findings.push(Finding::new(
+                            target_id.to_string(),
+                            "TLS/SSL Certificate Validation Failed (Untrusted / Self-Signed / Expired)".to_string(),
+                            FindingSeverity::High,
+                            95,
+                            url.to_string(),
+                            format!("Strict TLS verification failed: {}. The remote server's SSL certificate is untrusted, self-signed, expired, or hostname does not match.", err_str),
+                            "BaselineScanner".to_string(),
+                            "1.0.0".to_string(),
+                            Some("CWE-295".to_string()),
+                            "Deploy a valid SSL/TLS certificate issued by a trusted Certificate Authority (CA) with correct Subject Alternative Names (SAN).".to_string(),
+                        ));
+                    }
+                }
+            }
+        } else if url.starts_with("http://") {
+            findings.push(Finding::new(
+                target_id.to_string(),
+                "Unencrypted HTTP Communication".to_string(),
+                FindingSeverity::Medium,
+                95,
+                url.to_string(),
+                "Target is communicating over plaintext HTTP without TLS transport security.".to_string(),
+                "BaselineScanner".to_string(),
+                "1.0.0".to_string(),
+                Some("CWE-319".to_string()),
+                "Enforce HTTPS across all application web interfaces and implement automatic 301 redirects.".to_string(),
+            ));
+        }
+
         // 1. Check Content-Security-Policy
         if !headers.contains_key("content-security-policy") {
             findings.push(Finding::new(

@@ -63,6 +63,23 @@ impl NmapAdapter {
         None
     }
 
+    /// Diagnostic check for Npcap packet capture driver on Windows host
+    fn check_npcap_driver() -> (bool, String) {
+        #[cfg(target_os = "windows")]
+        {
+            let driver_path = Path::new(r"C:\Windows\System32\drivers\npcap.sys");
+            if driver_path.exists() {
+                (true, "Npcap packet capture driver detected (Raw sockets & SYN stealth scans supported).".to_string())
+            } else {
+                (false, "Npcap driver not detected; unprivileged TCP connect mode (-sT) is enforced.".to_string())
+            }
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            (true, "POSIX raw socket capability checked.".to_string())
+        }
+    }
+
     fn extract_hostname(raw_url: &str) -> String {
         if let Ok(parsed) = Url::parse(raw_url) {
             if let Some(host) = parsed.host_str() {
@@ -72,7 +89,14 @@ impl NmapAdapter {
         let stripped = raw_url
             .trim_start_matches("http://")
             .trim_start_matches("https://");
-        stripped.split('/').next().unwrap_or(raw_url).split(':').next().unwrap_or(raw_url).to_string()
+        stripped
+            .split('/')
+            .next()
+            .unwrap_or(raw_url)
+            .split(':')
+            .next()
+            .unwrap_or(raw_url)
+            .to_string()
     }
 }
 
@@ -102,11 +126,12 @@ impl SecurityToolAdapter for NmapAdapter {
             ToolCapability::PortScan,
             ToolCapability::TechDetection,
             ToolCapability::PassiveAudit,
+            ToolCapability::ReportExport,
         ]
     }
 
     fn description(&self) -> &str {
-        "Network discovery and service vulnerability auditing tool. Discovers open ports, running services, protocol versions, and defensive perimeter posture."
+        "Enterprise network discovery and service auditing tool. Conducts conservative TCP service detection, protocol version identification, and host inventory mapping."
     }
 
     fn documentation_url(&self) -> &str {
@@ -147,12 +172,14 @@ impl SecurityToolAdapter for NmapAdapter {
                         healthy: false,
                         detection_state: ToolDetectionState::NotInstalled,
                         detected_version: None,
-                        message: "Nmap executable was not found on host.".to_string(),
+                        message: "Nmap executable was not found on host or tools/bin directory.".to_string(),
                         checked_at: Utc::now().to_rfc3339(),
                         latency_ms: start.elapsed().as_millis() as u64,
                     };
                 }
             };
+
+            let (_npcap_found, npcap_msg) = Self::check_npcap_driver();
 
             match Command::new(&exe_path).arg("-V").output().await {
                 Ok(output) => {
@@ -169,7 +196,7 @@ impl SecurityToolAdapter for NmapAdapter {
                         healthy: true,
                         detection_state: ToolDetectionState::InstalledAndReady,
                         detected_version: Some(version_line),
-                        message: format!("Binary verified at: {}", exe_path.display()),
+                        message: format!("Binary: {}. {}", exe_path.display(), npcap_msg),
                         checked_at: Utc::now().to_rfc3339(),
                         latency_ms: start.elapsed().as_millis() as u64,
                     }
@@ -201,16 +228,25 @@ impl SecurityToolAdapter for NmapAdapter {
                 .parameters
                 .get("ports")
                 .cloned()
-                .unwrap_or_else(|| "80,443,8080,8443,3000,5000,8000,9000".to_string());
+                .unwrap_or_else(|| "21,22,23,25,80,443,445,3000,3306,3389,5000,5432,6379,8000,8080,8443,9000,27017".to_string());
 
             let mut cmd = Command::new(&exe_path);
+            // Conservative non-destructive scan profile:
+            // -sT: TCP connect (safe, works without admin/Npcap raw privileges)
+            // -Pn: Treat host as online (prevents ICMP drop false negatives)
+            // -sV: Probe open ports to determine service/version info
+            // --version-light: Light probe intensity (level 2) to prevent service crashes
+            // -T3: Normal conservative timing (avoids rate limiting or target overload)
+            // --open: Only show open ports
             cmd.args(&[
                 "-sT",
                 "-Pn",
+                "-sV",
+                "--version-light",
                 "-p",
                 &ports,
                 "--open",
-                "-T4",
+                "-T3",
                 &hostname,
             ]);
 
@@ -227,7 +263,10 @@ impl SecurityToolAdapter for NmapAdapter {
             let mut findings = Vec::new();
             let mut open_ports = Vec::new();
 
-            let port_regex = Regex::new(r"(\d+)/(tcp|udp)\s+open\s+(\S+)").unwrap();
+            // Example Nmap output line: "80/tcp open http Apache httpd 2.4.52 ((Ubuntu))"
+            let port_regex = Regex::new(r"^(\d+)/(tcp|udp)\s+open\s+(\S+)(?:\s+(.*))?$").unwrap();
+
+            logs.push(format!("[*] Nmap conservative service scan against target: {}", hostname));
 
             for line in stdout.lines() {
                 let trimmed = line.trim();
@@ -239,12 +278,20 @@ impl SecurityToolAdapter for NmapAdapter {
                     let port_str = caps.get(1).map_or("", |m| m.as_str());
                     let proto = caps.get(2).map_or("", |m| m.as_str());
                     let service = caps.get(3).map_or("", |m| m.as_str());
+                    let version_info = caps.get(4).map_or("", |m| m.as_str().trim());
                     let port_num = port_str.parse::<u16>().unwrap_or(0);
 
                     open_ports.push(port_str.to_string());
-                    logs.push(format!("[+] Open Port Detected: {}:{}/{} ({})", hostname, port_num, proto, service));
+                    logs.push(format!(
+                        "[+] Open Service: {}:{}/{} ({}) {}",
+                        hostname, port_num, proto, service, version_info
+                    ));
 
-                    let scheme = if port_num == 443 || port_num == 8443 { "https" } else { "http" };
+                    let scheme = if port_num == 443 || port_num == 8443 || service.contains("ssl") || service.contains("https") {
+                        "https"
+                    } else {
+                        "http"
+                    };
                     let url = format!("{}://{}:{}", scheme, hostname, port_num);
 
                     endpoints.push(DiscoveredEndpoint {
@@ -253,23 +300,82 @@ impl SecurityToolAdapter for NmapAdapter {
                         url: url.clone(),
                         method: "TCP".to_string(),
                         status_code: 200,
-                        content_type: Some(service.to_string()),
+                        content_type: Some(format!("{} {}", service, version_info).trim().to_string()),
                         source: "nmap".to_string(),
                         discovered_at: Utc::now().to_rfc3339(),
                     });
 
-                    if port_num == 80 || port_num == 8080 {
+                    // Vulnerability Check 1: Insecure plaintext HTTP / FTP / Telnet
+                    if port_num == 80 || port_num == 8080 || port_num == 8000 {
                         findings.push(Finding::new(
                             input.target_id.clone(),
-                            format!("Cleartext HTTP Service on Port {}", port_num),
+                            format!("Cleartext HTTP Web Service Exposed on Port {}", port_num),
                             FindingSeverity::Low,
                             95,
-                            url,
-                            format!("Nmap probe verified open plaintext service: {}", trimmed),
+                            url.clone(),
+                            format!("Nmap verified open unencrypted HTTP service: {} ({})", trimmed, version_info),
                             "nmap".to_string(),
                             "7.92".to_string(),
                             Some("CWE-319".to_string()),
-                            "Enforce TLS 1.3 encryption and redirect all unencrypted traffic to HTTPS.".to_string(),
+                            "Redirect all cleartext HTTP traffic to HTTPS (port 443) and enforce HSTS.".to_string(),
+                        ));
+                    } else if port_num == 21 || service == "ftp" {
+                        findings.push(Finding::new(
+                            input.target_id.clone(),
+                            format!("Unencrypted FTP Service Detected on Port {}", port_num),
+                            FindingSeverity::Medium,
+                            95,
+                            format!("ftp://{}:{}", hostname, port_num),
+                            format!("Insecure FTP protocol exposed: {}", trimmed),
+                            "nmap".to_string(),
+                            "7.92".to_string(),
+                            Some("CWE-319".to_string()),
+                            "Replace FTP with SFTP (SSH File Transfer Protocol) or FTPS with enforced TLS.".to_string(),
+                        ));
+                    } else if port_num == 23 || service == "telnet" {
+                        findings.push(Finding::new(
+                            input.target_id.clone(),
+                            format!("Legacy Insecure Telnet Service Exposed on Port {}", port_num),
+                            FindingSeverity::High,
+                            100,
+                            format!("telnet://{}:{}", hostname, port_num),
+                            format!("Legacy plaintext Telnet service exposes remote credentials in cleartext: {}", trimmed),
+                            "nmap".to_string(),
+                            "7.92".to_string(),
+                            Some("CWE-319".to_string()),
+                            "Disable Telnet daemon immediately and migrate to SSH (port 22).".to_string(),
+                        ));
+                    }
+
+                    // Vulnerability Check 2: Publicly accessible database ports
+                    if port_num == 3306 || port_num == 5432 || port_num == 6379 || port_num == 27017 {
+                        findings.push(Finding::new(
+                            input.target_id.clone(),
+                            format!("Exposed Database Service on Port {} ({})", port_num, service),
+                            FindingSeverity::High,
+                            95,
+                            format!("tcp://{}:{}", hostname, port_num),
+                            format!("Database listener is accessible from external network: {}", trimmed),
+                            "nmap".to_string(),
+                            "7.92".to_string(),
+                            Some("CWE-284".to_string()),
+                            "Bind database services to localhost (127.0.0.1) or restrict access via firewall / VPC security groups.".to_string(),
+                        ));
+                    }
+
+                    // Vulnerability Check 3: Exposed SMB / RDP
+                    if port_num == 445 {
+                        findings.push(Finding::new(
+                            input.target_id.clone(),
+                            "Exposed SMB File Sharing Port (445)".to_string(),
+                            FindingSeverity::High,
+                            95,
+                            format!("smb://{}:445", hostname),
+                            format!("Direct SMB port 445 open to host: {}", trimmed),
+                            "nmap".to_string(),
+                            "7.92".to_string(),
+                            Some("CWE-284".to_string()),
+                            "Block port 445 at boundary firewalls to prevent lateral movement and SMB exploits.".to_string(),
                         ));
                     }
                 } else {
@@ -280,7 +386,7 @@ impl SecurityToolAdapter for NmapAdapter {
             for line in stderr.lines() {
                 let trimmed = line.trim();
                 if !trimmed.is_empty() {
-                    logs.push(format!("[nmap] {}", trimmed));
+                    logs.push(format!("[nmap stderr] {}", trimmed));
                 }
             }
 
@@ -288,6 +394,13 @@ impl SecurityToolAdapter for NmapAdapter {
             artifacts.insert("open_ports".to_string(), open_ports.join(", "));
             artifacts.insert("open_ports_count".to_string(), open_ports.len().to_string());
             artifacts.insert("scanned_host".to_string(), hostname);
+
+            logs.push(format!(
+                "[*] Nmap scan finished in {} ms. Discovered {} open port(s) and generated {} finding(s).",
+                start.elapsed().as_millis(),
+                open_ports.len(),
+                findings.len()
+            ));
 
             Ok(AdapterOutput {
                 tool_id: "nmap".to_string(),

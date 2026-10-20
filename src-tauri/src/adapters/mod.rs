@@ -10,12 +10,15 @@ pub mod katana;
 pub mod nmap;
 pub mod nuclei;
 pub mod ollama;
+pub mod openapi;
 pub mod osv_scanner;
+pub mod postman;
 pub mod schemathesis;
 pub mod semgrep;
 pub mod sqlmap;
 pub mod trivy;
 pub mod tshark;
+pub mod zap;
 
 use baseline::NativeBaselineAdapter;
 use checkov::CheckovAdapter;
@@ -29,12 +32,15 @@ use katana::KatanaAdapter;
 use nmap::NmapAdapter;
 use nuclei::NucleiAdapter;
 use ollama::OllamaAdapter;
+use openapi::OpenApiAdapter;
 use osv_scanner::OsvScannerAdapter;
+use postman::PostmanAdapter;
 use schemathesis::SchemathesisAdapter;
 use semgrep::SemgrepAdapter;
 use sqlmap::SqlmapAdapter;
 use trivy::TrivyAdapter;
 use tshark::TsharkAdapter;
+use zap::ZapAdapter;
 
 use crate::models::{DiscoveredEndpoint, Finding};
 use serde::{Deserialize, Serialize};
@@ -166,7 +172,9 @@ pub trait SecurityToolAdapter: Send + Sync {
 
     fn install_source(&self) -> Option<String> {
         match self.id() {
-            "baseline" => Some("Built-in Native Rust Engine".to_string()),
+            "baseline" => Some("Built-in Native Rust Engine (Headers & TLS)".to_string()),
+            "openapi" => Some("Built-in Native OpenAPI & Swagger Security Engine".to_string()),
+            "postman" => Some("Postman CLI / Newman / Native Collection Runner".to_string()),
             "nuclei" => Some("Local Portable Binary (tools/bin)".to_string()),
             "httpx" => Some("Local Portable Binary (tools/bin)".to_string()),
             "katana" => Some("Local Portable Binary (tools/bin)".to_string()),
@@ -184,7 +192,7 @@ pub trait SecurityToolAdapter: Send + Sync {
             "docker" => Some("Docker Desktop CLI & Daemon".to_string()),
             "sqlmap" => Some("Python pip / Git CLI".to_string()),
             "burpsuite" => Some("Burp Suite Community Edition + Montoya Connector".to_string()),
-            "owasp_zap" => Some("OWASP ZAP Desktop".to_string()),
+            "owasp_zap" => Some("OWASP ZAP Desktop / Daemon API (:8080) / Docker".to_string()),
             "wireshark" => Some("Wireshark GUI Desktop".to_string()),
             _ => None,
         }
@@ -221,80 +229,89 @@ impl AdapterRegistry {
     pub fn new(bin_dir: PathBuf) -> Self {
         let mut map: HashMap<String, Box<dyn SecurityToolAdapter>> = HashMap::new();
 
-        // 1. Native baseline
+        // 1. Native baseline (Headers & TLS)
         let b = NativeBaselineAdapter::new();
         map.insert(b.id().to_string(), Box::new(b));
 
-        // 2. Nuclei
+        // 2. OpenAPI & Swagger Security Auditor
+        let oa = OpenApiAdapter::new();
+        map.insert(oa.id().to_string(), Box::new(oa));
+
+        // 3. Postman CLI & Collection Runner
+        let pm = PostmanAdapter::new(bin_dir.clone());
+        map.insert(pm.id().to_string(), Box::new(pm));
+
+        // 4. OWASP ZAP (API daemon & CLI)
+        let zap = ZapAdapter::new(bin_dir.clone());
+        map.insert(zap.id().to_string(), Box::new(zap));
+
+        // 5. Nuclei
         let n = NucleiAdapter::new(bin_dir.clone());
         map.insert(n.id().to_string(), Box::new(n));
 
-        // 3. httpx
+        // 6. httpx
         let h = HttpxAdapter::new(bin_dir.clone());
         map.insert(h.id().to_string(), Box::new(h));
 
-        // 4. katana
+        // 7. katana
         let kat = KatanaAdapter::new(bin_dir.clone());
         map.insert(kat.id().to_string(), Box::new(kat));
 
-        // 5. ffuf
+        // 8. ffuf
         let f = FfufAdapter::new(bin_dir.clone());
         map.insert(f.id().to_string(), Box::new(f));
 
-        // 6. schemathesis
+        // 9. schemathesis
         let st = SchemathesisAdapter::new();
         map.insert(st.id().to_string(), Box::new(st));
 
-        // 7. semgrep
+        // 10. semgrep
         let s = SemgrepAdapter::new();
         map.insert(s.id().to_string(), Box::new(s));
 
-        // 8. gitleaks
+        // 11. gitleaks
         let gl = GitleaksAdapter::new();
         map.insert(gl.id().to_string(), Box::new(gl));
 
-        // 9. osv_scanner
+        // 12. osv_scanner
         let osv = OsvScannerAdapter::new(bin_dir.clone());
         map.insert(osv.id().to_string(), Box::new(osv));
 
-        // 10. trivy
+        // 13. trivy
         let tr = TrivyAdapter::new();
         map.insert(tr.id().to_string(), Box::new(tr));
 
-        // 11. checkov
+        // 14. checkov
         let ck = CheckovAdapter::new();
         map.insert(ck.id().to_string(), Box::new(ck));
 
-        // 12. nmap
+        // 15. nmap
         let nm = NmapAdapter::new(bin_dir.clone());
         map.insert(nm.id().to_string(), Box::new(nm));
 
-        // 13. tshark
+        // 16. tshark
         let tsh = TsharkAdapter::new();
         map.insert(tsh.id().to_string(), Box::new(tsh));
 
-        // 14. jadx
+        // 17. jadx
         let jdx = JadxAdapter::new(bin_dir.clone());
         map.insert(jdx.id().to_string(), Box::new(jdx));
 
-        // 15. ollama
+        // 18. ollama
         let o = OllamaAdapter::new();
         map.insert(o.id().to_string(), Box::new(o));
 
-        // 16. docker
+        // 19. docker
         let d = DockerAdapter::new();
         map.insert(d.id().to_string(), Box::new(d));
 
-        // 17. sqlmap
+        // 20. sqlmap
         let sq = SqlmapAdapter::new();
         map.insert(sq.id().to_string(), Box::new(sq));
 
-        // 18. External GUI Tools
+        // 21. External GUI Tools
         let burp = ExternalGuiAdapter::new_burp();
         map.insert(burp.id().to_string(), Box::new(burp));
-
-        let zap = ExternalGuiAdapter::new_zap();
-        map.insert(zap.id().to_string(), Box::new(zap));
 
         let wire = ExternalGuiAdapter::new_wireshark();
         map.insert(wire.id().to_string(), Box::new(wire));
@@ -340,10 +357,10 @@ impl AdapterRegistry {
         // Keep deterministic categorized order:
         // Web & API -> SAST & Code -> Network & Android -> AI & Runtime -> External GUI
         let order = [
-            "baseline", "nuclei", "httpx", "katana", "ffuf", "schemathesis",
+            "baseline", "openapi", "postman", "owasp_zap", "nuclei", "httpx", "katana", "ffuf", "schemathesis", "sqlmap",
             "semgrep", "gitleaks", "osv_scanner", "trivy", "checkov",
-            "nmap", "tshark", "jadx", "ollama", "docker", "sqlmap",
-            "burpsuite", "owasp_zap", "wireshark",
+            "nmap", "tshark", "jadx", "ollama", "docker",
+            "burpsuite", "wireshark",
         ];
         list.sort_by_key(|item| {
             order.iter().position(|&x| x == item.id).unwrap_or(999)

@@ -107,6 +107,9 @@ export const CategoryWorkflowView: React.FC<CategoryWorkflowViewProps> = ({
   const [apiSpecText, setApiSpecText] = useState("");
   const [parsedEndpoints, setParsedEndpoints] = useState<Array<{ method: string; path: string; summary?: string }>>([]);
   const [importNotice, setImportNotice] = useState<string | null>(null);
+  const [specType, setSpecType] = useState<"openapi" | "postman" | null>(null);
+  const [isExecutingSpec, setIsExecutingSpec] = useState(false);
+  const [specExecutionResult, setSpecExecutionResult] = useState<string | null>(null);
 
   // Interactive Validation Workbench State
   const [selectedFindingToValidate, setSelectedFindingToValidate] = useState<string>("");
@@ -349,6 +352,7 @@ export const CategoryWorkflowView: React.FC<CategoryWorkflowViewProps> = ({
 
       // Check if OpenAPI v3 or Swagger v2
       if (data.paths) {
+        setSpecType("openapi");
         for (const [path, methods] of Object.entries(data.paths)) {
           if (typeof methods === "object" && methods !== null) {
             for (const [method, details] of Object.entries(methods as any)) {
@@ -365,6 +369,7 @@ export const CategoryWorkflowView: React.FC<CategoryWorkflowViewProps> = ({
       }
       // Check if Postman Collection v2.1
       else if (data.item && Array.isArray(data.item)) {
+        setSpecType("postman");
         const parseItems = (items: any[]) => {
           for (const item of items) {
             if (item.request) {
@@ -392,6 +397,34 @@ export const CategoryWorkflowView: React.FC<CategoryWorkflowViewProps> = ({
       }
     } catch {
       setImportNotice("Invalid JSON format. Please ensure valid OpenAPI JSON or Postman Collection format.");
+    }
+  };
+
+  // Execute Security Assessment against Imported Spec
+  const handleRunSpecSecurityScan = async () => {
+    if (!apiSpecText.trim()) return;
+    const isPostman = specType === "postman" || (apiSpecText.includes('"item"') && apiSpecText.includes('"request"'));
+    const toolId = isPostman ? "postman" : "openapi";
+    const targetUrl = activeTargetObj?.primary_url || "https://example.com";
+    const targetId = activeTargetObj?.id || "temp-target";
+
+    setIsExecutingSpec(true);
+    setSpecExecutionResult(null);
+
+    try {
+      const output = await invoke<any>("execute_tool_adapter", {
+        toolId,
+        targetId,
+        targetUrl,
+        parameters: isPostman ? { collection_json: apiSpecText } : { spec_json: apiSpecText },
+      });
+      setSpecExecutionResult(
+        `Audit Complete (${output.duration_ms}ms): Generated ${output.findings?.length || 0} finding(s) and mapped ${output.endpoints?.length || 0} endpoint(s).`
+      );
+    } catch (err: any) {
+      setSpecExecutionResult(`Scan failed: ${typeof err === "string" ? err : err?.message || String(err)}`);
+    } finally {
+      setIsExecutingSpec(false);
     }
   };
 
@@ -1269,6 +1302,38 @@ ${
                 >
                   Parse Endpoints & Schema
                 </button>
+                {parsedEndpoints.length > 0 && (
+                  <button
+                    onClick={handleRunSpecSecurityScan}
+                    disabled={isExecutingSpec}
+                    className="btn btn-primary"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      fontSize: "0.8rem",
+                      padding: "6px 12px",
+                    }}
+                  >
+                    <Play size={14} className={isExecutingSpec ? "spin-anim" : ""} />
+                    {isExecutingSpec
+                      ? "Running Assessment..."
+                      : specType === "postman"
+                      ? "Run Postman Collection Runner"
+                      : "Run OpenAPI Security Audit"}
+                  </button>
+                )}
+                {specExecutionResult && (
+                  <span
+                    style={{
+                      fontSize: "0.78rem",
+                      color: specExecutionResult.startsWith("Scan failed") ? "var(--sev-high)" : "var(--sev-low)",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {specExecutionResult}
+                  </span>
+                )}
                 {importNotice && (
                   <span style={{ fontSize: "0.78rem", color: "var(--accent-cyan)" }}>{importNotice}</span>
                 )}

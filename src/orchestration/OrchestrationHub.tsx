@@ -39,6 +39,7 @@ import {
   Sliders,
   ShieldCheck,
   Eye,
+  Sparkles,
 } from "lucide-react";
 
 interface OrchestrationHubProps {
@@ -317,14 +318,26 @@ export const OrchestrationHub: React.FC<OrchestrationHubProps> = ({
     if (adapter.id === "nuclei") {
       initialParams["severity"] = "low,medium,high,critical";
       initialParams["concurrency"] = "5";
-      initialParams["rate_limit"] = "30";
+      initialParams["rate_limit"] = "50";
     } else if (adapter.id === "katana") {
       initialParams["depth"] = "2";
       initialParams["max_pages"] = "20";
     } else if (adapter.id === "ffuf") {
       initialParams["wordlist"] = "tools/wordlists/common.txt";
       initialParams["rate"] = "25";
-    } else if (adapter.id === "semgrep" || adapter.id === "gitleaks" || adapter.id === "checkov" || adapter.id === "trivy") {
+    } else if (adapter.id === "nmap") {
+      initialParams["ports"] = "21,22,23,25,80,443,445,3000,3306,3389,5000,5432,6379,8000,8080,8443,9000,27017";
+    } else if (adapter.id === "owasp_zap") {
+      initialParams["api_url"] = "http://127.0.0.1:8080";
+    } else if (adapter.id === "postman") {
+      initialParams["collection_path"] = "";
+    } else if (adapter.id === "openapi") {
+      initialParams["spec_path"] = "";
+    } else if (adapter.id === "sqlmap") {
+      initialParams["threads"] = "1";
+      initialParams["risk"] = "1";
+      initialParams["level"] = "1";
+    } else if (adapter.id === "semgrep" || adapter.id === "gitleaks" || adapter.id === "checkov" || adapter.id === "trivy" || adapter.id === "osv_scanner") {
       initialParams["path"] = ".";
     } else if (adapter.id === "tshark") {
       initialParams["duration_sec"] = "10";
@@ -366,7 +379,7 @@ export const OrchestrationHub: React.FC<OrchestrationHubProps> = ({
       return (
         cat.includes("web") ||
         cat.includes("api") ||
-        ["baseline", "nuclei", "httpx", "katana", "ffuf", "schemathesis", "sqlmap"].includes(id)
+        ["baseline", "openapi", "postman", "owasp_zap", "nuclei", "httpx", "katana", "ffuf", "schemathesis", "sqlmap"].includes(id)
       );
     }
     if (tab === "sast") {
@@ -1796,18 +1809,36 @@ export const OrchestrationHub: React.FC<OrchestrationHubProps> = ({
                     </span>
                   </div>
 
-                  {toolExecOutput.findings.length > 0 && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <button
-                      className="btn btn-primary"
+                      className="btn btn-secondary"
                       onClick={() => {
-                        setExecutingTool(null);
-                        onNavigateToFindings();
+                        const topFindings = toolExecOutput.findings
+                          .slice(0, 5)
+                          .map((f) => `- [${f.severity}] ${f.title}: ${f.remediation || f.evidence}`)
+                          .join("\n");
+                        const query = `Please analyze the security results from ${executingTool.name} scan on ${execTargetUrl}.\nFindings (${toolExecOutput.findings.length}):\n${topFindings || "No high-risk findings detected."}\nRecent Tool Logs:\n${toolExecOutput.logs.slice(-6).join("\n")}\nWhat defensive posture improvements and code fixes do you recommend?`;
+                        window.dispatchEvent(new CustomEvent("appsec-ai-mentor-query", { detail: { prompt: query } }));
                       }}
                       style={{ fontSize: "0.75rem", padding: "4px 10px", display: "flex", alignItems: "center", gap: 4 }}
+                      title="Send scan findings to AI Mentor for defensive analysis"
                     >
-                      <Eye size={12} /> View Findings ({toolExecOutput.findings.length})
+                      <Sparkles size={12} color="var(--accent-cyan)" /> Explain with AI Mentor
                     </button>
-                  )}
+
+                    {toolExecOutput.findings.length > 0 && (
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => {
+                          setExecutingTool(null);
+                          onNavigateToFindings();
+                        }}
+                        style={{ fontSize: "0.75rem", padding: "4px 10px", display: "flex", alignItems: "center", gap: 4 }}
+                      >
+                        <Eye size={12} /> View Findings ({toolExecOutput.findings.length})
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Console Log Output */}
