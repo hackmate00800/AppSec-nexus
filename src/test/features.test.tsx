@@ -16,11 +16,11 @@ describe("Feature Automation Testing - APPSC NEXUS", () => {
     expect(screen.getByText("Desktop Platform")).toBeInTheDocument();
 
     // Verify navigation tabs exist
-    expect(screen.getAllByText("Security Analytics")[0]).toBeInTheDocument();
-    expect(screen.getAllByText("Target & Scope")[0]).toBeInTheDocument();
-    expect(screen.getAllByText("Scan Console")[0]).toBeInTheDocument();
+    expect(screen.getAllByText("Dashboard")[0]).toBeInTheDocument();
+    expect(screen.getAllByText("Projects & Targets")[0]).toBeInTheDocument();
+    expect(screen.getAllByText("Scan Jobs")[0]).toBeInTheDocument();
     expect(screen.getAllByText("Cyber Academy")[0]).toBeInTheDocument();
-    expect(screen.getAllByText("Local AI Mentor")[0]).toBeInTheDocument();
+    expect(screen.getAllByText("AI Mentor")[0]).toBeInTheDocument();
   });
 
   it("navigates to Cyber Academy and renders core curriculum tracks", async () => {
@@ -33,10 +33,9 @@ describe("Feature Automation Testing - APPSC NEXUS", () => {
 
     // Verify Academy title & tracks
     expect(screen.getByText("AppSec Nexus Cyber Academy")).toBeInTheDocument();
-    expect(screen.getByText("Dashboard & Progress")).toBeInTheDocument();
-    expect(screen.getByText("Learning Paths")).toBeInTheDocument();
-    expect(screen.getByText("Concept Library")).toBeInTheDocument();
-    expect(screen.getByText("Hands-on Guided Labs")).toBeInTheDocument();
+    expect(screen.getByText("Learning Dashboard")).toBeInTheDocument();
+    expect(screen.getByText("Roadmap (Stages 0–11)")).toBeInTheDocument();
+    expect(screen.getByText("Virtual Labs & Sandboxes")).toBeInTheDocument();
     expect(screen.getByText("Methodologies & Frameworks")).toBeInTheDocument();
   });
 
@@ -48,8 +47,8 @@ describe("Feature Automation Testing - APPSC NEXUS", () => {
       />
     );
 
-    // Switch to Hands-on Guided Labs
-    const labsButton = screen.getByText("Hands-on Guided Labs");
+    // Switch to Virtual Labs
+    const labsButton = screen.getByText("Virtual Labs & Sandboxes");
     fireEvent.click(labsButton);
 
     // Switch to Methodologies & Frameworks

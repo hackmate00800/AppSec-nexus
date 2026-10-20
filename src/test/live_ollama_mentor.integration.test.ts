@@ -6,7 +6,9 @@ async function checkOllamaOnline(): Promise<boolean> {
     const timeoutId = setTimeout(() => controller.abort(), 2000);
     const res = await fetch("http://127.0.0.1:11434/api/tags", { signal: controller.signal });
     clearTimeout(timeoutId);
-    return res.status === 200;
+    if (res.status !== 200) return false;
+    const data: any = await res.json();
+    return Array.isArray(data?.models) && data.models.some((m: any) => m.name.includes("appsec-teacher-1b"));
   } catch {
     return false;
   }

@@ -29,6 +29,7 @@ export default defineConfig(() => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+  
   build: {
     target: "es2020",
     minify: "esbuild",
@@ -42,14 +43,29 @@ export default defineConfig(() => ({
           if (id.includes("node_modules/lucide-react")) {
             return "icons";
           }
+          if (id.includes("src/theme/")) {
+            return "theme-system";
+          }
           if (id.includes("src/academy/data/")) {
             return "academy-data";
+          }
+          if (id.includes("src/academy/components/VirtualLabs")) {
+            return "academy-labs";
           }
           if (id.includes("src/academy/components/VisualLearningEngine")) {
             return "academy-simulators";
           }
           if (id.includes("src/components/issues/")) {
             return "issue-center";
+          }
+          if (id.includes("src/categories/")) {
+            return "categories";
+          }
+          if (id.includes("src/verification/")) {
+            return "verification-lab";
+          }
+          if (id.includes("src/components/help/") || id.includes("src/components/crud/")) {
+            return "app-modals";
           }
         },
       },

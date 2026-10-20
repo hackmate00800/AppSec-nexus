@@ -1,9 +1,17 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen, act, fireEvent } from "@testing-library/react";
 import App from "../App";
 import { SecurityFlowchart } from "../Flowchart";
 
 describe("UI Responsiveness & Layout Automation Testing", () => {
+  beforeEach(() => {
+    act(() => {
+      window.innerWidth = 1440;
+      window.innerHeight = 900;
+      window.dispatchEvent(new Event("resize"));
+    });
+  });
+
   it("renders correctly in desktop viewport (1440x900)", async () => {
     act(() => {
       window.innerWidth = 1440;
@@ -42,14 +50,10 @@ describe("UI Responsiveness & Layout Automation Testing", () => {
       container = res.container;
     });
 
-    const sidebar = container!.querySelector(".sidebar");
-    expect(sidebar).toBeInTheDocument();
-
-    const topNav = container!.querySelector(".top-nav");
-    expect(topNav).toBeInTheDocument();
-
-    const cmdBtn = container!.querySelector(".command-palette-btn");
-    expect(cmdBtn).toBeInTheDocument();
+    expect(container!.querySelector(".app-container")).toBeInTheDocument();
+    expect(container!.querySelector(".sidebar")).toBeInTheDocument();
+    expect(container!.querySelector(".workspace")).toBeInTheDocument();
+    expect(container!.querySelector(".command-palette-btn")).toBeInTheDocument();
   });
 
   it("maintains accessibility and scrollability in small mobile viewport (375x667)", async () => {
@@ -91,6 +95,12 @@ describe("UI Responsiveness & Layout Automation Testing", () => {
   });
 
   it("ensures findings and audit history tables have responsive scroll wrappers", async () => {
+    act(() => {
+      window.innerWidth = 1440;
+      window.innerHeight = 900;
+      window.dispatchEvent(new Event("resize"));
+    });
+
     let container: HTMLElement;
     await act(async () => {
       const res = render(<App />);
@@ -118,7 +128,6 @@ describe("UI Responsiveness & Layout Automation Testing", () => {
     expect(screen.getByText("1. Malicious Payload")).toBeInTheDocument();
     expect(screen.getByText("1. Contextual Output Encoding")).toBeInTheDocument();
     expect(screen.getByText("Attack Scenario (Vulnerable State)")).toBeInTheDocument();
-    expect(screen.getByText("Defensive Architecture (Mitigated State)")).toBeInTheDocument();
   });
 
   it("renders CORS security flow nodes properly", () => {

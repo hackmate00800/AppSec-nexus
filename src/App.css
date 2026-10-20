@@ -699,19 +699,6 @@ html[data-font-scale="lg"],
   border-color: var(--border-color) !important;
 }
 
-[data-theme-mode="light"] input,
-[data-theme-mode="light"] select,
-[data-theme-mode="light"] textarea {
-  background-color: var(--bg-card) !important;
-  color: var(--text-main) !important;
-  border-color: var(--border-color) !important;
-}
-
-[data-theme-mode="light"] input::placeholder,
-[data-theme-mode="light"] textarea::placeholder {
-  color: #64748b !important;
-  opacity: 1 !important;
-}
 
 /* Global Placeholder & Disabled Contrast */
 input::placeholder,

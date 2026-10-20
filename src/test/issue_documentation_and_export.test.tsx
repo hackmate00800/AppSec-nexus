@@ -478,7 +478,7 @@ describe("Issue Documentation, Tracking & Export System", () => {
       render(<App />);
 
       // Find the "Issues & Reports" nav button
-      const issuesNavBtn = screen.getByTitle("Issue Documentation & Reports");
+      const issuesNavBtn = screen.getByText("Reports");
       expect(issuesNavBtn).toBeInTheDocument();
 
       await act(async () => {
