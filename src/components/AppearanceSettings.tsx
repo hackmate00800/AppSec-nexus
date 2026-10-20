@@ -369,9 +369,10 @@ export function AppearanceSettings() {
 
         {/* Category Filter Pills */}
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "20px" }}>
-          {(["all", "dark", "light", "security", "minimal", "colorful", "developer", "custom"] as ThemeCategory[]).map((cat) => {
+          {(["all", "windows", "dark", "light", "security", "minimal", "colorful", "developer", "custom"] as ThemeCategory[]).map((cat) => {
             const getCount = (category: ThemeCategory) => {
               if (category === "all") return allThemes.length;
+              if (category === "windows") return allThemes.filter((t) => t.category === "windows" || t.tags?.includes("windows")).length;
               if (category === "dark") return allThemes.filter((t) => t.isDark).length;
               if (category === "light") return allThemes.filter((t) => !t.isDark).length;
               if (category === "custom") return allThemes.filter((t) => t.isCustom || t.category === "custom").length;
@@ -380,6 +381,7 @@ export function AppearanceSettings() {
 
             const labels: Record<ThemeCategory, string> = {
               all: `All Themes (${getCount("all")})`,
+              windows: `🪟 Windows 11 Fluent (${getCount("windows")})`,
               dark: `Dark Themes (${getCount("dark")})`,
               light: `Light Themes (${getCount("light")})`,
               security: `Security / SOC (${getCount("security")})`,

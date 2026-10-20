@@ -50,6 +50,7 @@ export type FontScale = "sm" | "md" | "lg";
 
 export type ThemeCategory =
   | "all"
+  | "windows"
   | "dark"
   | "light"
   | "security"
@@ -80,7 +81,7 @@ export interface ThemeDefinition {
   id: ThemeId;
   name: string;
   description: string;
-  category: "dark" | "light" | "security" | "minimal" | "colorful" | "developer" | "custom";
+  category: "dark" | "light" | "security" | "minimal" | "colorful" | "developer" | "custom" | "windows";
   tags?: string[];
   isDark: boolean;
   isCustom?: boolean;

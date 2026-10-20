@@ -1817,12 +1817,13 @@ export default function App() {
           onEmergencyStop={handleEmergencyStop}
           currentTheme={preferences.theme}
           onToggleTheme={() => {
-            if (preferences.theme === "arctic" || preferences.theme === "github_light") {
-              setTheme("midnight");
-              addToast({ type: "info", title: "Theme Switched", description: "Activated Midnight dark mode." });
+            const isCurrentlyLight = preferences.theme === "windows_11_light" || preferences.theme === "arctic" || preferences.theme === "github_light" || preferences.theme === "quiet_light" || preferences.theme === "solarized_light" || preferences.theme === "paper_ink" || preferences.theme === "flip7_playful";
+            if (isCurrentlyLight) {
+              setTheme("windows_11");
+              addToast({ type: "info", title: "Theme Switched", description: "Activated Windows 11 Fluent Dark mode." });
             } else {
-              setTheme("arctic");
-              addToast({ type: "info", title: "Theme Switched", description: "Activated Arctic light mode." });
+              setTheme("windows_11_light");
+              addToast({ type: "info", title: "Theme Switched", description: "Activated Windows 11 Fluent Light mode." });
             }
           }}
           hasRunningAiTask={hasRunningTask}
