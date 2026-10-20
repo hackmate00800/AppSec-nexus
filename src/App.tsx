@@ -3,7 +3,6 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
 import {
-  Shield,
   Terminal,
   Layers,
   AlertTriangle,
@@ -26,18 +25,10 @@ import {
   Radio,
   BookOpen,
   GraduationCap,
-  Activity,
-  Monitor,
   Cpu,
-  Palette,
-  PanelLeft,
-  Sun,
-  Moon,
   ShieldCheck,
   ShieldAlert,
   Loader2,
-  Bot,
-  X,
   LayoutGrid,
   Maximize2,
   Minimize2,
@@ -54,9 +45,6 @@ import {
   ArrowDown,
   CheckSquare,
   Square,
-  ClipboardList,
-  Keyboard,
-  FileCheck,
   Eye,
   List,
   Globe,
@@ -87,7 +75,7 @@ import {
 } from "./utils/aiModelResolver";
 import { useTheme } from "./theme/ThemeProvider";
 import { useToast } from "./components/ui/Toast";
-import { SeverityBadge, StatusBadge, ScopeBadge, ValidationBadge } from "./components/ui/Badge";
+import { SeverityBadge, StatusBadge, ValidationBadge } from "./components/ui/Badge";
 import { CommandPalette } from "./components/CommandPalette";
 import { useAiTaskContext } from "./context/AiTaskContext";
 import { useWorkspace } from "./context/WorkspaceContext";
@@ -99,7 +87,6 @@ import { TourProvider } from "./context/TourContext";
 import { InteractiveTourOverlay } from "./components/tour/InteractiveTourOverlay";
 import { HelpCenterModal } from "./components/help/HelpCenterModal";
 import { GuidedWorkflowsDrawer } from "./components/help/GuidedWorkflowsDrawer";
-import { HeaderHelpMenu } from "./components/help/HeaderHelpMenu";
 import { ContextualHelpButton } from "./components/help/ContextualHelpButton";
 import { LRUCache, InvertedIndex, BinaryMaxHeap, FindingDeduplicator } from "./utils/securityDsa";
 import { ConfirmationModal } from "./components/crud/ConfirmationModal";
@@ -109,8 +96,8 @@ import { FindingCreateModal } from "./components/crud/FindingCreateModal";
 import { AuditLogModal } from "./components/crud/AuditLogModal";
 import { KeyboardShortcutsModal } from "./components/help/KeyboardShortcutsModal";
 import { NavigationBreadcrumbs } from "./components/ui/NavigationBreadcrumbs";
+import { AppTopNav, AppSidebar } from "./components/navigation";
 import { SecurityCategory } from "./categories/types";
-import { CategorySelector } from "./categories/CategorySelector";
 import { FindingInlineDetailsAccordion } from "./components/findings/FindingInlineDetailsAccordion";
 import { ContextMenu } from "./components/ui/ContextMenu";
 import { useScanProgress } from "./context/ScanProgressContext";
@@ -1955,330 +1942,42 @@ export default function App() {
           </div>
         )}
 
-        {/* Top Header */}
-        <header className="top-nav">
-          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-            <div
-              className="brand"
-              data-tour="navbar-brand"
-              onClick={() => setActiveTab("analytics")}
-              title="AppSec Nexus Security Platform"
-            >
-              <Shield className="brand-icon" size={22} />
-              <span>AppSec Nexus</span>
-              <span className="brand-subtitle" style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>Desktop Platform</span>
-              <span
-                className="brand-version"
-                style={{
-                  fontSize: "0.68rem",
-                  padding: "2px 7px",
-                  borderRadius: "4px",
-                  backgroundColor: "var(--accent-primary-subtle)",
-                  color: "var(--accent-primary)",
-                  fontWeight: 700,
-                  letterSpacing: "0.04em",
-                }}
-              >
-                v2.1 PRO
-              </span>
-            </div>
-          </div>
-
-          {/* Global Command Palette Trigger Bar */}
-          <button
-            onClick={() => setIsCommandPaletteOpen(true)}
-            className="command-palette-btn"
-            data-tour="command-palette-btn"
-            title="Open Command Palette (Ctrl+K)"
-          >
-            <Search size={14} color="var(--text-dim)" />
-            <span className="search-placeholder" style={{ flex: 1, textAlign: "left" }}>Search actions, findings...</span>
-            <kbd
-              style={{
-                fontSize: "0.68rem",
-                padding: "2px 6px",
-                borderRadius: "4px",
-                backgroundColor: "var(--bg-card)",
-                border: "1px solid var(--border-color)",
-                color: "var(--text-dim)",
-              }}
-            >
-              Ctrl K
-            </kbd>
-          </button>
-
-          {/* Right Status & Actions */}
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            {selectedTarget && (
-              <div className="top-nav-target" data-tour="target-scope-nav" style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.82rem" }}>
-                <span style={{ color: "var(--text-dim)" }}>Target:</span>
-                <span style={{ fontWeight: 600, color: "var(--text-main)", maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {selectedTarget.primary_url}
-                </span>
-                <ScopeBadge allowLocalLab={selectedTarget.scope?.allow_local_lab} />
-              </div>
-            )}
-
-          {/* Global Background AI Activity Indicator */}
-          {hasRunningTask && (
-            <div
-              onClick={() => setActiveTab("mentor")}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                padding: "3px 10px",
-                borderRadius: "999px",
-                backgroundColor: "rgba(14, 165, 233, 0.15)",
-                border: "1px solid rgba(14, 165, 233, 0.4)",
-                cursor: "pointer",
-                boxShadow: "0 0 12px rgba(14, 165, 233, 0.2)",
-              }}
-              title="AI Mentor is generating a response in the background. Click to jump to conversation."
-            >
-              <Bot size={15} className="pulse" color="var(--accent-cyan)" />
-              <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--accent-cyan)" }}>
-                AI Mentor Analyzing...
-              </span>
-              {activeTasks[0] && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    cancelTask(activeTasks[0].id);
-                  }}
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: "1px",
-                    display: "flex",
-                    alignItems: "center",
-                    color: "var(--text-dim)",
-                  }}
-                  title="Cancel background generation"
-                >
-                  <X size={13} />
-                </button>
-              )}
-            </div>
-          )}
-
-          {recentlyCompletedTask && !hasRunningTask && (
-            <div
-              onClick={() => {
-                setActiveTab("mentor");
-                dismissNotification();
-              }}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: "3px 10px",
-                borderRadius: "999px",
-                backgroundColor: "rgba(16, 185, 129, 0.15)",
-                border: "1px solid rgba(16, 185, 129, 0.4)",
-                cursor: "pointer",
-                boxShadow: "0 0 10px rgba(16, 185, 129, 0.2)",
-              }}
-              title="Answer ready! Click to jump to AI Mentor."
-            >
-              <Sparkles size={13} color="var(--accent-emerald)" />
-              <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--accent-emerald)" }}>
-                Answer Ready!
-              </span>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  dismissNotification();
-                }}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: "1px",
-                  display: "flex",
-                  alignItems: "center",
-                  color: "var(--text-dim)",
-                }}
-              >
-                <X size={12} />
-              </button>
-            </div>
-          )}
-
-          {/* AI Status Badge */}
-          <div
-            data-tour="ai-status-badge"
-            onClick={() => setActiveTab("mentor")}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              padding: "4px 10px",
-              borderRadius: "999px",
-              backgroundColor: !isAiEnabled
-                ? "rgba(100, 116, 139, 0.15)"
-                : aiAvailable
-                ? "rgba(16, 185, 129, 0.12)"
-                : "rgba(245, 158, 11, 0.12)",
-              border: `1px solid ${
-                !isAiEnabled
-                  ? "var(--border-color)"
-                  : aiAvailable
-                  ? "rgba(16, 185, 129, 0.3)"
-                  : "rgba(245, 158, 11, 0.3)"
-              }`,
-              cursor: "pointer",
-            }}
-            title={
-              !isAiEnabled
-                ? "AI Engine is turned OFF (Click to open AI Mentor)"
-                : aiAvailable
-                ? `Ollama Active: ${aiModels.length} models ready`
-                : "Ollama engine offline"
+        {/* Modern Compact Linear-Style Top Nav */}
+        <AppTopNav
+          activeTab={activeTab}
+          onNavigateTab={(tab) => setActiveTab(tab as TabType)}
+          selectedTarget={selectedTarget}
+          targets={targets}
+          onSelectTarget={(t) => setSelectedTarget(t)}
+          selectedFinding={selectedFinding}
+          onCloseFinding={() => setSelectedFinding(null)}
+          isSidebarCollapsed={isSidebarCollapsed || sidebarWidth <= 80}
+          onToggleSidebar={handleToggleSidebar}
+          onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
+          onOpenShortcuts={() => setIsShortcutsModalOpen(true)}
+          onOpenAuditLogs={() => setIsAuditLogModalOpen(true)}
+          onOpenHelp={() => setIsCommandPaletteOpen(true)}
+          onEmergencyStop={handleEmergencyStop}
+          currentTheme={preferences.theme}
+          onToggleTheme={() => {
+            if (preferences.theme === "arctic" || preferences.theme === "github_light") {
+              setTheme("midnight");
+              addToast({ type: "info", title: "Theme Switched", description: "Activated Midnight dark mode." });
+            } else {
+              setTheme("arctic");
+              addToast({ type: "info", title: "Theme Switched", description: "Activated Arctic light mode." });
             }
-          >
-            <span
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: "50%",
-                backgroundColor: !isAiEnabled
-                  ? "var(--text-dim)"
-                  : aiAvailable
-                  ? "var(--accent-emerald)"
-                  : "var(--accent-amber)",
-              }}
-            />
-            <span
-              style={{
-                fontSize: "0.72rem",
-                fontWeight: 600,
-                color: !isAiEnabled
-                  ? "var(--text-dim)"
-                  : aiAvailable
-                  ? "var(--accent-emerald)"
-                  : "var(--accent-amber)",
-              }}
-            >
-              {!isAiEnabled ? "AI Paused" : aiAvailable ? `${aiModels.length} AI Models` : "AI Offline"}
-            </span>
-          </div>
-
-          {/* Active Security Category Specialization Selector */}
-          <div data-tour="category-selector" style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-            <CategorySelector
-              activeCategory={activeCategory}
-              onSelectCategory={(cat) => {
-                setActiveCategory(cat);
-                addToast({
-                  type: "info",
-                  title: "Security Specialization Switched",
-                  description: `Switched active intelligence to ${cat.toUpperCase()} security.`,
-                });
-              }}
-              compact
-            />
-          </div>
-
-          {/* Workspace Layout Preset Selector */}
-          <div data-tour="workspace-presets-select" style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-            <LayoutGrid size={14} color="var(--text-dim)" />
-            <select
-              value={workspacePreset}
-              onChange={(e) => handleSelectPreset(e.target.value as WorkspacePreset)}
-              style={{
-                padding: "2px 8px",
-                fontSize: "0.74rem",
-                height: "26px",
-                borderRadius: "4px",
-                backgroundColor: "var(--bg-secondary)",
-                color: "var(--text-main)",
-                border: "1px solid var(--border-color)",
-                cursor: "pointer",
-              }}
-              title="Select Workspace Preset (Default, Compact, Analyst, Pentest, API, Learning)"
-            >
-              <option value="default">⚡ Default</option>
-              <option value="compact">📐 Compact</option>
-              <option value="analyst">🔬 Analyst</option>
-              <option value="pentest">🛡️ Pentest</option>
-              <option value="api">🌐 API Test</option>
-              <option value="learning">🎓 Learning</option>
-            </select>
-          </div>
-
-          {/* Quick Theme Toggle Button */}
-          <button
-            className="btn btn-secondary"
-            style={{ padding: "6px 10px", fontSize: "0.8rem" }}
-            onClick={() => {
-              if (preferences.theme === "arctic") {
-                setTheme("midnight");
-                addToast({ type: "info", title: "Theme Switched", description: "Activated Midnight dark mode." });
-              } else {
-                setTheme("arctic");
-                addToast({ type: "info", title: "Theme Switched", description: "Activated Arctic Light mode." });
-              }
-            }}
-            title={`Toggle Theme (Current: ${preferences.theme})`}
-          >
-            {preferences.theme === "arctic" ? <Moon size={15} /> : <Sun size={15} />}
-          </button>
-
-          {/* Appearance Settings Tab Trigger */}
-          <button
-            className={`btn ${activeTab === "appearance" ? "btn-primary" : "btn-secondary"}`}
-            style={{ padding: "6px 10px" }}
-            onClick={() => setActiveTab("appearance")}
-            title="Appearance & Personalization"
-          >
-            <Palette size={15} />
-          </button>
-
-          {/* Audit Log Modal Trigger */}
-          <button
-            className="btn btn-secondary"
-            style={{ padding: "6px 10px", display: "flex", alignItems: "center", gap: "5px", fontSize: "0.8rem" }}
-            onClick={() => setIsAuditLogModalOpen(true)}
-            title="System Audit & Data Activity Log"
-          >
-            <History size={15} />
-            <span className="hide-mobile">Audit Log</span>
-          </button>
-
-
-          {/* Keyboard Shortcuts Trigger Button */}
-          <button
-            className="btn btn-secondary"
-            style={{ padding: "6px 10px", display: "flex", alignItems: "center", gap: "5px", fontSize: "0.8rem" }}
-            onClick={() => setIsShortcutsModalOpen(true)}
-            title="Keyboard Shortcuts Cheat Sheet (Press ? or Ctrl+/)"
-          >
-            <Keyboard size={15} />
-            <span className="hide-mobile">Shortcuts</span>
-          </button>
-
-          {/* Global Help & Tour Dropdown */}
-          <HeaderHelpMenu
-            onNavigateTab={(tab) => setActiveTab(tab)}
-            onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
-            onOpenShortcutsModal={() => setIsShortcutsModalOpen(true)}
-          />
-
-          {/* Emergency Stop Button */}
-          <button
-            className="btn btn-danger"
-            style={{ padding: "6px 12px" }}
-            onClick={handleEmergencyStop}
-            title="Halt all background network probes and scans (Ctrl+Shift+E)"
-          >
-            Emergency Stop
-          </button>
-        </div>
-      </header>
+          }}
+          hasRunningAiTask={hasRunningTask}
+          activeAiTasksCount={activeTasks.length}
+          onCancelActiveAiTask={() => {
+            if (activeTasks[0]) cancelTask(activeTasks[0].id);
+          }}
+          isAiAnswerReady={Boolean(recentlyCompletedTask && !hasRunningTask)}
+          onDismissAiNotification={dismissNotification}
+          workspacePreset={workspacePreset}
+          onSelectPreset={handleSelectPreset}
+        />
 
       {/* Workspace Controls & Tabs Strip */}
       <div data-tour="workspace-toolbar">
@@ -2306,254 +2005,21 @@ export default function App() {
           handleDrawerPointerUp(e);
         }}
       >
-        {/* Modern Categorized Navigation Sidebar with Resizable Handle */}
-        <aside
-          className={`sidebar ${preferences.sidebarMode === "compact" || sidebarWidth <= 80 ? "compact-mode" : ""}`}
-          style={{ width: `${sidebarWidth}px`, minWidth: `${sidebarWidth}px`, position: "relative" }}
-        >
-          {/* Resizable Sidebar Drag Handle */}
-          <div
-            className={`sidebar-resizer ${isResizingSidebar ? "resizing" : ""}`}
-            onPointerDown={handleSidebarPointerDown}
-            onDoubleClick={handleToggleSidebar}
-            title="Drag to resize sidebar width, double-click to collapse/expand (Ctrl+B)"
-            style={{
-              position: "absolute",
-              top: 0,
-              right: 0,
-              width: "6px",
-              height: "100%",
-              cursor: "col-resize",
-              zIndex: 30,
-              backgroundColor: isResizingSidebar ? "var(--accent-cyan)" : "transparent",
-              transition: "background-color 0.15s ease",
-            }}
-          />
-          {/* Group 1: Operations & Scope */}
-          <div className="sidebar-section-title">Operations & Scope</div>
-          <div
-            className={`nav-item ${activeTab === "analytics" ? "active" : ""}`}
-            onClick={() => setActiveTab("analytics")}
-            title="Security Analytics & Posture"
-          >
-            <Activity size={18} color={activeTab === "analytics" ? "var(--accent-cyan)" : undefined} />
-            <span className="sidebar-label">Security Analytics</span>
-          </div>
-
-          <div
-            className={`nav-item ${activeTab === "targets" ? "active" : ""}`}
-            onClick={() => setActiveTab("targets")}
-            title="Target & Scope"
-          >
-            <TargetIcon size={18} />
-            <span className="sidebar-label">Target & Scope</span>
-          </div>
-
-          {/* Group 2: Assessments & Execution */}
-          <div className="sidebar-section-title">Assessments & Scans</div>
-          <div
-            className={`nav-item ${activeTab === "scanner" ? "active" : ""}`}
-            onClick={() => setActiveTab("scanner")}
-            title="Scan Console"
-          >
-            <Terminal size={18} />
-            <span className="sidebar-label">Scan Console</span>
-          </div>
-
-          <div
-            className={`nav-item ${activeTab === "orchestration" ? "active" : ""}`}
-            onClick={() => setActiveTab("orchestration")}
-            title="Universal Orchestration"
-          >
-            <Cpu size={18} color={activeTab === "orchestration" ? "var(--accent-cyan)" : undefined} />
-            <span className="sidebar-label">Universal Orchestration</span>
-          </div>
-
-          <div
-            className={`nav-item ${activeTab === "crawler" ? "active" : ""}`}
-            onClick={() => setActiveTab("crawler")}
-            title="Crawler & Discovered Endpoints"
-          >
-            <Compass size={18} />
-            <span className="sidebar-label" style={{ flex: 1 }}>Crawler</span>
-            {endpoints.length > 0 && (
-              <span className="sidebar-badge" style={{ fontSize: "0.68rem", color: "var(--text-dim)", padding: "1px 6px", borderRadius: "10px", background: "var(--bg-card)" }}>
-                {endpoints.length}
-              </span>
-            )}
-          </div>
-
-          {/* Group 3: Taxonomy & Methodology */}
-          <div className="sidebar-section-title">Taxonomy & Playbooks</div>
-          <div
-            className={`nav-item ${activeTab === "categoryWorkflow" ? "active" : ""}`}
-            onClick={() => setActiveTab("categoryWorkflow")}
-            title="Category Intelligence & Assessment Engine"
-          >
-            <Layers size={18} color={activeTab === "categoryWorkflow" ? "var(--accent-cyan)" : undefined} />
-            <span className="sidebar-label" style={{ flex: 1 }}>Category Intel</span>
-          </div>
-
-          <div
-            className={`nav-item ${activeTab === "playbooks" ? "active" : ""}`}
-            onClick={() => setActiveTab("playbooks")}
-            title="Security Checklists & Assessment Playbooks"
-          >
-            <FileCheck size={18} color={activeTab === "playbooks" ? "var(--accent-cyan)" : undefined} />
-            <span className="sidebar-label" style={{ flex: 1 }}>Playbooks</span>
-          </div>
-
-          <div
-            className={`nav-item ${activeTab === "methodologies" ? "active" : ""}`}
-            onClick={() => setActiveTab("methodologies")}
-            title="Detection Methodologies & Transparency Rules"
-          >
-            <BookOpen size={18} color={activeTab === "methodologies" ? "var(--accent-cyan)" : undefined} />
-            <span className="sidebar-label" style={{ flex: 1 }}>Methodologies</span>
-          </div>
-
-          {/* Group 4: Findings & Documentation */}
-          <div className="sidebar-section-title">Findings & Reports</div>
-          <div
-            className={`nav-item ${activeTab === "findings" ? "active" : ""}`}
-            onClick={() => setActiveTab("findings")}
-            title="Vulnerability Findings"
-          >
-            <AlertTriangle size={18} />
-            <span className="sidebar-label" style={{ flex: 1 }}>Findings</span>
-            {findings.length > 0 && (
-              <span className="sidebar-badge" style={{ fontSize: "0.68rem", color: "var(--accent-rose)", padding: "1px 6px", borderRadius: "10px", background: "rgba(244, 63, 94, 0.12)", fontWeight: 700 }}>
-                {findings.length}
-              </span>
-            )}
-          </div>
-
-          <div
-            className={`nav-item ${activeTab === "issues" ? "active" : ""}`}
-            onClick={() => setActiveTab("issues")}
-            title="Issue Documentation & Reports"
-          >
-            <ClipboardList size={18} />
-            <span className="sidebar-label" style={{ flex: 1 }}>Issues & Reports</span>
-          </div>
-
-          <div
-            className={`nav-item ${activeTab === "importer" ? "active" : ""}`}
-            onClick={() => setActiveTab("importer")}
-            title="Import External Reports"
-          >
-            <UploadCloud size={18} />
-            <span className="sidebar-label">Import Reports</span>
-          </div>
-
-          {/* Group 5: Learning & Intelligence */}
-          <div className="sidebar-section-title">Learning & AI</div>
-          <div
-            className={`nav-item ${activeTab === "mentor" ? "active" : ""}`}
-            onClick={() => setActiveTab("mentor")}
-            title="Local AI Security Mentor"
-          >
-            <Sparkles size={18} />
-            <span className="sidebar-label">Local AI Mentor</span>
-          </div>
-
-          <div
-            className={`nav-item ${activeTab === "academy" ? "active" : ""}`}
-            onClick={() => setActiveTab("academy")}
-            title="Cyber Academy Curriculum"
-          >
-            <GraduationCap size={18} />
-            <span className="sidebar-label">Cyber Academy</span>
-          </div>
-
-          {/* Group 6: Tools & Integrations */}
-          <div className="sidebar-section-title">Tools & Integrations</div>
-          <div
-            className={`nav-item ${activeTab === "tools" ? "active" : ""}`}
-            onClick={() => setActiveTab("tools")}
-            title="Tools & Universal Plugins"
-          >
-            <Layers size={18} />
-            <span className="sidebar-label" style={{ flex: 1 }}>Tools & Plugins</span>
-            <span className="sidebar-badge" style={{ fontSize: "0.68rem", color: "var(--accent-emerald)", padding: "1px 6px", borderRadius: "10px", background: "rgba(16, 185, 129, 0.12)" }}>
-              {readyToolsCount}
-            </span>
-          </div>
-
-          <div
-            className={`nav-item ${activeTab === "terminal" ? "active" : ""}`}
-            onClick={() => setActiveTab("terminal")}
-            title="Multi-Terminal Orchestration & Tool Execution"
-          >
-            <Terminal size={18} color={activeTab === "terminal" ? "var(--accent-cyan)" : undefined} />
-            <span className="sidebar-label">Multi-Terminal</span>
-          </div>
-
-          <div
-            className={`nav-item ${activeTab === "burp" ? "active" : ""}`}
-            onClick={() => setActiveTab("burp")}
-            title="Burp Suite Local Integration"
-          >
-            <Radio size={18} color={activeTab === "burp" ? "var(--accent-orange, #f97316)" : undefined} />
-            <span className="sidebar-label" style={{ flex: 1 }}>Burp Suite</span>
-            <span className="sidebar-badge" style={{ fontSize: "0.68rem", color: "var(--accent-orange, #f97316)", padding: "1px 6px", borderRadius: "10px", background: "rgba(249, 115, 22, 0.12)", fontWeight: 700 }}>
-              Proxy
-            </span>
-          </div>
-
-          <div
-            className={`nav-item ${activeTab === "hostmobile" ? "active" : ""}`}
-            onClick={() => setActiveTab("hostmobile")}
-            title="Host & Mobile Audit"
-          >
-            <Monitor size={18} color={activeTab === "hostmobile" ? "var(--accent-blue)" : undefined} />
-            <span className="sidebar-label">Host & Mobile</span>
-          </div>
-
-          {/* Group 7: System & Audit */}
-          <div className="sidebar-section-title">System & Audit</div>
-          <div
-            className={`nav-item ${activeTab === "history" ? "active" : ""}`}
-            onClick={() => setActiveTab("history")}
-            title="Audit History"
-          >
-            <History size={18} />
-            <span className="sidebar-label" style={{ flex: 1 }}>Audit History</span>
-            {scanHistory.length > 0 && (
-              <span className="sidebar-badge" style={{ fontSize: "0.68rem", color: "var(--text-dim)", padding: "1px 6px", borderRadius: "10px", background: "var(--bg-card)" }}>
-                {scanHistory.length}
-              </span>
-            )}
-          </div>
-
-          <div
-            className={`nav-item ${activeTab === "appearance" ? "active" : ""}`}
-            onClick={() => setActiveTab("appearance")}
-            title="Appearance & Personalization"
-          >
-            <Palette size={18} color={activeTab === "appearance" ? "var(--accent-cyan)" : undefined} />
-            <span className="sidebar-label">Appearance</span>
-          </div>
-
-          {/* Bottom Sidebar Collapse/Expand Toggle */}
-          <div
-            className="nav-item sidebar-collapse-btn"
-            style={{
-              marginTop: "auto",
-              borderTop: "1px solid var(--border-color)",
-              padding: "10px 12px",
-              color: "var(--text-dim)",
-              cursor: "pointer",
-            }}
-            onClick={handleToggleSidebar}
-            title={preferences.sidebarMode === "compact" || sidebarWidth <= 80 ? "Expand Sidebar (Ctrl+B)" : "Collapse Sidebar (Ctrl+B)"}
-          >
-            <PanelLeft size={18} />
-            <span className="sidebar-label">
-              {preferences.sidebarMode === "compact" || sidebarWidth <= 80 ? "Expand" : "Collapse"}
-            </span>
-          </div>
-        </aside>
+        {/* Modern Linear / VS Code Collapsible & Resizable Sidebar */}
+        <AppSidebar
+          activeTab={activeTab}
+          onSelectTab={(tab) => setActiveTab(tab as TabType)}
+          isCollapsed={isSidebarCollapsed || sidebarWidth <= 80}
+          onToggleCollapse={handleToggleSidebar}
+          width={sidebarWidth}
+          isResizing={isResizingSidebar}
+          onResizePointerDown={handleSidebarPointerDown}
+          findingsCount={findings.length}
+          endpointsCount={endpoints.length}
+          readyToolsCount={readyToolsCount}
+          scanHistoryCount={scanHistory.length}
+          hasRunningAiTask={hasRunningTask}
+        />
 
         {/* Center Workspace */}
         <main className="workspace">
@@ -5075,8 +4541,8 @@ export default function App() {
             </div>
           )}
 
-          {/* TAB 7: APPSEC AI — TWO-MODEL SECURITY WORKSPACE */}
-          {activeTab === "mentor" && (
+          {/* TAB 7: APPSEC AI — TWO-MODEL SECURITY WORKSPACE (Persistently Mounted for Background Task Execution) */}
+          <div style={{ display: activeTab === "mentor" ? "block" : "none" }}>
             <div className="card">
               {/* SECTION A: HEADER: APPSEC AI */}
               <div
@@ -5870,7 +5336,7 @@ export default function App() {
                 </Suspense>
               </div>
             </div>
-          )}
+          </div>
 
           {/* TAB: HOST & MOBILE SECURITY AUDITOR */}
           {activeTab === "hostmobile" && (

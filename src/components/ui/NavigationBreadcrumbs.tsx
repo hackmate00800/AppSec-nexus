@@ -19,6 +19,7 @@ import {
   FileCheck,
   Radio,
   Workflow,
+  Bot,
 } from "lucide-react";
 import { TabType } from "../../App";
 import { Target, Finding } from "../../types";
@@ -53,6 +54,7 @@ const TAB_CONFIG: Record<string, { label: string; group: string; icon: React.Rea
   history: { label: "Audit History", group: "Platform", icon: <History size={14} /> },
   appearance: { label: "Appearance", group: "Platform", icon: <Palette size={14} /> },
   methodologies: { label: "Methodology Explorer", group: "AI & Learning", icon: <Workflow size={14} /> },
+  modelLab: { label: "Model Lab (Heretic)", group: "AI & Learning", icon: <Bot size={14} /> },
 };
 
 export const NavigationBreadcrumbs: React.FC<NavigationBreadcrumbsProps> = ({

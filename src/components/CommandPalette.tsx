@@ -21,6 +21,7 @@ import {
   Shield,
   Check,
   Radio,
+  Bot,
 } from "lucide-react";
 import { useTheme } from "../theme/ThemeProvider";
 import { BUILT_IN_THEMES } from "../theme/themes";
@@ -177,6 +178,15 @@ export function CommandPalette({
         icon: <Sparkles size={16} />,
         action: () => { onNavigateTab("mentor"); onClose(); },
         keywords: ["ai", "ollama", "chat", "teacher", "remediation"],
+      },
+      {
+        id: "nav-model-lab",
+        category: "Navigation",
+        title: "Go to Heretic Model Lab",
+        subtitle: "Abliterate refusal vectors, optimize weights with Optuna TPE, export to Ollama",
+        icon: <Bot size={16} />,
+        action: () => { onNavigateTab("modelLab"); onClose(); },
+        keywords: ["heretic", "model", "lab", "abliteration", "ollama", "weights", "qwen", "optuna", "benchmark"],
       },
       {
         id: "nav-academy",
