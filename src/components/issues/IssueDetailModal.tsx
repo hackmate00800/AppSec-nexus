@@ -384,8 +384,10 @@ ${issue.root_cause ? `## Root Cause\n${issue.root_cause}\n` : ""}
                 border: "1px solid var(--border-color)",
                 color: "var(--text-main)",
                 fontSize: "0.85rem",
-                lineHeight: "1.5",
+                lineHeight: "1.55",
                 whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                overflowWrap: "anywhere",
               }}
             >
               {issue.description}
@@ -408,6 +410,8 @@ ${issue.root_cause ? `## Root Cause\n${issue.root_cause}\n` : ""}
                       border: "1px solid var(--border-color)",
                       fontSize: "0.82rem",
                       whiteSpace: "pre-wrap",
+                      wordBreak: "break-all",
+                      overflowWrap: "anywhere",
                       fontFamily: "monospace",
                     }}
                   >
@@ -463,8 +467,12 @@ ${issue.root_cause ? `## Root Cause\n${issue.root_cause}\n` : ""}
                   color: "var(--accent-cyan)",
                   fontSize: "0.78rem",
                   overflowX: "auto",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-all",
+                  overflowWrap: "anywhere",
                   margin: 0,
                   fontFamily: "monospace",
+                  lineHeight: "1.5",
                 }}
               >
                 {issue.evidence || issue.error_details}
@@ -570,28 +578,28 @@ ${issue.root_cause ? `## Root Cause\n${issue.root_cause}\n` : ""}
             )}
 
             {/* Add note form */}
-            <form onSubmit={handleAddNote} style={{ display: "flex", gap: "8px", alignItems: "flex-end" }}>
-              <div style={{ width: "130px" }}>
-                <label style={{ display: "block", fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: "2px" }}>
+            <form onSubmit={handleAddNote} style={{ display: "flex", gap: "8px", alignItems: "flex-end", flexWrap: "wrap" }}>
+              <div style={{ width: "130px", minWidth: "110px" }}>
+                <label style={{ display: "block", fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: "4px" }}>
                   Author
                 </label>
                 <input
                   type="text"
                   className="input-field"
-                  style={{ height: "32px", fontSize: "0.78rem" }}
+                  style={{ height: "36px", minHeight: "36px", fontSize: "0.8rem", padding: "6px 10px" }}
                   value={authorName}
                   onChange={(e) => setAuthorName(e.target.value)}
                   placeholder="Your Name"
                 />
               </div>
-              <div style={{ flex: 1 }}>
-                <label style={{ display: "block", fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: "2px" }}>
+              <div style={{ flex: 1, minWidth: "200px" }}>
+                <label style={{ display: "block", fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: "4px" }}>
                   Add Investigation Note
                 </label>
                 <input
                   type="text"
                   className="input-field"
-                  style={{ height: "32px", fontSize: "0.78rem" }}
+                  style={{ height: "36px", minHeight: "36px", fontSize: "0.8rem", padding: "6px 12px" }}
                   value={newNoteText}
                   onChange={(e) => setNewNoteText(e.target.value)}
                   placeholder="Type note or retest observation..."
@@ -602,7 +610,7 @@ ${issue.root_cause ? `## Root Cause\n${issue.root_cause}\n` : ""}
                 type="submit"
                 className="btn btn-primary"
                 disabled={isSubmittingNote || !newNoteText.trim()}
-                style={{ height: "32px", padding: "0 12px", fontSize: "0.78rem" }}
+                style={{ height: "36px", minHeight: "36px", padding: "0 14px", fontSize: "0.8rem", flexShrink: 0 }}
               >
                 Add Note
               </button>

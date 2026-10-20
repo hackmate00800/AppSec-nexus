@@ -38,6 +38,7 @@ export function formatModelDisplayName(modelName: string): string {
 export function isQuickCandidate(modelName: string): boolean {
   const lower = modelName.toLowerCase();
   return (
+    lower.includes("appsec-teacher-1b") ||
     lower.includes("1b") ||
     lower.includes("1.5b") ||
     lower.includes("2b") ||
@@ -98,8 +99,11 @@ export function resolveModelSlots(installedModels: string[]): {
     if (isSingleModel) {
       resolvedQuick = installedModels[0];
     } else if (hasInstalledModels) {
-      // Find first 1B - 3B candidate
-      const cand = installedModels.find(isQuickCandidate);
+      // Find 1B - 3B candidate, preferring appsec-teacher-1b
+      const cand =
+        installedModels.find((m) => m.toLowerCase().includes("appsec-teacher-1b")) ||
+        installedModels.find(isQuickCandidate) ||
+        installedModels[0];
       resolvedQuick = cand || installedModels[0];
     } else {
       resolvedQuick = RECOMMENDED_QUICK_MODEL;

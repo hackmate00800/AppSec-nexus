@@ -23,6 +23,8 @@ export function CodeBlock({ language, code }: CodeBlockProps) {
         overflow: "hidden",
         border: "1px solid var(--border-color)",
         backgroundColor: "var(--bg-primary)",
+        maxWidth: "100%",
+        minWidth: 0,
       }}
     >
       {/* Code Header with language and copy button */}
@@ -75,6 +77,7 @@ export function CodeBlock({ language, code }: CodeBlockProps) {
           fontFamily: "var(--font-mono, 'Fira Code', monospace)",
           lineHeight: "1.5",
           overflowX: "auto",
+          maxWidth: "100%",
           color: "var(--text-main)",
         }}
       >
@@ -115,7 +118,18 @@ export function MarkdownViewer({ content }: MarkdownViewerProps) {
     parts.push(renderTextSegment(remainingText, `txt-${lastIndex}`));
   }
 
-  return <div style={{ wordBreak: "break-word" }}>{parts}</div>;
+  return (
+    <div
+      style={{
+        wordBreak: "break-word",
+        overflowWrap: "break-word",
+        minWidth: 0,
+        maxWidth: "100%",
+      }}
+    >
+      {parts}
+    </div>
+  );
 }
 
 function renderTextSegment(text: string, keyPrefix: string) {
@@ -234,6 +248,10 @@ function renderInlineStyles(text: string): React.ReactNode[] {
             fontSize: "0.85em",
             color: "var(--accent-cyan)",
             border: "1px solid var(--border-color)",
+            wordBreak: "break-all",
+            overflowWrap: "anywhere",
+            whiteSpace: "pre-wrap",
+            maxWidth: "100%",
           }}
         >
           {token.slice(1, -1)}

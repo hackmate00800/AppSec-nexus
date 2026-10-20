@@ -2,9 +2,15 @@ use crate::models::{DiscoveredEndpoint, Finding, FindingSeverity, ScopeConfig};
 use crate::scope::ScopeValidator;
 use regex::Regex;
 use std::collections::{HashSet, VecDeque};
+use std::sync::OnceLock;
 use std::time::Duration;
 use url::Url;
 use uuid::Uuid;
+
+static HREF_RE: OnceLock<Regex> = OnceLock::new();
+static FORM_RE: OnceLock<Regex> = OnceLock::new();
+static METHOD_RE: OnceLock<Regex> = OnceLock::new();
+static SCRIPT_RE: OnceLock<Regex> = OnceLock::new();
 
 pub struct Crawler;
 
@@ -35,11 +41,11 @@ impl Crawler {
         let mut endpoints = Vec::new();
         let mut findings = Vec::new();
 
-        // Regex patterns for extracting assets and links
-        let href_re = Regex::new(r#"(?i)<a\s+[^>]*?href=["']([^"'#\s>]+)["']"#).unwrap();
-        let form_re = Regex::new(r#"(?i)<form\s+[^>]*?action=["']([^"'#\s>]+)["']"#).unwrap();
-        let method_re = Regex::new(r#"(?i)method=["'](GET|POST|PUT|DELETE)["']"#).unwrap();
-        let script_re = Regex::new(r#"(?i)<script\s+[^>]*?src=["']([^"'#\s>]+)["']"#).unwrap();
+        // Reusable compiled regex patterns for extracting assets and links
+        let href_re = HREF_RE.get_or_init(|| Regex::new(r#"(?i)<a\s+[^>]*?href=["']([^"'#\s>]+)["']"#).unwrap());
+        let form_re = FORM_RE.get_or_init(|| Regex::new(r#"(?i)<form\s+[^>]*?action=["']([^"'#\s>]+)["']"#).unwrap());
+        let method_re = METHOD_RE.get_or_init(|| Regex::new(r#"(?i)method=["'](GET|POST|PUT|DELETE)["']"#).unwrap());
+        let script_re = SCRIPT_RE.get_or_init(|| Regex::new(r#"(?i)<script\s+[^>]*?src=["']([^"'#\s>]+)["']"#).unwrap());
 
         // 1. Initial sensitive exposures probe
         Self::probe_sensitive_files(
@@ -97,6 +103,13 @@ impl Crawler {
 
             if !is_html || depth >= max_depth {
                 continue;
+            }
+
+            // Bound body size reading to 2MB to prevent memory exhaustion on giant responses
+            if let Some(cl) = resp.content_length() {
+                if cl > 2 * 1024 * 1024 {
+                    continue;
+                }
             }
 
             let body = match resp.text().await {
@@ -207,6 +220,12 @@ impl Crawler {
                 if let Ok(resp) = client.get(url_str).send().await {
                     let status = resp.status().as_u16();
                     if resp.status().is_success() {
+                        // Skip if sensitive probe returned an excessively large payload (>256KB)
+                        if let Some(cl) = resp.content_length() {
+                            if cl > 256 * 1024 {
+                                continue;
+                            }
+                        }
                         let text = resp.text().await.unwrap_or_default();
                         let text_lower = text.to_lowercase();
 

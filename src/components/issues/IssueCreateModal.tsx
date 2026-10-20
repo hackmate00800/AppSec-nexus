@@ -270,8 +270,8 @@ export const IssueCreateModal: React.FC<IssueCreateModalProps> = ({
           </div>
 
           {/* Row 3: Affected Component, Scope, Verification */}
-          <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr", gap: "12px" }}>
-            <div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
+            <div style={{ minWidth: 0 }}>
               <label style={{ display: "block", fontSize: "0.76rem", fontWeight: 600, color: "var(--text-dim)", marginBottom: "4px" }}>
                 Affected Component / Endpoint / Screen *
               </label>
@@ -286,7 +286,7 @@ export const IssueCreateModal: React.FC<IssueCreateModalProps> = ({
               />
             </div>
 
-            <div>
+            <div style={{ minWidth: 0 }}>
               <label style={{ display: "block", fontSize: "0.76rem", fontWeight: 600, color: "var(--text-dim)", marginBottom: "4px" }}>
                 Target Project Scope
               </label>
@@ -305,7 +305,7 @@ export const IssueCreateModal: React.FC<IssueCreateModalProps> = ({
               </select>
             </div>
 
-            <div>
+            <div style={{ minWidth: 0 }}>
               <label style={{ display: "block", fontSize: "0.76rem", fontWeight: 600, color: "var(--text-dim)", marginBottom: "4px" }}>
                 Verification
               </label>

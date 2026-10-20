@@ -499,6 +499,7 @@ export const ReportGeneratorModal: React.FC<ReportGeneratorModalProps> = ({
               flexDirection: "column",
               background: "#080c14",
               overflow: "hidden",
+              minWidth: 0,
             }}
           >
             <div

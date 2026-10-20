@@ -449,7 +449,7 @@ export const IssueCenter: React.FC<IssueCenterProps> = ({
             <Search
               size={14}
               color="var(--text-dim)"
-              style={{ position: "absolute", left: "10px", top: "10px" }}
+              style={{ position: "absolute", left: "10px", top: "11px" }}
             />
             <input
               type="text"
@@ -457,7 +457,7 @@ export const IssueCenter: React.FC<IssueCenterProps> = ({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by ID, title, affected component, or error text..."
-              style={{ paddingLeft: "30px", height: "34px", fontSize: "0.8rem" }}
+              style={{ paddingLeft: "32px", height: "36px", minHeight: "36px", fontSize: "0.82rem" }}
             />
           </form>
 
@@ -468,7 +468,7 @@ export const IssueCenter: React.FC<IssueCenterProps> = ({
               setSeverityFilter(e.target.value);
               setPage(1);
             }}
-            style={{ width: "130px", height: "34px", fontSize: "0.8rem" }}
+            style={{ width: "135px", height: "36px", minHeight: "36px", fontSize: "0.82rem", padding: "6px 10px" }}
             aria-label="Filter by Severity"
           >
             <option value="ALL">All Severities</option>
@@ -486,7 +486,7 @@ export const IssueCenter: React.FC<IssueCenterProps> = ({
               setStatusFilter(e.target.value);
               setPage(1);
             }}
-            style={{ width: "130px", height: "34px", fontSize: "0.8rem" }}
+            style={{ width: "135px", height: "36px", minHeight: "36px", fontSize: "0.82rem", padding: "6px 10px" }}
             aria-label="Filter by Status"
           >
             <option value="ALL">All Statuses</option>
@@ -506,7 +506,7 @@ export const IssueCenter: React.FC<IssueCenterProps> = ({
               setTargetFilter(e.target.value);
               setPage(1);
             }}
-            style={{ width: "160px", height: "34px", fontSize: "0.8rem" }}
+            style={{ width: "165px", height: "36px", minHeight: "36px", fontSize: "0.82rem", padding: "6px 10px" }}
             aria-label="Filter by Project Scope"
           >
             <option value="ALL">All Target Scopes</option>

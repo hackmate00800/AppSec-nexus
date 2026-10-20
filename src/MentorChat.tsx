@@ -236,6 +236,7 @@ export function MentorChat({
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const prevTaskIdRef = useRef<string | null>(null);
+  const promptTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Context token budget estimation
   const tokenCount = useMemo(() => {
@@ -465,6 +466,9 @@ export function MentorChat({
       newThread.push({ role: "assistant", content: deterministicTip });
       setMessages(newThread);
       setInputPrompt("");
+      if (promptTextareaRef.current) {
+        promptTextareaRef.current.style.height = "auto";
+      }
       setEditingIndex(null);
       return;
     }
@@ -481,6 +485,9 @@ export function MentorChat({
     updatedHistory.push(userMsg);
     setMessages(updatedHistory);
     setInputPrompt("");
+    if (promptTextareaRef.current) {
+      promptTextareaRef.current.style.height = "auto";
+    }
     setEditingIndex(null);
     setIsLoading(true);
 
@@ -520,9 +527,7 @@ ${categoryPersona.systemPrompt}`;
       if (selectedFinding) {
         systemPrompt = `${personaContext}
 
-You are APPSC NEXUS AI Mentor assisting with finding "${selectedFinding.title}".
-${depthDirectives[studyDepth]}
-Finding Details:
+Finding Context:
 - Title: ${selectedFinding.title}
 - Severity: ${selectedFinding.severity}
 - Asset: ${selectedFinding.affected_asset}
@@ -535,11 +540,11 @@ Finding Details:
 - CWE: ${selectedFinding.cwe || "N/A"}
 - Recommended Remediation: ${selectedFinding.remediation}
 
+${depthDirectives[studyDepth]}
 Provide technically deep, dual-perspective cybersecurity education and actionable guidance. Always include copy-pasteable remediation code snippets where applicable.`;
       } else {
         systemPrompt = `${personaContext}
 
-You are APPSC NEXUS AI Mentor.
 ${depthDirectives[studyDepth]}
 Provide technically deep, dual-perspective cybersecurity education, lab reproduction guidelines, and secure code remediations.`;
       }
@@ -1330,6 +1335,7 @@ Provide technically deep, dual-perspective cybersecurity education, lab reproduc
                   alignItems: "flex-start",
                   alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
                   maxWidth: "92%",
+                  minWidth: 0,
                   width: isEditing ? "100%" : "auto",
                 }}
               >
@@ -1364,6 +1370,8 @@ Provide technically deep, dual-perspective cybersecurity education, lab reproduc
                     lineHeight: "1.55",
                     color: "var(--text-main)",
                     wordBreak: "break-word",
+                    overflowWrap: "break-word",
+                    minWidth: 0,
                     position: "relative",
                     flex: isEditing ? 1 : undefined,
                     boxShadow: "var(--shadow-sm)",
@@ -1660,28 +1668,47 @@ Provide technically deep, dual-perspective cybersecurity education, lab reproduc
       </div>
 
       {/* =========================================================================
-          PROMPT INPUT BOX
+          PROMPT INPUT BOX (Expanding multiline textarea with Shift+Enter support)
           ========================================================================= */}
-      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-        <input
-          type="text"
-          className="input-field"
-          placeholder="Ask a follow-up question (e.g., 'How do I remediate this in Nginx?', 'Show exploit flow')..."
-          value={inputPrompt}
-          onChange={(e) => setInputPrompt(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              handleSendMessage();
-            }
-          }}
-          disabled={isLoading || isTaskRunning}
-        />
+      <div style={{ display: "flex", gap: "8px", alignItems: "flex-end" }}>
+        <div style={{ flex: 1, position: "relative", minWidth: 0 }}>
+          <textarea
+            ref={promptTextareaRef}
+            className="input-field"
+            placeholder="Ask a follow-up question (e.g., 'How do I remediate this in Nginx?', 'Show exploit flow')... (Shift+Enter for newline, Enter to send)"
+            value={inputPrompt}
+            rows={1}
+            onChange={(e) => {
+              setInputPrompt(e.target.value);
+              e.target.style.height = "auto";
+              e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSendMessage();
+              }
+            }}
+            disabled={isLoading || isTaskRunning}
+            style={{
+              minHeight: "44px",
+              maxHeight: "160px",
+              resize: "none",
+              overflowY: "auto",
+              lineHeight: "1.45",
+              padding: "10px 14px",
+              display: "block",
+              width: "100%",
+              boxSizing: "border-box",
+            }}
+          />
+        </div>
         <button
           className="btn btn-primary"
-          style={{ padding: "10px 18px", flexShrink: 0 }}
+          style={{ padding: "10px 18px", height: "44px", flexShrink: 0, alignSelf: "flex-end" }}
           onClick={() => handleSendMessage()}
           disabled={isLoading || isTaskRunning || !inputPrompt.trim()}
+          title="Send message (Enter)"
         >
           <Send size={16} /> Send
         </button>

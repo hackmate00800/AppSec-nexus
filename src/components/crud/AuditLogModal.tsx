@@ -133,14 +133,14 @@ export const AuditLogModal: React.FC<AuditLogModalProps> = ({ isOpen, onClose })
         {/* Filter Bar */}
         <div style={{ display: "flex", gap: "10px", marginBottom: "14px", flexWrap: "wrap" }}>
           <div style={{ position: "relative", flex: 1, minWidth: "200px" }}>
-            <Search size={14} color="var(--text-dim)" style={{ position: "absolute", left: "10px", top: "10px" }} />
+            <Search size={14} color="var(--text-dim)" style={{ position: "absolute", left: "10px", top: "11px" }} />
             <input
               type="text"
               className="input-field"
               placeholder="Search audit trail by entity, action, or details..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              style={{ paddingLeft: "30px", height: "34px", fontSize: "0.8rem" }}
+              style={{ paddingLeft: "32px", height: "36px", minHeight: "36px", fontSize: "0.82rem" }}
             />
           </div>
 

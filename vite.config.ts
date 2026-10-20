@@ -42,9 +42,18 @@ export default defineConfig(() => ({
           if (id.includes("node_modules/lucide-react")) {
             return "icons";
           }
+          if (id.includes("src/academy/data/")) {
+            return "academy-data";
+          }
+          if (id.includes("src/academy/components/VisualLearningEngine")) {
+            return "academy-simulators";
+          }
+          if (id.includes("src/components/issues/")) {
+            return "issue-center";
+          }
         },
       },
     },
-    chunkSizeWarningLimit: 800,
+    chunkSizeWarningLimit: 600,
   },
 }));

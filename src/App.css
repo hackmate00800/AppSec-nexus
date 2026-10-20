@@ -730,7 +730,13 @@ code, pre, kbd {
   transition: all 0.15s ease;
   border: 1px solid transparent;
   text-decoration: none;
-  line-height: 1.2;
+  line-height: 1.45;
+  min-height: 36px;
+  box-sizing: border-box;
+}
+
+[data-density="compact"] .btn {
+  min-height: 32px;
 }
 
 .btn:focus-visible {
@@ -782,9 +788,17 @@ code, pre, kbd {
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
   color: var(--text-main);
+  font-family: inherit;
   font-size: 0.86rem;
+  line-height: 1.5;
+  min-height: 38px;
+  box-sizing: border-box;
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+[data-density="compact"] .input-field {
+  min-height: 34px;
 }
 
 .input-field:focus {
@@ -799,11 +813,19 @@ code, pre, kbd {
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
   color: var(--text-main);
-  font-family: 'Fira Code', monospace;
-  font-size: 0.82rem;
+  font-family: inherit;
+  font-size: 0.85rem;
   outline: none;
   resize: vertical;
-  line-height: 1.45;
+  line-height: 1.55;
+  min-height: 80px;
+  box-sizing: border-box;
+}
+
+.textarea-field.code-font,
+.textarea-code {
+  font-family: 'Fira Code', monospace;
+  font-size: 0.82rem;
 }
 
 .textarea-field:focus {
@@ -818,6 +840,7 @@ code, pre, kbd {
 .badge {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
   padding: 3px 8px;
   border-radius: var(--radius-full);
@@ -825,6 +848,9 @@ code, pre, kbd {
   font-weight: 600;
   letter-spacing: 0.02em;
   white-space: nowrap;
+  line-height: 1.35;
+  min-height: 22px;
+  box-sizing: border-box;
 }
 
 .badge-critical {
@@ -904,6 +930,8 @@ code, pre, kbd {
   border-bottom: 1px solid var(--border-color);
   color: var(--text-main);
   vertical-align: middle;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .data-table tr:hover {
@@ -954,6 +982,9 @@ code, pre, kbd {
 }
 
 .filter-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 4px 10px;
   border-radius: var(--radius-full);
   font-size: 0.74rem;
@@ -962,6 +993,10 @@ code, pre, kbd {
   border: 1px solid var(--border-color);
   background: transparent;
   color: var(--text-muted);
+  line-height: 1.4;
+  min-height: 26px;
+  box-sizing: border-box;
+  white-space: nowrap;
   transition: all 0.15s ease;
 }
 
@@ -1876,4 +1911,40 @@ code, pre, kbd {
     opacity: 0.8;
   }
 }
+
+/* =========================================================================
+   TEXT WRAPPING, OVERFLOW & FLEX CONTAINMENT UTILITIES
+   ========================================================================= */
+.break-words {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.break-all {
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.min-w-0 {
+  min-width: 0 !important;
+}
+
+.min-h-0 {
+  min-height: 0 !important;
+}
+
+.truncate-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.code-pre-wrap {
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+
 

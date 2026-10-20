@@ -704,8 +704,11 @@ export const FindingInlineDetailsAccordion: React.FC<FindingInlineDetailsAccordi
                   fontSize: "0.75rem",
                   color: "var(--accent-cyan)",
                   whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
+                  wordBreak: "break-all",
+                  overflowWrap: "anywhere",
                   maxHeight: "220px",
+                  maxWidth: "100%",
+                  overflowX: "auto",
                   overflowY: "auto",
                   margin: 0,
                 }}
@@ -1224,6 +1227,10 @@ export const FindingInlineDetailsAccordion: React.FC<FindingInlineDetailsAccordi
                   fontFamily: "monospace",
                   color: "var(--accent-emerald)",
                   fontSize: "0.72rem",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-all",
+                  overflowWrap: "anywhere",
+                  maxWidth: "100%",
                 }}
               >
                 {explanation.remediation.safeRetestProcedure ||

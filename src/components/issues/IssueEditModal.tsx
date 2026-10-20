@@ -269,8 +269,8 @@ export const IssueEditModal: React.FC<IssueEditModalProps> = ({
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
-            <div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
+            <div style={{ minWidth: 0 }}>
               <label style={{ display: "block", fontSize: "0.76rem", fontWeight: 600, color: "var(--text-dim)", marginBottom: "4px" }}>
                 Status
               </label>
@@ -291,7 +291,7 @@ export const IssueEditModal: React.FC<IssueEditModalProps> = ({
               </select>
             </div>
 
-            <div>
+            <div style={{ minWidth: 0 }}>
               <label style={{ display: "block", fontSize: "0.76rem", fontWeight: 600, color: "var(--text-dim)", marginBottom: "4px" }}>
                 Verification Status
               </label>
@@ -309,7 +309,7 @@ export const IssueEditModal: React.FC<IssueEditModalProps> = ({
               </select>
             </div>
 
-            <div>
+            <div style={{ minWidth: 0 }}>
               <label style={{ display: "block", fontSize: "0.76rem", fontWeight: 600, color: "var(--text-dim)", marginBottom: "4px" }}>
                 Affected Component *
               </label>
@@ -338,8 +338,8 @@ export const IssueEditModal: React.FC<IssueEditModalProps> = ({
             />
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-            <div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+            <div style={{ minWidth: 0 }}>
               <label style={{ display: "block", fontSize: "0.76rem", fontWeight: 600, color: "var(--text-dim)", marginBottom: "4px" }}>
                 Reproduction Steps
               </label>
@@ -352,7 +352,7 @@ export const IssueEditModal: React.FC<IssueEditModalProps> = ({
               />
             </div>
 
-            <div>
+            <div style={{ minWidth: 0 }}>
               <label style={{ display: "block", fontSize: "0.76rem", fontWeight: 600, color: "var(--text-dim)", marginBottom: "4px" }}>
                 Remediation Guidance
               </label>
