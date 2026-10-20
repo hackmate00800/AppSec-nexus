@@ -8,8 +8,6 @@ import {
   Keyboard,
   History,
   AlertOctagon,
-  PanelLeftClose,
-  PanelLeft,
   Bot,
   Sparkles,
   X,
@@ -28,8 +26,8 @@ interface AppTopNavProps {
   onSelectTarget: (target: Target) => void;
   selectedFinding?: Finding | null;
   onCloseFinding?: () => void;
-  isSidebarCollapsed: boolean;
-  onToggleSidebar: () => void;
+  isSidebarCollapsed?: boolean;
+  onToggleSidebar?: () => void;
   onOpenCommandPalette: () => void;
   onOpenShortcuts: () => void;
   onOpenAuditLogs: () => void;
@@ -54,8 +52,6 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
   onSelectTarget,
   selectedFinding,
   onCloseFinding,
-  isSidebarCollapsed,
-  onToggleSidebar,
   onOpenCommandPalette,
   onOpenShortcuts,
   onOpenAuditLogs,
@@ -73,15 +69,6 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
     <header className="top-nav h-11 px-3 bg-slate-950/95 border-b border-slate-800/80 flex items-center justify-between gap-3 select-none z-30 shrink-0">
       {/* Left: Brand + Sidebar Toggle + Breadcrumb */}
       <div className="flex items-center gap-2.5 min-w-0">
-        <button
-          onClick={onToggleSidebar}
-          className="p-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-850 transition"
-          title={isSidebarCollapsed ? "Expand Sidebar (Ctrl+B)" : "Collapse Sidebar (Ctrl+B)"}
-          aria-label="Toggle navigation sidebar"
-        >
-          {isSidebarCollapsed ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
-        </button>
-
         <div
           onClick={() => onNavigateTab("analytics")}
           className="brand flex items-center gap-2 cursor-pointer group"
