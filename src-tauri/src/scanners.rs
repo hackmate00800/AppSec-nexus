@@ -116,19 +116,19 @@ impl BaselineScanner {
             ));
         }
 
-        // 4. Check X-Content-Type-Options
+        // 4. Check X-Content-Type-Options (MIME Sniffing Protection)
         if !headers.contains_key("x-content-type-options") {
             findings.push(Finding::new(
                 target_id.to_string(),
-                "Missing X-Content-Type-Options (MIME Sniffing)".to_string(),
+                "Missing X-Content-Type-Options (MIME Sniffing Protection)".to_string(),
                 FindingSeverity::Low,
                 95,
                 url.to_string(),
-                "Header 'X-Content-Type-Options: nosniff' was not detected.".to_string(),
+                "Header 'X-Content-Type-Options: nosniff' was not detected. Browsers may attempt to MIME-sniff response bodies into executable types. Note: this is a defense-in-depth header configuration issue (CWE-693), not an active Cross-Site Scripting vulnerability.".to_string(),
                 "BaselineScanner".to_string(),
                 "1.0.0".to_string(),
-                Some("CWE-79".to_string()),
-                "Add 'X-Content-Type-Options: nosniff' to HTTP response headers.".to_string(),
+                Some("CWE-693".to_string()),
+                "Add 'X-Content-Type-Options: nosniff' to all HTTP response headers.".to_string(),
             ));
         }
 

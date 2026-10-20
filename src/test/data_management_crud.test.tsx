@@ -293,7 +293,7 @@ describe("Data Management & Complete CRUD Suite", () => {
       });
 
       // Switch to Targets tab
-      const targetsTabBtn = screen.getByTitle("Target & Scope");
+      const targetsTabBtn = screen.getByText("Projects & Targets");
       fireEvent.click(targetsTabBtn);
 
       await waitFor(() => {
@@ -310,7 +310,7 @@ describe("Data Management & Complete CRUD Suite", () => {
       });
 
       // Switch to Findings tab
-      const findingsTabBtn = screen.getByTitle("Vulnerability Findings");
+      const findingsTabBtn = screen.getByText("Findings");
       fireEvent.click(findingsTabBtn);
 
       await waitFor(() => {
@@ -339,7 +339,7 @@ describe("Data Management & Complete CRUD Suite", () => {
       });
 
       // Switch to Findings tab
-      const findingsTabBtn = screen.getByTitle("Vulnerability Findings");
+      const findingsTabBtn = screen.getByText("Findings");
       fireEvent.click(findingsTabBtn);
 
       await waitFor(() => {
@@ -362,21 +362,27 @@ describe("Data Management & Complete CRUD Suite", () => {
       });
     });
 
-    it("renders Scan Audit History tab with Audit Trail and Clear History controls", async () => {
+    it("renders Activity Monitor tab and opens Audit Trail dialog", async () => {
       await act(async () => {
         render(<App />);
       });
 
-      // Switch to History tab
-      const historyTabBtn = screen.getByTitle("Audit History");
-      fireEvent.click(historyTabBtn);
+      // Switch to Activity Monitor tab
+      const activityTabBtn = screen.getByText("Activity Monitor");
+      fireEvent.click(activityTabBtn);
 
       await waitFor(() => {
-        expect(screen.getByText(/Scan Audit History/i)).toBeInTheDocument();
+        expect(screen.getByText(/Activity Monitor & Diagnostics/i)).toBeInTheDocument();
       });
 
-      // Check Audit Trail button is present
-      expect(screen.getByRole("button", { name: /Audit Trail/i })).toBeInTheDocument();
+      // Check System Audit Log modal trigger is present in header
+      const auditLogBtn = screen.getByLabelText(/System audit log/i);
+      expect(auditLogBtn).toBeInTheDocument();
+      fireEvent.click(auditLogBtn);
+
+      await waitFor(() => {
+        expect(screen.getByText(/System Audit Trail/i)).toBeInTheDocument();
+      });
     });
 
     it("renders Discovered Endpoints in Crawler tab with Discovery and Refresh options", async () => {
@@ -384,9 +390,8 @@ describe("Data Management & Complete CRUD Suite", () => {
         render(<App />);
       });
 
-      // Switch to Crawler tab
-      const crawlerTabBtn = screen.getByTitle("Crawler & Discovered Endpoints");
-      fireEvent.click(crawlerTabBtn);
+      // Switch to Crawler tab via key shortcut 'Ctrl+5'
+      fireEvent.keyDown(window, { key: "5", code: "Digit5", ctrlKey: true });
 
       await waitFor(() => {
         expect(screen.getByText(/Bounded Low-Impact Crawler/i)).toBeInTheDocument();

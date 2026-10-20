@@ -90,10 +90,40 @@ pub struct Finding {
     pub fingerprint: String,
     #[serde(default = "default_validation_status")]
     pub validation_status: String,
+    #[serde(default)]
+    pub scan_id: Option<String>,
+    #[serde(default = "default_detection_method")]
+    pub detection_method: String,
+    #[serde(default = "default_detector_version")]
+    pub detector_version: String,
+    #[serde(default = "default_provenance_kind")]
+    pub provenance_kind: String,
+    #[serde(default = "default_verification_status")]
+    pub verification_status: String,
+    #[serde(default)]
+    pub is_simulated: bool,
+    #[serde(default)]
+    pub validation_notes: Option<String>,
 }
 
 fn default_validation_status() -> String {
     "NEEDS_VALIDATION".to_string()
+}
+
+fn default_detection_method() -> String {
+    "AutomatedDetection".to_string()
+}
+
+fn default_detector_version() -> String {
+    "1.0.0".to_string()
+}
+
+fn default_provenance_kind() -> String {
+    "Live".to_string()
+}
+
+fn default_verification_status() -> String {
+    "Potential".to_string()
 }
 
 impl Finding {
@@ -118,14 +148,70 @@ impl Finding {
             confidence,
             affected_asset,
             evidence,
-            source_tool,
-            tool_version,
+            source_tool: source_tool.clone(),
+            tool_version: tool_version.clone(),
             cwe,
             remediation,
             status: FindingStatus::NeedsValidation,
             created_at: chrono::Utc::now().to_rfc3339(),
             fingerprint,
             validation_status: "NEEDS_VALIDATION".to_string(),
+            scan_id: None,
+            detection_method: source_tool,
+            detector_version: tool_version,
+            provenance_kind: "Live".to_string(),
+            verification_status: "Potential".to_string(),
+            is_simulated: false,
+            validation_notes: None,
+        }
+    }
+
+    pub fn new_with_provenance(
+        target_id: String,
+        title: String,
+        severity: FindingSeverity,
+        confidence: u8,
+        affected_asset: String,
+        evidence: String,
+        source_tool: String,
+        tool_version: String,
+        cwe: Option<String>,
+        remediation: String,
+        scan_id: Option<String>,
+        detection_method: String,
+        detector_version: String,
+        provenance_kind: String,
+        verification_status: String,
+        is_simulated: bool,
+    ) -> Self {
+        let fingerprint = Self::calculate_fingerprint(&target_id, &title, &affected_asset);
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            target_id,
+            title,
+            severity,
+            confidence,
+            affected_asset,
+            evidence,
+            source_tool,
+            tool_version,
+            cwe,
+            remediation,
+            status: match verification_status.as_str() {
+                "Confirmed" | "CONFIRMED" => FindingStatus::Confirmed,
+                "FalsePositive" | "FALSE_POSITIVE" => FindingStatus::LikelyFalsePositive,
+                _ => FindingStatus::NeedsValidation,
+            },
+            created_at: chrono::Utc::now().to_rfc3339(),
+            fingerprint,
+            validation_status: verification_status.clone(),
+            scan_id,
+            detection_method,
+            detector_version,
+            provenance_kind,
+            verification_status,
+            is_simulated,
+            validation_notes: None,
         }
     }
 

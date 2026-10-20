@@ -350,10 +350,14 @@ export const FindingInlineDetailsAccordion: React.FC<FindingInlineDetailsAccordi
             type="detected_by"
             detail={`${finding.source_tool} ${finding.tool_version ? (finding.tool_version.startsWith("v") ? finding.tool_version : `v${finding.tool_version}`) : ""}`.trim()}
           />
-          {finding.validation_status === "Confirmed" ? (
-            <ProvenanceBadge type="observed" detail="Validated True Positive" />
+          {finding.is_simulated || finding.provenance_kind === "Simulated" ? (
+            <ProvenanceBadge type="simulated" detail="Demo Fixture (Synthetic)" />
+          ) : finding.verification_status === "Confirmed" || finding.validation_status === "Confirmed" || finding.validation_status === "CONFIRMED" ? (
+            <ProvenanceBadge type="confirmed" detail="Confirmed Active Probe" />
+          ) : finding.verification_status === "FalsePositive" || finding.validation_status === "LikelyFalsePositive" || finding.validation_status === "LIKELY_FALSE_POSITIVE" ? (
+            <ProvenanceBadge type="false_positive" detail="False Positive" />
           ) : (
-            <ProvenanceBadge type="not_verified" detail={finding.validation_status || "Needs Validation"} />
+            <ProvenanceBadge type="not_verified" detail={finding.verification_status || finding.validation_status || "Needs Validation"} />
           )}
         </div>
 

@@ -188,26 +188,56 @@ impl SecurityToolAdapter for SqlmapAdapter {
 
             logs.push(format!("[*] sqlmap safe injection audit against: {}", input.target_url));
 
+            let mut is_injection_confirmed = false;
+            let mut detected_technique = String::new();
+
             for line in stdout.lines() {
                 let trimmed = line.trim();
                 if trimmed.is_empty() {
                     continue;
                 }
-                if trimmed.contains("is vulnerable") || trimmed.contains("SQL injection") {
-                    findings.push(Finding::new(
-                        input.target_id.clone(),
-                        "Potential SQL Injection Detected".to_string(),
-                        FindingSeverity::Critical,
-                        90,
-                        input.target_url.clone(),
-                        trimmed.to_string(),
-                        "sqlmap".to_string(),
-                        "1.8.0".to_string(),
-                        Some("CWE-89".to_string()),
-                        "Use parameterized queries (prepared statements) or ORM to eliminate SQL injection.".to_string(),
-                    ));
+                
+                // Exclude tool banners, usage text, and generic probe progress messages
+                let is_banner_or_probe = trimmed.starts_with("sqlmap/")
+                    || trimmed.starts_with("[*] starting")
+                    || trimmed.contains("automatic SQL injection")
+                    || trimmed.contains("testing connection")
+                    || trimmed.contains("testing '")
+                    || trimmed.contains("testing for SQL injection");
+
+                if !is_banner_or_probe {
+                    if trimmed.contains("is vulnerable")
+                        || trimmed.contains("identified the following injection point")
+                        || trimmed.contains("back-end DBMS is")
+                    {
+                        is_injection_confirmed = true;
+                        detected_technique = trimmed.to_string();
+                    }
                 }
                 logs.push(trimmed.to_string());
+            }
+
+            if is_injection_confirmed {
+                let mut finding = Finding::new(
+                    input.target_id.clone(),
+                    "Confirmed SQL Injection (sqlmap verified)".to_string(),
+                    FindingSeverity::Critical,
+                    95,
+                    input.target_url.clone(),
+                    if detected_technique.is_empty() {
+                        "Target endpoint is confirmed vulnerable to SQL injection by sqlmap active probe.".to_string()
+                    } else {
+                        format!("sqlmap verified injection point: {}", detected_technique)
+                    },
+                    "sqlmap".to_string(),
+                    "1.8.0".to_string(),
+                    Some("CWE-89".to_string()),
+                    "Use parameterized queries (prepared statements) or ORM to eliminate SQL injection.".to_string(),
+                );
+                finding.verification_status = "Confirmed".to_string();
+                finding.provenance_kind = "ExternalTool".to_string();
+                finding.detection_method = "sqlmap-active-probe".to_string();
+                findings.push(finding);
             }
 
             let mut artifacts = HashMap::new();

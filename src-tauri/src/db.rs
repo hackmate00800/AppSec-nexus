@@ -69,6 +69,34 @@ impl Database {
             "ALTER TABLE findings ADD COLUMN validation_status TEXT DEFAULT 'NEEDS_VALIDATION'",
             [],
         );
+        let _ = conn.execute(
+            "ALTER TABLE findings ADD COLUMN scan_id TEXT DEFAULT ''",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE findings ADD COLUMN detection_method TEXT DEFAULT 'AutomatedDetection'",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE findings ADD COLUMN detector_version TEXT DEFAULT '1.0.0'",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE findings ADD COLUMN provenance_kind TEXT DEFAULT 'Live'",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE findings ADD COLUMN verification_status TEXT DEFAULT 'Potential'",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE findings ADD COLUMN is_simulated INTEGER DEFAULT 0",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE findings ADD COLUMN validation_notes TEXT DEFAULT ''",
+            [],
+        );
 
         let _ = conn.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_findings_fingerprint ON findings(fingerprint)",
@@ -852,13 +880,20 @@ impl Database {
         };
 
         conn.execute(
-            "INSERT INTO findings (id, target_id, title, severity, confidence, affected_asset, evidence, source_tool, tool_version, cwe, remediation, status, created_at, fingerprint, validation_status)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+            "INSERT INTO findings (id, target_id, title, severity, confidence, affected_asset, evidence, source_tool, tool_version, cwe, remediation, status, created_at, fingerprint, validation_status, scan_id, detection_method, detector_version, provenance_kind, verification_status, is_simulated, validation_notes)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)
              ON CONFLICT(fingerprint) DO UPDATE SET
                 evidence = excluded.evidence,
                 tool_version = excluded.tool_version,
                 created_at = excluded.created_at,
-                validation_status = excluded.validation_status",
+                validation_status = excluded.validation_status,
+                scan_id = excluded.scan_id,
+                detection_method = excluded.detection_method,
+                detector_version = excluded.detector_version,
+                provenance_kind = excluded.provenance_kind,
+                verification_status = excluded.verification_status,
+                is_simulated = excluded.is_simulated,
+                validation_notes = excluded.validation_notes",
             params![
                 finding.id,
                 finding.target_id,
@@ -874,7 +909,14 @@ impl Database {
                 status_str,
                 finding.created_at,
                 fingerprint,
-                val_status
+                val_status,
+                finding.scan_id.clone().unwrap_or_default(),
+                finding.detection_method,
+                finding.detector_version,
+                finding.provenance_kind,
+                finding.verification_status,
+                if finding.is_simulated { 1 } else { 0 },
+                finding.validation_notes.clone().unwrap_or_default()
             ],
         )?;
 
@@ -948,7 +990,7 @@ impl Database {
     pub fn get_findings(&self) -> Result<Vec<Finding>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT id, target_id, title, severity, confidence, affected_asset, evidence, source_tool, tool_version, cwe, remediation, status, created_at, COALESCE(fingerprint, ''), COALESCE(validation_status, 'NEEDS_VALIDATION') FROM findings ORDER BY created_at DESC"
+            "SELECT id, target_id, title, severity, confidence, affected_asset, evidence, source_tool, tool_version, cwe, remediation, status, created_at, COALESCE(fingerprint, ''), COALESCE(validation_status, 'NEEDS_VALIDATION'), COALESCE(scan_id, ''), COALESCE(detection_method, source_tool), COALESCE(detector_version, tool_version), COALESCE(provenance_kind, 'Live'), COALESCE(verification_status, 'Potential'), COALESCE(is_simulated, 0), COALESCE(validation_notes, '') FROM findings ORDER BY created_at DESC"
         )?;
 
         let rows = stmt.query_map([], |row| {
@@ -995,6 +1037,19 @@ impl Database {
                 created_at: row.get(12)?,
                 fingerprint: row.get(13)?,
                 validation_status: val_status,
+                scan_id: {
+                    let s: String = row.get(15).unwrap_or_default();
+                    if s.is_empty() { None } else { Some(s) }
+                },
+                detection_method: row.get(16).unwrap_or_else(|_| "AutomatedDetection".to_string()),
+                detector_version: row.get(17).unwrap_or_else(|_| "1.0.0".to_string()),
+                provenance_kind: row.get(18).unwrap_or_else(|_| "Live".to_string()),
+                verification_status: row.get(19).unwrap_or_else(|_| "Potential".to_string()),
+                is_simulated: row.get::<_, i64>(20).unwrap_or(0) == 1,
+                validation_notes: {
+                    let n: String = row.get(21).unwrap_or_default();
+                    if n.is_empty() { None } else { Some(n) }
+                },
             })
         })?;
 
@@ -1075,9 +1130,17 @@ impl Database {
 
     pub fn update_finding_validation(&self, finding_id: &str, status: &str, confidence: u8) -> Result<()> {
         let conn = self.conn.lock().unwrap();
+        let verif_status = match status {
+            "CONFIRMED" | "Confirmed" => "Confirmed",
+            "LIKELY_TRUE_POSITIVE" | "LikelyTruePositive" => "Confirmed",
+            "LIKELY_FALSE_POSITIVE" | "LikelyFalsePositive" => "FalsePositive",
+            "UNCONFIRMED" | "Unconfirmed" => "Inconclusive",
+            "VALIDATION_FAILED" | "ValidationFailed" => "ScanError",
+            _ => "Potential",
+        };
         conn.execute(
-            "UPDATE findings SET status = ?1, validation_status = ?2, confidence = ?3 WHERE id = ?4",
-            params![status, status, confidence, finding_id],
+            "UPDATE findings SET status = ?1, validation_status = ?2, verification_status = ?3, confidence = ?4 WHERE id = ?5",
+            params![status, status, verif_status, confidence, finding_id],
         )?;
         Ok(())
     }
@@ -1245,7 +1308,7 @@ impl Database {
     pub fn get_finding_by_id(&self, id: &str) -> Result<Option<Finding>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT id, target_id, title, severity, confidence, affected_asset, evidence, source_tool, tool_version, cwe, remediation, status, created_at, COALESCE(fingerprint, ''), COALESCE(validation_status, 'NEEDS_VALIDATION') FROM findings WHERE id = ?1 LIMIT 1"
+            "SELECT id, target_id, title, severity, confidence, affected_asset, evidence, source_tool, tool_version, cwe, remediation, status, created_at, COALESCE(fingerprint, ''), COALESCE(validation_status, 'NEEDS_VALIDATION'), COALESCE(scan_id, ''), COALESCE(detection_method, source_tool), COALESCE(detector_version, tool_version), COALESCE(provenance_kind, 'Live'), COALESCE(verification_status, 'Potential'), COALESCE(is_simulated, 0), COALESCE(validation_notes, '') FROM findings WHERE id = ?1 LIMIT 1"
         )?;
 
         let mut rows = stmt.query_map(params![id], |row| {
@@ -1291,6 +1354,19 @@ impl Database {
                 created_at: row.get(12)?,
                 fingerprint: row.get(13)?,
                 validation_status: row.get(14)?,
+                scan_id: {
+                    let s: String = row.get(15).unwrap_or_default();
+                    if s.is_empty() { None } else { Some(s) }
+                },
+                detection_method: row.get(16).unwrap_or_else(|_| "AutomatedDetection".to_string()),
+                detector_version: row.get(17).unwrap_or_else(|_| "1.0.0".to_string()),
+                provenance_kind: row.get(18).unwrap_or_else(|_| "Live".to_string()),
+                verification_status: row.get(19).unwrap_or_else(|_| "Potential".to_string()),
+                is_simulated: row.get::<_, i64>(20).unwrap_or(0) == 1,
+                validation_notes: {
+                    let n: String = row.get(21).unwrap_or_default();
+                    if n.is_empty() { None } else { Some(n) }
+                },
             })
         })?;
 

@@ -252,7 +252,12 @@ async fn run_scan(
             let findings = BaselineScanner::scan_url(&target.id, &target.primary_url).await?;
 
             for finding in &findings {
-                let _ = state.db.insert_finding(finding);
+                let mut f = finding.clone();
+                f.scan_id = Some(scan_id.clone());
+                f.detection_method = "BaselineScanner".to_string();
+                f.provenance_kind = "Live".to_string();
+                f.verification_status = "Potential".to_string();
+                let _ = state.db.insert_finding(&f);
                 let _ = state.db.insert_scan_event(&ScanEvent {
                     id: Uuid::new_v4().to_string(),
                     scan_id: scan_id.clone(),
@@ -301,7 +306,12 @@ async fn run_scan(
                 .await?;
 
             for finding in &findings {
-                let _ = state.db.insert_finding(finding);
+                let mut f = finding.clone();
+                f.scan_id = Some(scan_id.clone());
+                f.detection_method = "NucleiTemplateMatch".to_string();
+                f.provenance_kind = "ExternalTool".to_string();
+                f.verification_status = "Potential".to_string();
+                let _ = state.db.insert_finding(&f);
                 let _ = state.db.insert_scan_event(&ScanEvent {
                     id: Uuid::new_v4().to_string(),
                     scan_id: scan_id.clone(),
@@ -328,7 +338,12 @@ async fn run_scan(
                 .await?;
 
             for finding in &findings {
-                let _ = state.db.insert_finding(finding);
+                let mut f = finding.clone();
+                f.scan_id = Some(scan_id.clone());
+                f.detection_method = "NmapServiceDiscovery".to_string();
+                f.provenance_kind = "ExternalTool".to_string();
+                f.verification_status = "Potential".to_string();
+                let _ = state.db.insert_finding(&f);
                 let _ = state.db.insert_scan_event(&ScanEvent {
                     id: Uuid::new_v4().to_string(),
                     scan_id: scan_id.clone(),
@@ -1214,7 +1229,14 @@ async fn execute_tool_adapter(
     };
 
     for finding in &output.findings {
-        let _ = state.db.insert_finding(finding);
+        let mut f = finding.clone();
+        if f.scan_id.is_none() {
+            f.scan_id = Some(scan_id.clone());
+        }
+        if f.detection_method == "AutomatedDetection" || f.detection_method.is_empty() {
+            f.detection_method = tool_id.clone();
+        }
+        let _ = state.db.insert_finding(&f);
         let f_evt = ScanEvent {
             id: Uuid::new_v4().to_string(),
             scan_id: scan_id.clone(),

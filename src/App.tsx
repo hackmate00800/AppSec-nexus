@@ -325,7 +325,7 @@ export default function App() {
   // Auto-collapse sidebar on smaller screens (tablet/mobile viewports < 800px)
   useEffect(() => {
     const handleWindowResize = () => {
-      if (typeof window !== 'undefined' && window.innerWidth < 800 && sidebarWidth > 80) {
+      if (typeof window !== 'undefined' && window.innerWidth > 0 && window.innerWidth < 800 && sidebarWidth > 80) {
         setSidebarWidth(60);
       }
     };
@@ -3898,13 +3898,9 @@ export default function App() {
                                   <td>
                                     <SeverityBadge severity={f.severity} size="sm" />
                                   </td>
-                                  <td style={{ fontWeight: 600 }}>{f.title}</td>
+                                  <td style={{ fontWeight: 600 }}>{f.title}{(f.is_simulated || f.provenance_kind === "Simulated") && (<span style={{ marginLeft: "8px", fontSize: "0.65rem", padding: "1px 5px", borderRadius: "3px", background: "rgba(245, 158, 11, 0.15)", color: "#f59e0b", border: "1px solid rgba(245, 158, 11, 0.4)", fontWeight: 700 }} title="Simulated demo fixture">SIMULATED</span>)}</td>
                                   <td>
-                                    <ValidationBadge
-                                      status={f.validation_status || f.status}
-                                      confidence={f.confidence}
-                                      size="sm"
-                                    />
+                                    <ValidationBadge status={(f.is_simulated || f.provenance_kind === "Simulated") ? "simulated" : (f.verification_status || f.validation_status || f.status)} confidence={f.confidence} size="sm" />
                                   </td>
                                   <td onClick={(e) => e.stopPropagation()}>
                                     <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>

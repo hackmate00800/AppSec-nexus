@@ -22,6 +22,7 @@ import { ALL_SECURITY_CATEGORIES } from "../categories/registry";
 import { getCategoryIcon } from "../categories/CategorySelector";
 import { sanitizeEvidence } from "../categories/validationRules";
 import { Finding } from "../types";
+import { invoke } from "@tauri-apps/api/core";
 
 interface ChecklistPlaybookCenterProps {
   initialCategory?: SecurityCategory;
@@ -317,7 +318,7 @@ export const ChecklistPlaybookCenter: React.FC<ChecklistPlaybookCenterProps> = (
     setIsNewRunModalOpen(false);
   };
 
-  // Create finding from checklist item
+  // Create finding from checklist item with honest verification state and provenance
   const handleCreateFinding = (item: ChecklistItemTemplate) => {
     if (!onFindingsAdded || !activeRun) return;
     const record = activeRun.itemResults[item.id];
@@ -327,17 +328,43 @@ export const ChecklistPlaybookCenter: React.FC<ChecklistPlaybookCenterProps> = (
       target_id: activeRun.targetId,
       title: `${item.code}: ${item.title}`,
       severity: item.defaultSeverity,
-      confidence: 90,
+      confidence: 85,
       affected_asset: activeRun.targetUrl,
-      evidence: record?.evidenceSnippet || "Verified during playbook assessment.",
+      evidence: record?.evidenceSnippet || "Observed during checklist playbook assessment.",
       source_tool: record?.toolsUsed || item.recommendedTools[0] || "Checklist Playbook",
       tool_version: "1.0",
       cwe: item.cwe,
       remediation: item.remediationGuidance,
-      status: "New",
+      status: "NeedsValidation",
       created_at: new Date().toISOString(),
-      validation_status: "CONFIRMED",
+      validation_status: "NEEDS_VALIDATION",
+      verification_status: "Potential",
+      provenance_kind: "Live",
+      is_simulated: false,
+      detection_method: "ChecklistPlaybookAudit",
+      detector_version: "1.0",
+      scan_id: activeRun.id,
     };
+
+    // Save to database via Tauri command if available
+    try {
+      invoke("create_finding", {
+        targetId: newFinding.target_id,
+        title: newFinding.title,
+        severity: newFinding.severity,
+        confidence: newFinding.confidence,
+        affectedAsset: newFinding.affected_asset,
+        evidence: newFinding.evidence,
+        sourceTool: newFinding.source_tool,
+        cwe: newFinding.cwe || null,
+        remediation: newFinding.remediation,
+        status: newFinding.status,
+      }).catch((err) => {
+        console.warn("Auto-persisting checklist finding to DB:", err);
+      });
+    } catch (e) {
+      console.warn("invoke not available:", e);
+    }
 
     onFindingsAdded([newFinding]);
     handleUpdateItemResult(item.id, {

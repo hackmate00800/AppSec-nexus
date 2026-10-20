@@ -233,7 +233,37 @@ export function ValidationBadge({
   switch (normStatus.toLowerCase()) {
     case "confirmed":
       label = "CONFIRMED";
-      color = "var(--accent-rose)";
+      color = "#10b981";
+      bg = "rgba(16, 185, 129, 0.15)";
+      border = "rgba(16, 185, 129, 0.4)";
+      break;
+    case "potential":
+      label = "POTENTIAL";
+      color = "#38bdf8";
+      bg = "rgba(56, 189, 248, 0.15)";
+      border = "rgba(56, 189, 248, 0.4)";
+      break;
+    case "inconclusive":
+      label = "INCONCLUSIVE";
+      color = "#eab308";
+      bg = "rgba(234, 179, 8, 0.15)";
+      border = "rgba(234, 179, 8, 0.4)";
+      break;
+    case "falsepositive":
+      label = "FALSE POSITIVE";
+      color = "#94a3b8";
+      bg = "rgba(148, 163, 184, 0.15)";
+      border = "rgba(148, 163, 184, 0.4)";
+      break;
+    case "simulated":
+      label = "SIMULATED / DEMO";
+      color = "#f59e0b";
+      bg = "rgba(245, 158, 11, 0.15)";
+      border = "rgba(245, 158, 11, 0.4)";
+      break;
+    case "scanerror":
+      label = "SCAN ERROR";
+      color = "#f43f5e";
       bg = "rgba(244, 63, 94, 0.15)";
       border = "rgba(244, 63, 94, 0.4)";
       break;
@@ -277,6 +307,7 @@ export function ValidationBadge({
 
   return (
     <span
+      role="status"
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -326,7 +357,12 @@ export type ProvenanceType =
   | "detected_by"
   | "inferred"
   | "ai_explanation"
-  | "not_verified";
+  | "not_verified"
+  | "simulated"
+  | "confirmed"
+  | "false_positive"
+  | "inconclusive"
+  | "scan_error";
 
 interface ProvenanceBadgeProps {
   type: ProvenanceType;
@@ -374,6 +410,41 @@ export function ProvenanceBadge({ type, detail, className = "", style = {} }: Pr
       color: "var(--accent-rose)",
       bg: "rgba(244, 63, 94, 0.12)",
       border: "rgba(244, 63, 94, 0.35)",
+    },
+    simulated: {
+      label: "[Simulated / Demo]",
+      title: "Synthetically generated test or demo fixture — not from a live target scan",
+      color: "#f59e0b",
+      bg: "rgba(245, 158, 11, 0.15)",
+      border: "rgba(245, 158, 11, 0.4)",
+    },
+    confirmed: {
+      label: "[Confirmed]",
+      title: "Directly verified and confirmed via active probe reproduction",
+      color: "#10b981",
+      bg: "rgba(16, 185, 129, 0.15)",
+      border: "rgba(16, 185, 129, 0.4)",
+    },
+    false_positive: {
+      label: "[False Positive]",
+      title: "Contradicted by deterministic active validation probe",
+      color: "#94a3b8",
+      bg: "rgba(148, 163, 184, 0.15)",
+      border: "rgba(148, 163, 184, 0.35)",
+    },
+    inconclusive: {
+      label: "[Inconclusive]",
+      title: "Insufficient evidence or unexpected target behavior during verification",
+      color: "#eab308",
+      bg: "rgba(234, 179, 8, 0.15)",
+      border: "rgba(234, 179, 8, 0.4)",
+    },
+    scan_error: {
+      label: "[Scan Error]",
+      title: "Target unreachable, connection timeout, or tool execution failure",
+      color: "#f43f5e",
+      bg: "rgba(244, 63, 94, 0.15)",
+      border: "rgba(244, 63, 94, 0.4)",
     },
   };
 

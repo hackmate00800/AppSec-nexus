@@ -49,6 +49,20 @@ export interface ValidationRecord {
   error_message?: string;
 }
 
+export type ProvenanceKind =
+  | "Live"
+  | "StaticAnalysis"
+  | "ExternalTool"
+  | "Simulated";
+
+export type VerificationStatus =
+  | "Confirmed"
+  | "Potential"
+  | "Inconclusive"
+  | "FalsePositive"
+  | "Simulated"
+  | "ScanError";
+
 export interface Finding {
   id: string;
   target_id: string;
@@ -65,6 +79,13 @@ export interface Finding {
   created_at: string;
   fingerprint?: string;
   validation_status?: string;
+  scan_id?: string;
+  detection_method?: string;
+  detector_version?: string;
+  provenance_kind?: ProvenanceKind;
+  verification_status?: VerificationStatus;
+  is_simulated?: boolean;
+  validation_notes?: string;
 }
 
 export interface FindingUpdatePayload {
