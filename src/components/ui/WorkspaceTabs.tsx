@@ -1,5 +1,6 @@
 import React, { useState, useRef } from "react";
 import {
+  ShieldCheck,
   X,
   Plus,
   ChevronLeft,
@@ -93,6 +94,12 @@ const ALL_TABS_META: Record<string, TabMeta> = {
     id: "findings",
     label: "Findings & Triage",
     icon: <AlertTriangle size={14} />,
+    closable: true,
+  },
+  verificationLab: {
+    id: "verificationLab",
+    label: "Verification Lab",
+    icon: <ShieldCheck size={14} />,
     closable: true,
   },
   issues: {

@@ -570,6 +570,31 @@ fn get_validation_history(
 }
 
 #[tauri::command]
+fn get_all_validation_records(
+    state: State<'_, AppState>,
+) -> Result<Vec<validator::ValidationRecord>, String> {
+    state.db.get_validation_history("all").map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn clear_validation_history(
+    state: State<'_, AppState>,
+    finding_id: Option<String>,
+) -> Result<(), String> {
+    state.db.clear_validation_history(finding_id.as_deref()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn update_finding_verification(
+    state: State<'_, AppState>,
+    finding_id: String,
+    verification_status: String,
+    notes: Option<String>,
+) -> Result<(), String> {
+    state.db.update_finding_verification(&finding_id, &verification_status, notes.as_deref()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn chat_with_mentor(
     state: State<'_, AppState>,
     model: String,
@@ -2106,6 +2131,9 @@ pub fn run() {
             validate_finding,
             validate_all_findings,
             get_validation_history,
+            get_all_validation_records,
+            clear_validation_history,
+            update_finding_verification,
             update_target,
             delete_target,
             create_finding,

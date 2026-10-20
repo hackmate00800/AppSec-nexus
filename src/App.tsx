@@ -174,6 +174,9 @@ const InteractiveDiagramLibrary = lazy(() =>
 const ActivityMonitor = lazy(() =>
   import("./activity/ActivityMonitor").then((m) => ({ default: m.ActivityMonitor }))
 );
+const VulnerabilityVerificationLab = lazy(() =>
+  import("./verification/VulnerabilityVerificationLab").then((m) => ({ default: m.VulnerabilityVerificationLab }))
+);
 const GlossaryLibrary = lazy(() =>
   import("./research/GlossaryLibrary").then((m) => ({ default: m.GlossaryLibrary }))
 );
@@ -226,6 +229,7 @@ export type TabType =
   | "activity"
   | "terminal"
   | "findings"
+  | "verificationLab"
   | "issues"
   | "importer"
   | "mentor"
@@ -2042,6 +2046,7 @@ export default function App() {
           readyToolsCount={readyToolsCount}
           scanHistoryCount={scanHistory.length}
           hasRunningAiTask={hasRunningTask}
+          unverifiedFindingsCount={findings.filter((f) => !f.verification_status || f.verification_status === "Potential" || f.status === "NeedsValidation").length}
         />
 
         {/* Center Workspace */}
@@ -4096,6 +4101,10 @@ export default function App() {
                                           setActiveFindingDetail(f);
                                           setSelectedFinding(f);
                                         }}
+                                        onOpenVerificationLab={(item) => {
+                                          setSelectedFinding(item);
+                                          setActiveTab("verificationLab");
+                                        }}
                                       />
                                     </td>
                                   </tr>
@@ -4294,6 +4303,10 @@ export default function App() {
                                   onInspectFull={() => {
                                     setActiveFindingDetail(f);
                                     setSelectedFinding(f);
+                                  }}
+                                  onOpenVerificationLab={(item) => {
+                                    setSelectedFinding(item);
+                                    setActiveTab("verificationLab");
                                   }}
                                 />
                               </div>
@@ -5606,6 +5619,25 @@ export default function App() {
                   setSelectedModel(modelName);
                   setActiveTab("mentor");
                 }}
+              />
+            </Suspense>
+          )}
+
+          {/* TAB: VULNERABILITY VERIFICATION LAB */}
+          {activeTab === "verificationLab" && (
+            <Suspense fallback={<TabLoadingSkeleton />}>
+              <VulnerabilityVerificationLab
+                findings={findings}
+                targets={targets}
+                selectedTarget={selectedTarget}
+                onSelectTarget={(t) => setSelectedTarget(t)}
+                onRefreshData={loadInitialData}
+                onNavigateTab={(tab) => setActiveTab(tab as TabType)}
+                onAskAiMentorWithPrompt={(prompt) => {
+                  setExternalMentorPrompt(prompt);
+                  setActiveTab("mentor");
+                }}
+                initialSelectedFinding={selectedFinding}
               />
             </Suspense>
           )}

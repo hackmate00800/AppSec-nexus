@@ -1091,41 +1091,109 @@ impl Database {
 
     pub fn get_validation_history(&self, finding_id: &str) -> Result<Vec<crate::validator::ValidationRecord>> {
         let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare(
-            "SELECT id, finding_id, target_id, status, hypothesis, test_method, preconditions, expected_observation, actual_observation, supporting_evidence, contradicting_evidence, confidence_score, confidence_rationale, executed_at, duration_ms, error_message
-             FROM validation_records WHERE finding_id = ?1 ORDER BY executed_at DESC"
-        )?;
-
-        let rows = stmt.query_map(params![finding_id], |row| {
-            let conf: i64 = row.get(11)?;
-            let dur: i64 = row.get(14)?;
-            Ok(crate::validator::ValidationRecord {
-                id: row.get(0)?,
-                finding_id: row.get(1)?,
-                target_id: row.get(2)?,
-                status: row.get(3)?,
-                hypothesis: row.get(4)?,
-                test_method: row.get(5)?,
-                preconditions: row.get(6)?,
-                expected_observation: row.get(7)?,
-                actual_observation: row.get(8)?,
-                supporting_evidence: row.get(9)?,
-                contradicting_evidence: row.get(10)?,
-                confidence_score: conf as u8,
-                confidence_rationale: row.get(12)?,
-                executed_at: row.get(13)?,
-                duration_ms: dur as u64,
-                error_message: row.get(15)?,
-            })
-        })?;
-
+        let is_all = finding_id.is_empty() || finding_id.eq_ignore_ascii_case("all");
         let mut list = Vec::new();
-        for r in rows {
-            if let Ok(rec) = r {
-                list.push(rec);
+
+        if is_all {
+            let mut stmt = conn.prepare(
+                "SELECT id, finding_id, target_id, status, hypothesis, test_method, preconditions, expected_observation, actual_observation, supporting_evidence, contradicting_evidence, confidence_score, confidence_rationale, executed_at, duration_ms, error_message
+                 FROM validation_records ORDER BY executed_at DESC"
+            )?;
+            let rows = stmt.query_map([], |row| {
+                let conf: i64 = row.get(11)?;
+                let dur: i64 = row.get(14)?;
+                Ok(crate::validator::ValidationRecord {
+                    id: row.get(0)?,
+                    finding_id: row.get(1)?,
+                    target_id: row.get(2)?,
+                    status: row.get(3)?,
+                    hypothesis: row.get(4)?,
+                    test_method: row.get(5)?,
+                    preconditions: row.get(6)?,
+                    expected_observation: row.get(7)?,
+                    actual_observation: row.get(8)?,
+                    supporting_evidence: row.get(9)?,
+                    contradicting_evidence: row.get(10)?,
+                    confidence_score: conf as u8,
+                    confidence_rationale: row.get(12)?,
+                    executed_at: row.get(13)?,
+                    duration_ms: dur as u64,
+                    error_message: row.get(15)?,
+                })
+            })?;
+            for r in rows {
+                if let Ok(rec) = r {
+                    list.push(rec);
+                }
+            }
+        } else {
+            let mut stmt = conn.prepare(
+                "SELECT id, finding_id, target_id, status, hypothesis, test_method, preconditions, expected_observation, actual_observation, supporting_evidence, contradicting_evidence, confidence_score, confidence_rationale, executed_at, duration_ms, error_message
+                 FROM validation_records WHERE finding_id = ?1 ORDER BY executed_at DESC"
+            )?;
+            let rows = stmt.query_map(params![finding_id], |row| {
+                let conf: i64 = row.get(11)?;
+                let dur: i64 = row.get(14)?;
+                Ok(crate::validator::ValidationRecord {
+                    id: row.get(0)?,
+                    finding_id: row.get(1)?,
+                    target_id: row.get(2)?,
+                    status: row.get(3)?,
+                    hypothesis: row.get(4)?,
+                    test_method: row.get(5)?,
+                    preconditions: row.get(6)?,
+                    expected_observation: row.get(7)?,
+                    actual_observation: row.get(8)?,
+                    supporting_evidence: row.get(9)?,
+                    contradicting_evidence: row.get(10)?,
+                    confidence_score: conf as u8,
+                    confidence_rationale: row.get(12)?,
+                    executed_at: row.get(13)?,
+                    duration_ms: dur as u64,
+                    error_message: row.get(15)?,
+                })
+            })?;
+            for r in rows {
+                if let Ok(rec) = r {
+                    list.push(rec);
+                }
             }
         }
         Ok(list)
+    }
+
+    pub fn clear_validation_history(&self, finding_id: Option<&str>) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        if let Some(fid) = finding_id {
+            if !fid.is_empty() && !fid.eq_ignore_ascii_case("all") {
+                conn.execute("DELETE FROM validation_records WHERE finding_id = ?1", params![fid])?;
+                return Ok(());
+            }
+        }
+        conn.execute("DELETE FROM validation_records", [])?;
+        Ok(())
+    }
+
+    pub fn update_finding_verification(
+        &self,
+        finding_id: &str,
+        verification_status: &str,
+        notes: Option<&str>,
+    ) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let status = match verification_status {
+            "Confirmed" => "CONFIRMED",
+            "Potential" => "NEEDS_VALIDATION",
+            "FalsePositive" => "LIKELY_FALSE_POSITIVE",
+            "Inconclusive" => "UNCONFIRMED",
+            "ScanError" => "VALIDATION_FAILED",
+            _ => "NEEDS_VALIDATION",
+        };
+        conn.execute(
+            "UPDATE findings SET verification_status = ?1, status = ?2, validation_status = ?3, validation_notes = ?4 WHERE id = ?5",
+            params![verification_status, status, status, notes.unwrap_or(""), finding_id],
+        )?;
+        Ok(())
     }
 
     pub fn update_finding_validation(&self, finding_id: &str, status: &str, confidence: u8) -> Result<()> {

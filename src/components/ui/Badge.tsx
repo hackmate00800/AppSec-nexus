@@ -362,7 +362,11 @@ export type ProvenanceType =
   | "confirmed"
   | "false_positive"
   | "inconclusive"
-  | "scan_error";
+  | "scan_error"
+  | "Live"
+  | "StaticAnalysis"
+  | "ExternalTool"
+  | "Simulated";
 
 interface ProvenanceBadgeProps {
   type: ProvenanceType;
@@ -445,6 +449,34 @@ export function ProvenanceBadge({ type, detail, className = "", style = {} }: Pr
       color: "#f43f5e",
       bg: "rgba(244, 63, 94, 0.15)",
       border: "rgba(244, 63, 94, 0.4)",
+    },
+    Live: {
+      label: "[Live Probe]",
+      title: "Directly captured from live HTTP target response or verified endpoint probe",
+      color: "var(--accent-cyan)",
+      bg: "rgba(6, 182, 212, 0.12)",
+      border: "rgba(6, 182, 212, 0.35)",
+    },
+    StaticAnalysis: {
+      label: "[Static Code]",
+      title: "Syntactic or semantic pattern match from static analysis tools",
+      color: "#a855f7",
+      bg: "rgba(168, 85, 247, 0.12)",
+      border: "rgba(168, 85, 247, 0.35)",
+    },
+    ExternalTool: {
+      label: "[Tool Output]",
+      title: "Direct output parsed from an external CLI subprocess security tool",
+      color: "#60a5fa",
+      bg: "rgba(59, 130, 246, 0.12)",
+      border: "rgba(59, 130, 246, 0.35)",
+    },
+    Simulated: {
+      label: "[Simulated / Demo]",
+      title: "Synthetically generated test or demo fixture — not from a live target scan",
+      color: "#f59e0b",
+      bg: "rgba(245, 158, 11, 0.15)",
+      border: "rgba(245, 158, 11, 0.4)",
     },
   };
 

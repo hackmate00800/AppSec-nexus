@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  ShieldCheck,
   ChevronRight,
   ArrowLeft,
   Activity,
@@ -45,6 +46,7 @@ const TAB_CONFIG: Record<string, { label: string; group: string; icon: React.Rea
   burp: { label: "Burp Suite", group: "Discovery & Audit", icon: <Radio size={14} /> },
   hostmobile: { label: "Host & Mobile", group: "Discovery & Audit", icon: <Monitor size={14} /> },
   findings: { label: "Vulnerability Findings", group: "Findings & Intel", icon: <AlertTriangle size={14} /> },
+  verificationLab: { label: "Verification Lab", group: "Operations", icon: <ShieldCheck size={14} /> },
   issues: { label: "Issues & Reports", group: "Findings & Intel", icon: <ClipboardList size={14} /> },
   importer: { label: "Import Reports", group: "Findings & Intel", icon: <UploadCloud size={14} /> },
   categoryWorkflow: { label: "Category Intel", group: "Findings & Intel", icon: <Layers size={14} /> },

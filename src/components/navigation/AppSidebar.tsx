@@ -21,6 +21,7 @@ import {
   PanelLeftClose,
   PanelLeft,
   Shield,
+  ShieldCheck,
   ShieldAlert,
   BookA,
   Wrench,
@@ -57,6 +58,7 @@ interface AppSidebarProps {
   readyToolsCount: number;
   scanHistoryCount: number;
   hasRunningAiTask: boolean;
+  unverifiedFindingsCount?: number;
 }
 
 export const AppSidebar: React.FC<AppSidebarProps> = ({
@@ -72,6 +74,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
   readyToolsCount,
   scanHistoryCount,
   hasRunningAiTask,
+  unverifiedFindingsCount = 0,
 }) => {
   // Track collapsed groups
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({
@@ -158,6 +161,19 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             ) : undefined,
           tooltip: "Vulnerability Findings & Evidence",
           dataTour: "sidebar-findings",
+        },
+        {
+          id: "verificationLab",
+          label: "Vulnerability Verification Lab",
+          icon: <ShieldCheck size={15} />,
+          badge:
+            unverifiedFindingsCount > 0 ? (
+              <span className="px-1.5 py-0.2 text-[10px] font-semibold rounded-full bg-cyan-950/80 text-cyan-300 border border-cyan-800/80">
+                {unverifiedFindingsCount}
+              </span>
+            ) : undefined,
+          tooltip: "Evidence-Based Vulnerability Verification & False-Positive Elimination",
+          dataTour: "sidebar-verification-lab",
         },
         {
           id: "issues",

@@ -42,6 +42,7 @@ export interface FindingInlineDetailsAccordionProps {
   onValidateFinding?: (findingId: string) => Promise<ValidationRecord | void>;
   onFindingUpdated?: (finding: Finding) => void;
   onInspectFull?: () => void;
+  onOpenVerificationLab?: (finding: Finding) => void;
 }
 
 export const FindingInlineDetailsAccordion: React.FC<FindingInlineDetailsAccordionProps> = ({
@@ -52,6 +53,7 @@ export const FindingInlineDetailsAccordion: React.FC<FindingInlineDetailsAccordi
   onValidateFinding,
   onFindingUpdated,
   onInspectFull,
+  onOpenVerificationLab,
 }) => {
   // Trace and scan events state for this specific finding
   const [trace, setTrace] = useState<FindingDetectionTrace | null>(null);
@@ -1009,6 +1011,26 @@ export const FindingInlineDetailsAccordion: React.FC<FindingInlineDetailsAccordi
                 />
               </div>
 
+              {onOpenVerificationLab && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => onOpenVerificationLab(finding)}
+                  style={{
+                    padding: "3px 8px",
+                    fontSize: "0.7rem",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    borderColor: "var(--accent-cyan)",
+                    color: "var(--accent-cyan)",
+                  }}
+                  title="Open finding in Vulnerability Verification Lab"
+                >
+                  <ShieldCheck size={12} />
+                  <span>Verify in Lab</span>
+                </button>
+              )}
               <button
                 type="button"
                 className="btn btn-secondary"
