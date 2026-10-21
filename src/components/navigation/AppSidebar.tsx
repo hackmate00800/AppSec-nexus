@@ -112,7 +112,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           icon: <Shield size={15} />,
           badge:
             endpointsCount > 0 ? (
-              <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-slate-800 text-slate-400">
+              <span className="sidebar-badge">
                 {endpointsCount}
               </span>
             ) : undefined,
@@ -123,7 +123,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           label: "Tool Integrations",
           icon: <Wrench size={15} />,
           badge: (
-            <span className="px-1.5 py-0.2 text-[10px] font-semibold rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-800/80">
+            <span className="sidebar-badge sidebar-badge-success">
               {readyToolsCount > 0 ? readyToolsCount : 20}
             </span>
           ),
@@ -142,7 +142,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           icon: <Activity size={15} />,
           badge:
             scanHistoryCount > 0 ? (
-              <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-slate-800 text-slate-400">
+              <span className="sidebar-badge">
                 {scanHistoryCount}
               </span>
             ) : undefined,
@@ -155,7 +155,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           icon: <AlertTriangle size={15} />,
           badge:
             findingsCount > 0 ? (
-              <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-rose-950/80 text-rose-300 border border-rose-800/80">
+              <span className="sidebar-badge sidebar-badge-alert font-bold">
                 {findingsCount}
               </span>
             ) : undefined,
@@ -168,7 +168,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           icon: <ShieldCheck size={15} />,
           badge:
             unverifiedFindingsCount > 0 ? (
-              <span className="px-1.5 py-0.2 text-[10px] font-semibold rounded-full bg-cyan-950/80 text-cyan-300 border border-cyan-800/80">
+              <span className="sidebar-badge sidebar-badge-accent">
                 {unverifiedFindingsCount}
               </span>
             ) : undefined,
@@ -240,7 +240,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           label: "AI Mentor",
           icon: <Sparkles size={15} />,
           badge: hasRunningAiTask ? (
-            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+            <span className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: "var(--accent-primary)" }} />
           ) : undefined,
           tooltip: "Interactive AI Mentor & Security Copilot",
         },
@@ -255,7 +255,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           label: "Model Lab",
           icon: <Bot size={15} />,
           badge: (
-            <span className="px-1.5 py-0.2 text-[10px] font-semibold rounded bg-cyan-950 text-cyan-300 border border-cyan-800">
+            <span className="sidebar-badge sidebar-badge-accent">
               Heretic
             </span>
           ),
@@ -284,7 +284,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           label: "Integrations & Proxy",
           icon: <Radio size={15} />,
           badge: (
-            <span className="px-1.5 py-0.2 text-[10px] font-bold rounded bg-amber-950/80 text-amber-300 border border-amber-800/80">
+            <span className="sidebar-badge sidebar-badge-warning">
               Burp
             </span>
           ),
@@ -296,7 +296,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
 
   return (
     <aside
-      className="sidebar relative flex flex-col bg-slate-950 border-r border-slate-800/80 select-none z-20 shrink-0 transition-all duration-150"
+      className="sidebar relative flex flex-col select-none z-20 shrink-0 transition-all duration-150"
       style={{
         width: isCollapsed ? 60 : `${width}px`,
         minWidth: isCollapsed ? 60 : `${width}px`,
@@ -308,8 +308,8 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           onPointerDown={onResizePointerDown}
           onDoubleClick={onToggleCollapse}
           title="Drag to resize sidebar width, double-click to collapse"
-          className={`absolute top-0 right-0 w-1.5 h-full cursor-col-resize z-30 transition-colors ${
-            isResizing ? "bg-cyan-500 shadow-md shadow-cyan-500/50" : "hover:bg-cyan-500/50 bg-transparent"
+          className={`sidebar-resizer-line absolute top-0 right-0 w-1.5 h-full cursor-col-resize z-30 ${
+            isResizing ? "is-resizing" : ""
           }`}
         />
       )}
@@ -325,15 +325,15 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
               {!isCollapsed ? (
                 <button
                   onClick={() => toggleGroup(group.id)}
-                  className="w-full flex items-center justify-between px-2 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider hover:text-slate-200 transition-colors group cursor-pointer"
+                  className="sidebar-group-header group"
                 >
                   <span>{group.label}</span>
-                  <span className="text-slate-500 group-hover:text-slate-300">
+                  <span className="group-chevron">
                     {isGroupCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
                   </span>
                 </button>
               ) : (
-                <div className="w-full h-px bg-slate-800 my-2" />
+                <div className="sidebar-group-divider" />
               )}
 
               {/* Group Nav Items */}
@@ -347,28 +347,18 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                         key={item.id}
                         onClick={() => onSelectTab(item.id)}
                         data-tour={item.dataTour}
-                        className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all text-left relative ${
-                          isActive
-                            ? "bg-cyan-500/10 text-cyan-300 font-semibold border border-cyan-500/20 shadow-sm shadow-cyan-950"
-                            : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60"
-                        }`}
+                        className={`sidebar-nav-item ${isActive ? "active" : ""}`}
                       >
                         {/* Active Accent Indicator */}
-                        {isActive && (
-                          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-cyan-400 rounded-r" />
-                        )}
+                        {isActive && <div className="active-pill-indicator" />}
 
-                        <span
-                          className={`shrink-0 transition-colors ${
-                            isActive ? "text-cyan-400" : "text-slate-400 group-hover:text-slate-300"
-                          }`}
-                        >
+                        <span className="sidebar-nav-icon">
                           {item.icon}
                         </span>
 
                         {!isCollapsed && (
                           <div className="flex-1 flex items-center justify-between min-w-0">
-                            <span className="truncate">{item.label}</span>
+                            <span className="sidebar-nav-label">{item.label}</span>
                             {item.badge && <span className="ml-1.5 shrink-0">{item.badge}</span>}
                           </div>
                         )}
@@ -391,10 +381,10 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       </div>
 
       {/* Sidebar Footer with Collapse/Expand button */}
-      <div className="p-2 border-t border-slate-800/80 shrink-0">
+      <div className="sidebar-footer">
         <button
           onClick={onToggleCollapse}
-          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-900 transition-colors"
+          className="sidebar-footer-btn"
           title={isCollapsed ? "Expand Sidebar (Ctrl+B)" : "Collapse Sidebar (Ctrl+B)"}
         >
           {isCollapsed ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
