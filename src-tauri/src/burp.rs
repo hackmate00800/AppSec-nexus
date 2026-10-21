@@ -371,17 +371,17 @@ impl BurpService {
 
     /// Automatically redacts sensitive authentication credentials, tokens, and cookies
     pub fn redact_sensitive_data(input: &str) -> String {
-        // Redact Bearer and JWT tokens
-        let bearer_re = Regex::new(r"(?i)(authorization:\s*bearer\s+)[A-Za-z0-9_\-\.]{8,}").unwrap();
+        // Redact Bearer and JWT tokens (in raw headers, header values, or body evidence)
+        let bearer_re = Regex::new(r"(?i)((?:authorization:\s*)?bearer\s+)[A-Za-z0-9_\-\.]{8,}").unwrap();
         let s1 = bearer_re.replace_all(input, "$1[REDACTED_BEARER_TOKEN]");
 
-        // Redact Cookie session values
-        let cookie_re = Regex::new(r"(?i)(cookie:\s*.*?(?:session|token|auth|jwt|phpsessid|jsessionid)=)[^;\s&]+").unwrap();
+        // Redact Cookie session values (in raw headers, Set-Cookie values, or body evidence)
+        let cookie_re = Regex::new(r"(?i)((?:(?:set-)?cookie:\s*)?.*?(?:session|token|auth|jwt|phpsessid|jsessionid)=)[^;\s&]+").unwrap();
         let s2 = cookie_re.replace_all(&s1, "$1[REDACTED_SESSION_COOKIE]");
 
-        // Redact API key params
-        let api_key_re = Regex::new(r"(?i)(api[_-]?key|secret|access[_-]?token|password|passwd)=([^&\s]+)").unwrap();
-        let s3 = api_key_re.replace_all(&s2, "$1=[REDACTED_CREDENTIAL]");
+        // Redact API key, password, and credential parameters in queries, forms, or JSON bodies
+        let api_key_re = Regex::new(r#"(?i)("?(?:api[_-]?key|secret|access[_-]?token|password|passwd)"?\s*[:=]\s*"?)([^"&,\s}]+)("?)"#).unwrap();
+        let s3 = api_key_re.replace_all(&s2, "$1[REDACTED_CREDENTIAL]$3");
 
         s3.to_string()
     }

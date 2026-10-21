@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   ShieldCheck,
   X,
@@ -25,6 +25,13 @@ import {
   ClipboardList,
   Workflow,
   Bot,
+  Shield,
+  BookOpen,
+  Search,
+  ShieldAlert,
+  BookA,
+  Globe,
+  Network,
 } from "lucide-react";
 import { useWorkspace } from "../../context/WorkspaceContext";
 
@@ -168,6 +175,60 @@ const ALL_TABS_META: Record<string, TabMeta> = {
     icon: <Bot size={14} />,
     closable: true,
   },
+  webPentest: {
+    id: "webPentest",
+    label: "Pentest Workbench",
+    icon: <Shield size={14} />,
+    closable: true,
+  },
+  activity: {
+    id: "activity",
+    label: "Activity Monitor",
+    icon: <Activity size={14} />,
+    closable: true,
+  },
+  documentationCenter: {
+    id: "documentationCenter",
+    label: "Intelligence Center",
+    icon: <BookOpen size={14} />,
+    closable: true,
+  },
+  vulnerabilityExplorer: {
+    id: "vulnerabilityExplorer",
+    label: "Vuln Explorer",
+    icon: <Search size={14} />,
+    closable: true,
+  },
+  zeroDayResearch: {
+    id: "zeroDayResearch",
+    label: "Zero-Day Research",
+    icon: <ShieldAlert size={14} />,
+    closable: true,
+  },
+  diagramLibrary: {
+    id: "diagramLibrary",
+    label: "Diagram Library",
+    icon: <Layers size={14} />,
+    closable: true,
+  },
+  glossaryLibrary: {
+    id: "glossaryLibrary",
+    label: "Glossary & Reference",
+    icon: <BookA size={14} />,
+    closable: true,
+  },
+  apiSecurity: {
+    id: "apiSecurity",
+    label: "API Security",
+    icon: <Globe size={14} />,
+    closable: true,
+  },
+  networkRecon: {
+    id: "networkRecon",
+    label: "Network Recon",
+    icon: <Network size={14} />,
+    closable: true,
+  },
 };
 
 export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
@@ -194,6 +255,13 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
   // Compute visible tabs in user-ordered sequence
   const visibleTabs = tabOrder.filter((id) => !closedTabs.includes(id));
   const hiddenTabs = Object.keys(ALL_TABS_META).filter((id) => closedTabs.includes(id));
+
+  // Ensure active tab is present in tabOrder and unclosed so it's always visible in the strip
+  useEffect(() => {
+    if (activeTab && (!tabOrder.includes(activeTab) || closedTabs.includes(activeTab))) {
+      reopenTab(activeTab);
+    }
+  }, [activeTab, tabOrder, closedTabs, reopenTab]);
 
   // Drag and drop handlers
   const handleDragStart = (e: React.DragEvent, index: number) => {

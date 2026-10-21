@@ -368,7 +368,7 @@ describe("Data Management & Complete CRUD Suite", () => {
       });
 
       // Switch to Activity Monitor tab
-      const activityTabBtn = screen.getByText("Activity Monitor");
+      const activityTabBtn = screen.getAllByText("Activity Monitor")[0];
       fireEvent.click(activityTabBtn);
 
       await waitFor(() => {
